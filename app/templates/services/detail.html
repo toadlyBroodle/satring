@@ -28,6 +28,7 @@
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5 w-32">endpoint</td><td class="px-3 py-1.5"><a href="{{ service.url }}" class="text-amber-400 hover:underline" target="_blank">{{ service.url }}</a></td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">pricing</td><td class="px-3 py-1.5">{{ service.pricing_sats }} sats / {{ service.pricing_model }}</td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">protocol</td><td class="px-3 py-1.5">{{ service.protocol }}</td></tr>
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">status</td><td class="px-3 py-1.5"><span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% else %}text-green-700{% endif %}">{{ service.status }}</span></td></tr>
       {% if service.owner_name %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">provider</td><td class="px-3 py-1.5">{{ service.owner_name }}</td></tr>{% endif %}
       {% if service.owner_contact %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">contact</td><td class="px-3 py-1.5">{{ service.owner_contact }}</td></tr>{% endif %}
       <tr><td class="text-green-700 px-3 py-1.5">listed</td><td class="px-3 py-1.5">{{ service.created_at.strftime('%Y-%m-%d') }}</td></tr>
@@ -41,10 +42,13 @@
 {% set r_pad = [20 - r_val|length - r_count|length, 0]|max %}
 {% set p_sats = service.pricing_sats|string ~ " sats" %}
 {% set p_pad = [19 - p_sats|length - service.pricing_model|length, 0]|max %}
+{% set s_val = service.status %}
+{% set s_pad = [22 - s_val|length, 0]|max %}
 <pre class="text-sm mb-6">┌─ stats ───────────────────────┐
 │ rating: <span class="text-amber-400">{{ r_val }}</span>  {{ r_count }}{{ " " * r_pad }}│
 │ price:  <span class="text-amber-400">{{ p_sats }}</span> / {{ service.pricing_model }}{{ " " * p_pad }}│
 │ proto:  {{ service.protocol }}{{ " " * (22 - service.protocol|length) }}│
+│ status: <span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% else %}text-green-700{% endif %}">{{ s_val }}</span>{{ " " * s_pad }}│
 └───────────────────────────────┘</pre>
 
 <!-- Reviews -->

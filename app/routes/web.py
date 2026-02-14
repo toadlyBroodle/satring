@@ -15,28 +15,64 @@ router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
-async def directory(request: Request, category: str | None = None, db: AsyncSession = Depends(get_db)):
+async def directory(
+    request: Request,
+    category: str | None = None,
+    status: str | None = None,
+    sort: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
     categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
 
-    query = select(Service).options(selectinload(Service.categories)).order_by(Service.created_at.desc())
+    query = select(Service).options(selectinload(Service.categories))
     if category:
         query = query.join(service_categories).join(Category).where(Category.slug == category)
+    if status:
+        query = query.where(Service.status == status)
+
+    sort_map = {
+        "top-rated": Service.avg_rating.desc(),
+        "cheapest": Service.pricing_sats.asc(),
+        "most-reviewed": Service.rating_count.desc(),
+    }
+    query = query.order_by(sort_map.get(sort, Service.created_at.desc()))
 
     services = (await db.execute(query)).scalars().all()
     return templates.TemplateResponse(request, "services/list.html", {
         "services": services,
         "categories": categories,
         "active_category": category,
+        "active_status": status,
+        "active_sort": sort,
     })
 
 
 @router.get("/search", response_class=HTMLResponse)
-async def search(request: Request, q: str = "", db: AsyncSession = Depends(get_db)):
+async def search(
+    request: Request,
+    q: str = "",
+    category: str | None = None,
+    status: str | None = None,
+    sort: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
     query = select(Service).options(selectinload(Service.categories))
     if q.strip():
         pattern = f"%{q.strip()}%"
         query = query.where(Service.name.ilike(pattern) | Service.description.ilike(pattern))
-    services = (await db.execute(query.order_by(Service.created_at.desc()))).scalars().all()
+    if category:
+        query = query.join(service_categories).join(Category).where(Category.slug == category)
+    if status:
+        query = query.where(Service.status == status)
+
+    sort_map = {
+        "top-rated": Service.avg_rating.desc(),
+        "cheapest": Service.pricing_sats.asc(),
+        "most-reviewed": Service.rating_count.desc(),
+    }
+    query = query.order_by(sort_map.get(sort, Service.created_at.desc()))
+
+    services = (await db.execute(query)).scalars().all()
     return templates.TemplateResponse(request, "services/_card_grid.html", {
         "services": services,
     })
