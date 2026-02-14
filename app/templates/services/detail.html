@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ service.name }}{% endblock %}
+{% block content %}
+
+<div class="mb-4 text-sm">
+  <a href="/" class="text-green-700 hover:text-amber-400">&lt; back to directory</a>
+</div>
+
+<div class="mb-4">
+  <div class="text-amber-400 text-sm mb-1">$ satring info {{ service.slug }}</div>
+  <h1 class="text-xl">{{ service.name }}</h1>
+  <div class="flex items-center gap-2 mt-1 text-sm">
+    <span class="text-amber-400">[{{ service.protocol }}]</span>
+    {% for cat in service.categories %}
+    <span class="text-green-700">#{{ cat.name }}</span>
+    {% endfor %}
+  </div>
+</div>
+
+{% if service.description %}
+<div class="text-green-400 text-sm mb-4">{{ service.description }}</div>
+{% endif %}
+
+<!-- Service Info -->
+<div class="border border-green-800 mb-4 text-sm">
+  <table class="w-full">
+    <tbody>
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5 w-32">endpoint</td><td class="px-3 py-1.5"><a href="{{ service.url }}" class="text-amber-400 hover:underline" target="_blank">{{ service.url }}</a></td></tr>
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">pricing</td><td class="px-3 py-1.5">{{ service.pricing_sats }} sats / {{ service.pricing_model }}</td></tr>
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">protocol</td><td class="px-3 py-1.5">{{ service.protocol }}</td></tr>
+      {% if service.owner_name %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">provider</td><td class="px-3 py-1.5">{{ service.owner_name }}</td></tr>{% endif %}
+      {% if service.owner_contact %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">contact</td><td class="px-3 py-1.5">{{ service.owner_contact }}</td></tr>{% endif %}
+      <tr><td class="text-green-700 px-3 py-1.5">listed</td><td class="px-3 py-1.5">{{ service.created_at.strftime('%Y-%m-%d') }}</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Stats Box -->
+<pre class="text-sm mb-6">┌─ stats ───────────────────────┐
+│ rating: <span class="text-amber-400">{% if service.avg_rating %}{{ "%.1f" | format(service.avg_rating) }}/5{% else %}  —{% endif %}</span>  ({{ service.rating_count }} review{{ "s" if service.rating_count != 1 }})  │
+│ price:  <span class="text-amber-400">{{ service.pricing_sats }} sats</span> / {{ service.pricing_model }}{{ " " * (12 - service.pricing_model|length) }}│
+│ proto:  {{ service.protocol }}{{ " " * (22 - service.protocol|length) }}│
+└───────────────────────────────┘</pre>
+
+<!-- Reviews -->
+<div class="mb-6">
+  <div class="text-amber-400 text-sm mb-2">## reviews ({{ service.rating_count }})</div>
+
+  <div id="reviews">
+    {% for rating in service.ratings | sort(attribute='created_at', reverse=True) %}
+      {% include "services/_review_bubble.html" %}
+    {% else %}
+      <p class="text-green-700 text-sm">No reviews yet. Be the first!</p>
+    {% endfor %}
+  </div>
+
+  <!-- Review Form -->
+  <div id="payment-area">
+    <div class="border border-green-800 mt-4 p-4">
+      <div class="text-amber-400 text-sm mb-3">$ satring review --submit</div>
+      <form hx-post="/services/{{ service.slug }}/rate" hx-target="#reviews" hx-swap="afterbegin" hx-on::after-request="this.reset()">
+        <div class="mb-3">
+          <label for="reviewer_name" class="text-green-700 text-sm block mb-1 cursor-pointer">name&gt;</label>
+          <input type="text" id="reviewer_name" name="reviewer_name" placeholder="Anonymous"
+            class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1 text-sm w-full max-w-xs outline-none focus:border-green-400 placeholder-green-900" />
+        </div>
+        <div class="mb-3">
+          <label class="text-green-700 text-sm block mb-1">score&gt;</label>
+          <div class="flex gap-3 text-sm">
+            {% for i in range(1, 6) %}
+            <label class="cursor-pointer hover:text-amber-400">
+              <input type="radio" name="score" value="{{ i }}" {% if i == 3 %}checked{% endif %} class="hidden peer" />
+              <span class="peer-checked:text-amber-400 peer-checked:font-bold">[{{ i }}]</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="mb-3">
+          <label for="comment" class="text-green-700 text-sm block mb-1 cursor-pointer">comment&gt;</label>
+          <textarea id="comment" name="comment" rows="3" placeholder="What did you think?"
+            class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1 text-sm w-full outline-none focus:border-green-400 placeholder-green-900"></textarea>
+        </div>
+        <button type="submit" class="border border-green-400 text-green-400 px-4 py-1 text-sm hover:bg-green-400 hover:text-black transition-colors">[SUBMIT]</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,23 @@
+<a href="/services/{{ service.slug }}" class="block border border-green-800 p-3 hover:border-green-400 transition-colors">
+  <div class="flex items-center justify-between gap-4 text-sm">
+    <div class="flex items-center gap-2 min-w-0">
+      <span class="text-amber-400 shrink-0">[{{ service.protocol }}]</span>
+      <span class="text-green-400 truncate">{{ service.name }}</span>
+    </div>
+    <div class="flex items-center gap-3 shrink-0">
+      <span class="text-green-700">{{ service.pricing_sats }} sats/{{ service.pricing_model }}</span>
+      <span class="text-amber-400">[{% for i in range(5) %}{% if i < (service.avg_rating | round(0, 'floor') | int) %}*{% else %}-{% endif %}{% endfor %}]</span>
+      <span class="text-green-700">({{ service.rating_count }})</span>
+    </div>
+  </div>
+  {% if service.description %}
+  <div class="text-green-700 text-xs mt-1 truncate">{{ service.description }}</div>
+  {% endif %}
+  {% if service.categories %}
+  <div class="flex gap-2 mt-1">
+    {% for cat in service.categories %}
+    <span class="text-green-900 text-xs">#{{ cat.name }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</a>

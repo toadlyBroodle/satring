@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Satring{% endblock %} — L402 Service Directory</title>
+  <style>
+    body { background: #000; color: #4ade80; font-family: ui-monospace, monospace; opacity: 0; }
+    ::selection { background: #22c55e; color: #000; }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #000; }
+    ::-webkit-scrollbar-thumb { background: #166534; }
+    ::-webkit-scrollbar-thumb:hover { background: #22c55e; }
+    input, select, textarea { caret-color: #4ade80; }
+    .category-check::before { content: '[\00a0]'; }
+    input:checked ~ .category-check::before { content: '[x]'; }
+  </style>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+  <style type="text/tailwindcss">
+    @import "tailwindcss";
+    body { opacity: 1; }
+  </style>
+</head>
+<body class="bg-black text-green-400 font-mono min-h-screen flex flex-col" hx-boost="true">
+
+  <header class="border-b border-green-800 px-4 py-3">
+    <div class="max-w-6xl mx-auto">
+      <pre class="text-green-400 text-sm leading-tight mb-2">
+ ___  __ _| |_ _ __(_)_ __   __ _
+/ __|/ _` | __| '__| | '_ \ / _` |
+\__ \ (_| | |_| |  | | | | | (_| |
+|___/\__,_|\__|_|  |_|_| |_|\__, |
+                             |___/  <span class="text-amber-400">⚡ L402</span></pre>
+      <nav class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        <span class="text-green-700">$</span>
+        <a href="/" class="hover:text-amber-400 transition-colors">&gt; [directory]</a>
+        <a href="/submit" class="hover:text-amber-400 transition-colors">&gt; [submit]</a>
+        <a href="/docs" target="_blank" hx-boost="false" class="hover:text-amber-400 transition-colors">&gt; [api]</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="border-t border-green-900 px-4 py-3">
+    <div class="max-w-6xl mx-auto text-green-700 text-xs">
+      <span>satring — L402 service directory &amp; marketplace</span>
+      <span class="hidden sm:inline ml-4">// connecting AI agents with Lightning-paywalled APIs</span>
+    </div>
+  </footer>
+
+</body>
+</html>

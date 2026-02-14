@@ -1,0 +1,6 @@
+<div class="text-sm border-b border-green-900 py-2">
+  <span class="text-green-700">[{{ rating.created_at.strftime('%Y-%m-%d') }}]</span>
+  <span class="text-green-400">{{ rating.reviewer_name }}</span>
+  <span class="text-amber-400">({{ rating.score }}/5)</span><span class="text-green-700">:</span>
+  {% if rating.comment %}{{ rating.comment }}{% else %}<span class="text-green-900">no comment</span>{% endif %}
+</div>
