@@ -39,13 +39,13 @@ Open http://localhost:8000
 
 ```bash
 # List all services
-curl https://satring.dev/api/v1/services
+curl https://satring.com/api/v1/services
 
 # Search by category
-curl https://satring.dev/api/v1/services?category=data
+curl https://satring.com/api/v1/services?category=data
 
 # Get service details
-curl https://satring.dev/api/v1/services/{id}
+curl https://satring.com/api/v1/services/{id}
 ```
 
 Agents using [lnget](https://github.com/lightninglabs/lightning-agent-tools) can query the API directly to discover L402 endpoints.
@@ -54,14 +54,14 @@ Agents using [lnget](https://github.com/lightninglabs/lightning-agent-tools) can
 
 List your L402 API in the directory:
 
-1. Visit https://satring.dev/submit
+1. Visit https://satring.com/submit
 2. Provide your endpoint URL, description, pricing, and category
 3. Your service appears in the directory after verification
 
 Or submit via API:
 
 ```bash
-curl -X POST https://satring.dev/api/v1/services \
+curl -X POST https://satring.com/api/v1/services \
   -H "Content-Type: application/json" \
   -d '{"name": "My API", "url": "https://api.example.com", "price_sats": 10, "category": "data"}'
 ```
