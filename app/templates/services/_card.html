@@ -11,8 +11,10 @@
       <span class="text-green-700">({{ service.rating_count }})</span>
     </div>
   </div>
+  {% set parsed_url = service.url | replace("https://", "") | replace("http://", "") %}
+  <div class="text-green-900 text-xs mt-1 truncate font-mono">{{ parsed_url }}</div>
   {% if service.description %}
-  <div class="text-green-700 text-xs mt-1 truncate">{{ service.description }}</div>
+  <div class="text-green-700 text-xs mt-0.5 truncate">{{ service.description }}</div>
   {% endif %}
   {% if service.categories %}
   <div class="flex gap-2 mt-1">
