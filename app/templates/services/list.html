@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Directory{% endblock %}
+{% block content %}
+
+<div class="mb-4">
+  <div class="text-amber-400 text-sm mb-1">$ satring --list</div>
+  <h1 class="text-xl">L402 Service Directory</h1>
+  <p class="text-green-700 text-sm">Discover Lightning-paywalled APIs for your AI agents</p>
+</div>
+
+<!-- Search -->
+<div class="mb-4">
+  <div class="flex items-center border border-green-800 rounded-none max-w-md">
+    <label for="search" class="text-green-700 pl-2 text-sm cursor-pointer">search&gt;</label>
+    <input type="text" id="search" name="q" placeholder="_"
+      class="bg-black text-green-400 border-none outline-none w-full px-2 py-1.5 text-sm placeholder-green-900"
+      hx-get="/search" hx-trigger="input changed delay:300ms" hx-target="#service-grid" />
+  </div>
+</div>
+
+<!-- Category Filters -->
+<div class="mb-4 flex flex-wrap gap-2 text-sm">
+  <a href="/" class="border border-green-800 px-2 py-0.5 {% if not active_category %}bg-green-400 text-black{% else %}hover:text-amber-400{% endif %}">[all]</a>
+  {% for cat in categories %}
+  <a href="/?category={{ cat.slug }}" class="border border-green-800 px-2 py-0.5 {% if active_category == cat.slug %}bg-amber-400 text-black{% else %}hover:text-amber-400{% endif %}">[{{ cat.name }}]</a>
+  {% endfor %}
+</div>
+
+<!-- Service List -->
+<div id="service-grid" class="flex flex-col gap-2">
+  {% for service in services %}
+    {% include "services/_card.html" %}
+  {% else %}
+    <div class="border border-green-900 py-8 text-center text-green-700">
+      <p>No services found.</p>
+      <a href="/submit" class="text-amber-400 hover:underline mt-2 inline-block">&gt; [submit the first one]</a>
+    </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

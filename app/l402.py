@@ -1,0 +1,128 @@
+import base64
+import hashlib
+
+import httpx
+from fastapi import HTTPException, Request
+from pymacaroons import Macaroon, Verifier
+
+from app.config import settings
+
+
+_consumed_hashes: set[str] = set()
+
+
+async def check_payment_status(payment_hash: str) -> bool:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"{settings.PAYMENT_URL}/api/v1/payments/{payment_hash}",
+            headers={"X-Api-Key": settings.PAYMENT_KEY},
+        )
+        if resp.status_code != 200:
+            return False
+        return resp.json().get("paid", False)
+
+
+def check_and_consume_payment(payment_hash: str) -> bool:
+    if payment_hash in _consumed_hashes:
+        return False
+    _consumed_hashes.add(payment_hash)
+    return True
+
+
+async def create_invoice(amount_sats: int, memo: str = "Satring L402") -> dict:
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"{settings.PAYMENT_URL}/api/v1/payments",
+            headers={"X-Api-Key": settings.PAYMENT_KEY},
+            json={"out": False, "amount": amount_sats, "memo": memo},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return {
+            "payment_hash": data["payment_hash"],
+            "payment_request": data["payment_request"],
+        }
+
+
+def mint_macaroon(payment_hash: str) -> str:
+    mac = Macaroon(
+        location="satring",
+        identifier=payment_hash,
+        key=settings.AUTH_ROOT_KEY,
+    )
+    mac.add_first_party_caveat(f"payment_hash = {payment_hash}")
+    return base64.b64encode(mac.serialize().encode()).decode()
+
+
+def verify_l402(macaroon_b64: str, preimage_hex: str) -> bool:
+    try:
+        raw = base64.b64decode(macaroon_b64).decode()
+        mac = Macaroon.deserialize(raw)
+    except Exception:
+        return False
+
+    # Verify preimage: SHA256(preimage) must equal the payment_hash in the caveat
+    preimage_bytes = bytes.fromhex(preimage_hex)
+    expected_hash = hashlib.sha256(preimage_bytes).hexdigest()
+
+    payment_hash = None
+    for caveat in mac.caveats:
+        cid = caveat.caveat_id
+        if hasattr(cid, "decode"):
+            cid = cid.decode()
+        if cid.startswith("payment_hash = "):
+            payment_hash = cid.split("= ", 1)[1]
+            break
+
+    if not payment_hash or expected_hash != payment_hash:
+        return False
+
+    # Verify macaroon signature
+    v = Verifier()
+    v.satisfy_exact(f"payment_hash = {payment_hash}")
+    try:
+        v.verify(mac, settings.AUTH_ROOT_KEY)
+        return True
+    except Exception:
+        return False
+
+
+async def require_l402(
+    request: Request = None,
+    db=None,
+    amount_sats: int | None = None,
+    memo: str | None = None,
+):
+    # Dev/test mode: skip L402 entirely
+    if settings.AUTH_ROOT_KEY == "test-mode":
+        return
+
+    if request is None:
+        raise HTTPException(status_code=500, detail="L402 requires request context")
+
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("L402 ") or auth.startswith("LSAT "):
+        token = auth.split(" ", 1)[1]
+        if ":" not in token:
+            raise HTTPException(status_code=401, detail="Invalid L402 token format")
+        macaroon_b64, preimage_hex = token.split(":", 1)
+        if verify_l402(macaroon_b64, preimage_hex):
+            return
+        raise HTTPException(status_code=401, detail="Invalid L402 credentials")
+
+    # No auth header — issue a 402 challenge
+    price = amount_sats if amount_sats is not None else settings.AUTH_PRICE_SATS
+    inv_memo = memo or "Satring premium API access"
+    invoice_data = await create_invoice(price, inv_memo)
+    macaroon_b64 = mint_macaroon(invoice_data["payment_hash"])
+
+    raise HTTPException(
+        status_code=402,
+        detail="Payment Required",
+        headers={
+            "WWW-Authenticate": (
+                f'L402 macaroon="{macaroon_b64}", '
+                f'invoice="{invoice_data["payment_request"]}"'
+            )
+        },
+    )
