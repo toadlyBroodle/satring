@@ -4,9 +4,13 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
+from app.config import settings
 from app.database import Base, get_db
 from app.models import Category, Service, Rating
 from app.main import app, SEED_CATEGORIES
+
+# Bypass L402 paywall in tests
+settings.AUTH_ROOT_KEY = "test-mode"
 
 
 @pytest.fixture(scope="session")

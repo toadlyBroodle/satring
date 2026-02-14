@@ -5,7 +5,7 @@ load_dotenv()
 
 
 class Settings:
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./sr.db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./db/sr.db")
     PAYMENT_URL: str = os.getenv("PAYMENT_URL", "")
     PAYMENT_KEY: str = os.getenv("PAYMENT_KEY", "")
     AUTH_ROOT_KEY: str = os.getenv("AUTH_ROOT_KEY", "test-mode")
