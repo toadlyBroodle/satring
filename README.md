@@ -1,6 +1,12 @@
-# Satring
+```
+ ___  __ _| |_ _ __(_)_ __   __ _
+/ __|/ _` | __| '__| | '_ \ / _` |
+\__ \ (_| | |_| |  | | | | | (_| |
+|___/\__,_|\__|_|  |_|_| |_|\__, |
+                             |___/  ⚡ L402
+```
 
-The L402 service directory. Find, rate, and connect to Lightning-paywalled APIs.
+[satring.com](https://satring.com) — the L402 service directory. Find, rate, and connect to Lightning-paywalled APIs.
 
 Satring helps AI agents and developers discover L402 services — APIs that accept Bitcoin Lightning payments via the [L402 protocol](https://www.l402.org/). Browse the directory, submit your service, and let agents find you.
 
@@ -19,7 +25,7 @@ AI agents can now [pay for APIs autonomously](https://lightning.engineering/post
 ## Quick Start
 
 ```bash
-git clone https://github.com/yourusername/satring.git
+git clone https://github.com/toadlyBroodle/satring.git
 cd satring
 python -m venv .venv
 source .venv/bin/activate
@@ -62,7 +68,7 @@ curl -X POST https://satring.dev/api/v1/services \
 
 ## Contributing
 
-Contributions welcome. See [docs/STACK.md](docs/STACK.md) for architecture details.
+All contributions welcome!
 
 ## License
 
