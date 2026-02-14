@@ -50,7 +50,7 @@
     {% for rating in service.ratings | sort(attribute='created_at', reverse=True) %}
       {% include "services/_review_bubble.html" %}
     {% else %}
-      <p class="text-green-700 text-sm">No reviews yet. Be the first!</p>
+      <p id="no-reviews" class="text-green-700 text-sm">No reviews yet. Be the first!</p>
     {% endfor %}
   </div>
 

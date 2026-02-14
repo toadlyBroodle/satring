@@ -56,8 +56,15 @@
         return values;
       }
 
-      // Poll for payment
+      // Poll for payment (stop after 10 minutes)
+      var pollErrors = 0;
       var pollInterval = setInterval(function() {
+        if (pollErrors > 120) {
+          clearInterval(pollInterval);
+          document.getElementById('status-text').textContent = 'invoice expired. please refresh and try again.';
+          document.getElementById('status-text').className = 'text-red-400';
+          return;
+        }
         fetch('/payment-status/' + paymentHash)
           .then(function(r) { return r.json(); })
           .then(function(data) {
@@ -67,12 +74,16 @@
               document.getElementById('status-text').className = 'text-green-400';
 
               if (htmxMode) {
-                // HTMX review flow: resubmit via htmx.ajax
+                // HTMX review flow: resubmit then reload to update stats
                 var values = getFormValues();
                 htmx.ajax('POST', formAction + '?payment_hash=' + paymentHash, {
                   target: '#reviews',
                   swap: 'afterbegin',
                   values: values,
+                }).then(function() {
+                  window.location.reload();
+                }).catch(function() {
+                  window.location.reload();
                 });
               } else {
                 // Full-page flow: build and submit a form
@@ -96,7 +107,8 @@
               }
             }
           })
-          .catch(function() {});
+          .catch(function() { pollErrors += 10; });
+        pollErrors++;
       }, 5000);
     })();
   </script>
