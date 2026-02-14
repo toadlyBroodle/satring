@@ -43,6 +43,9 @@ class Service(Base):
     logo_url = Column(String(500), default="")
     avg_rating = Column(Float, default=0.0)
     rating_count = Column(Integer, default=0)
+    status = Column(String(20), default="unverified")  # confirmed | live | dead | unverified
+    last_probed_at = Column(DateTime, nullable=True)
+    dead_since = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
