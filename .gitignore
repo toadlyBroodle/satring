@@ -1,8 +1,8 @@
-satring.db
+db/
 .env
 __pycache__/
 *.pyc
 .venv/
-docs/market-research/
+docs/
 deploy/
 tests/test_paywall.py
