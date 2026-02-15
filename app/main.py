@@ -77,6 +77,7 @@ templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 from app.routes.web import router as web_router   # noqa: E402
 from app.routes.api import router as api_router    # noqa: E402
 
+app.mount("/.well-known", StaticFiles(directory=Path(__file__).parent / ".well-known"), name="well-known")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(web_router)
 app.include_router(api_router, prefix="/api/v1")
