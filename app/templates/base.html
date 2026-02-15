@@ -3,19 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Satring{% endblock %} — L402 Service Directory</title>
+  <title>{% block title %}satring{% endblock %} — L402 Service Directory</title>
   <link rel="icon" type="image/png" href="/static/img/satring-logo-trans-bg.png">
-  <style>
-    body { background: #000; color: #4ade80; font-family: ui-monospace, monospace; opacity: 0; }
-    ::selection { background: #22c55e; color: #000; }
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: #000; }
-    ::-webkit-scrollbar-thumb { background: #166534; }
-    ::-webkit-scrollbar-thumb:hover { background: #22c55e; }
-    input, select, textarea { caret-color: #4ade80; }
-    .category-check::before { content: '[\00a0]'; }
-    input:checked ~ .category-check::before { content: '[x]'; }
-  </style>
+  <link rel="stylesheet" href="/static/css/theme.css">
   <script type="module" src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <script src="https://unpkg.com/htmx.org@2.0.8"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>

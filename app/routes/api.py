@@ -134,7 +134,7 @@ async def get_service_or_404(db: AsyncSession, slug: str) -> Service:
 # IMPORTANT: /services/bulk BEFORE /services/{slug}
 @router.get("/services/bulk", response_model=list[ServiceOut])
 async def bulk_export(request: Request, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request, amount_sats=settings.AUTH_BULK_PRICE_SATS, memo="Satring bulk export")
+    await require_l402(request=request, amount_sats=settings.AUTH_BULK_PRICE_SATS, memo="satring.com bulk export")
     result = await db.execute(
         select(Service).options(selectinload(Service.categories)).order_by(Service.id)
     )
@@ -161,7 +161,7 @@ async def get_service(slug: str, db: AsyncSession = Depends(get_db)):
 
 @router.post("/services", response_model=ServiceCreateOut, status_code=201)
 async def create_service(request: Request, body: ServiceCreate, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request, amount_sats=settings.AUTH_SUBMIT_PRICE_SATS, memo="Satring service submission")
+    await require_l402(request=request, amount_sats=settings.AUTH_SUBMIT_PRICE_SATS, memo="satring.com service submission")
     from app.utils import unique_slug
     slug = await unique_slug(db, body.name)
     edit_token = generate_edit_token()
@@ -286,7 +286,7 @@ async def list_ratings(slug: str, db: AsyncSession = Depends(get_db)):
 
 @router.post("/services/{slug}/ratings", response_model=RatingOut, status_code=201)
 async def create_rating(request: Request, slug: str, body: RatingCreate, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request, amount_sats=settings.AUTH_REVIEW_PRICE_SATS, memo="Satring review submission")
+    await require_l402(request=request, amount_sats=settings.AUTH_REVIEW_PRICE_SATS, memo="satring.com review submission")
     service = await get_service_or_404(db, slug)
     rating = Rating(
         service_id=service.id,

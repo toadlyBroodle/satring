@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
@@ -38,7 +39,34 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Satring", description="L402 Service Directory", lifespan=lifespan)
+app = FastAPI(title="satring", description="L402 Service Directory", lifespan=lifespan, docs_url=None)
+
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui():
+    return HTMLResponse("""<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>satring — API Docs</title>
+<link rel="icon" type="image/png" href="/static/img/satring-logo-trans-bg.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+<link rel="stylesheet" href="/static/css/theme.css">
+<style>body { transition: opacity 0.15s; }</style>
+</head><body>
+<div id="swagger-ui"></div>
+<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script>
+SwaggerUIBundle({
+  url: "/openapi.json",
+  dom_id: "#swagger-ui",
+  presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+  layout: "BaseLayout",
+  syntaxHighlight: { theme: "monokai" },
+  deepLinking: true,
+});
+document.body.style.opacity = "1";
+</script>
+</body></html>""")
 
 from pathlib import Path
 

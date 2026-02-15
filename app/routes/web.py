@@ -127,7 +127,7 @@ async def submit_service(
         if not payment_hash:
             # Create invoice and show payment page
             invoice = await create_invoice(
-                settings.AUTH_SUBMIT_PRICE_SATS, "Satring service submission"
+                settings.AUTH_SUBMIT_PRICE_SATS, "satring.com service submission"
             )
             # Build hidden fields for resubmission
             form_fields = {
@@ -371,7 +371,7 @@ async def rate_service(
         payment_hash = request.query_params.get("payment_hash")
         if not payment_hash:
             invoice = await create_invoice(
-                settings.AUTH_REVIEW_PRICE_SATS, "Satring review submission"
+                settings.AUTH_REVIEW_PRICE_SATS, "satring.com review submission"
             )
             form_fields = {
                 "score": str(score),
