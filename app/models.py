@@ -41,6 +41,9 @@ class Service(Base):
     owner_name = Column(String(200), default="")
     owner_contact = Column(String(300), default="")
     logo_url = Column(String(500), default="")
+    edit_token_hash = Column(String(64), nullable=True, index=True)
+    domain_challenge = Column(String(64), nullable=True)
+    domain_challenge_expires_at = Column(DateTime, nullable=True)
     avg_rating = Column(Float, default=0.0)
     rating_count = Column(Integer, default=0)
     status = Column(String(20), default="unverified")  # confirmed | live | dead | unverified

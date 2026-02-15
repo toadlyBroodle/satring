@@ -2,8 +2,9 @@
 {% block title %}{{ service.name }}{% endblock %}
 {% block content %}
 
-<div class="mb-4 text-sm">
+<div class="mb-4 text-sm flex gap-4">
   <a href="/" class="text-green-700 hover:text-amber-400">&lt; back to directory</a>
+  <a href="/services/{{ service.slug }}/edit" class="text-green-700 hover:text-amber-400">[edit]</a>
 </div>
 
 <div class="mb-4">

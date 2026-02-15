@@ -115,19 +115,21 @@ class TestSubmitService:
             "pricing_sats": "50",
             "pricing_model": "per-request",
         }, follow_redirects=False)
-        assert resp.status_code == 303
-        assert "/services/new-service" in resp.headers["location"]
+        assert resp.status_code == 200
+        assert "New Service" in resp.text
+        assert "edit token" in resp.text.lower() or "edit-token" in resp.text.lower()
 
         result = await db.execute(select(Service).where(Service.slug == "new-service"))
         svc = result.scalars().first()
         assert svc is not None
         assert svc.name == "New Service"
         assert svc.pricing_sats == 50
+        assert svc.edit_token_hash is not None
 
     @pytest.mark.asyncio
     async def test_submit_with_categories(self, client: AsyncClient, db: AsyncSession):
         resp = await client.post("/submit", content="name=Cat+Service&url=https%3A%2F%2Fcat.example.com&categories=1&categories=2", headers={"Content-Type": "application/x-www-form-urlencoded"}, follow_redirects=False)
-        assert resp.status_code == 303
+        assert resp.status_code == 200
 
         result = await db.execute(select(Service).where(Service.slug == "cat-service"))
         svc = result.scalars().first()
@@ -139,12 +141,13 @@ class TestSubmitService:
             "name": "Test API",
             "url": "https://other.example.com",
         }, follow_redirects=False)
-        assert resp.status_code == 303
+        assert resp.status_code == 200
 
-        # Should have a different slug with hash suffix
-        location = resp.headers["location"]
-        assert location != "/services/test-api"
-        assert location.startswith("/services/test-api-")
+        # Should have created a service with a different slug
+        result = await db.execute(select(Service).where(Service.slug.like("test-api-%")))
+        svc = result.scalars().first()
+        assert svc is not None
+        assert svc.slug != "test-api"
 
 
 class TestRateService:
