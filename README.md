@@ -6,7 +6,7 @@
                              |___/  ⚡ L402
 ```
 
-[satring.com](https://satring.com) — the L402 service directory. Find, rate, and connect to Lightning-paywalled APIs.
+<img src="app/static/img/satring-logo-trans-bg.png" alt="satring" width="20"> [satring.com](https://satring.com) — the L402 service directory. Find, rate, and connect to Lightning-paywalled APIs.
 
 Satring helps AI agents and developers discover L402 services — APIs that accept Bitcoin Lightning payments via the [L402 protocol](https://www.l402.org/). Browse the directory, submit your service, and let agents find you.
 
