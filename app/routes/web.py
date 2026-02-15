@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta, timezone
+
+import httpx
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func
@@ -9,7 +12,7 @@ from app.database import get_db
 from app.l402 import create_invoice, check_payment_status, check_and_consume_payment
 from app.main import templates
 from app.models import Service, Category, Rating, service_categories
-from app.utils import unique_slug
+from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token
 
 router = APIRouter()
 
@@ -153,10 +156,12 @@ async def submit_service(
             )
 
     slug = await unique_slug(db, name)
+    edit_token = generate_edit_token()
     service = Service(
         name=name, slug=slug, url=url, description=description,
         protocol=protocol, pricing_sats=pricing_sats, pricing_model=pricing_model,
         owner_name=owner_name, owner_contact=owner_contact, logo_url=logo_url,
+        edit_token_hash=hash_token(edit_token),
     )
     if category_ids:
         cats = (await db.execute(select(Category).where(Category.id.in_(category_ids)))).scalars().all()
@@ -164,7 +169,182 @@ async def submit_service(
 
     db.add(service)
     await db.commit()
+    return templates.TemplateResponse(request, "services/submit_success.html", {
+        "service": service,
+        "edit_token": edit_token,
+    })
+
+
+EDITABLE_FIELDS = {
+    "name", "description", "pricing_sats", "pricing_model",
+    "protocol", "owner_name", "owner_contact", "logo_url",
+}
+
+
+@router.get("/services/{slug}/edit", response_class=HTMLResponse)
+async def edit_service_form(
+    request: Request,
+    slug: str,
+    token: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Service).options(selectinload(Service.categories)).where(Service.slug == slug)
+    )
+    service = result.scalars().first()
+    if not service:
+        return HTMLResponse("<h1>Not Found</h1>", status_code=404)
+
+    categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
+    token_valid = (
+        token is not None
+        and service.edit_token_hash is not None
+        and verify_edit_token(token, service.edit_token_hash)
+    )
+    return templates.TemplateResponse(request, "services/edit.html", {
+        "service": service,
+        "categories": categories,
+        "token_valid": token_valid,
+        "token": token if token_valid else "",
+    })
+
+
+@router.post("/services/{slug}/edit")
+async def edit_service(
+    request: Request,
+    slug: str,
+    edit_token: str = Form(""),
+    name: str = Form(""),
+    description: str = Form(""),
+    protocol: str = Form(""),
+    pricing_sats: int = Form(0),
+    pricing_model: str = Form(""),
+    owner_name: str = Form(""),
+    owner_contact: str = Form(""),
+    logo_url: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Service).options(selectinload(Service.categories)).where(Service.slug == slug)
+    )
+    service = result.scalars().first()
+    if not service:
+        return HTMLResponse("<h1>Not Found</h1>", status_code=404)
+    if not service.edit_token_hash or not verify_edit_token(edit_token, service.edit_token_hash):
+        return HTMLResponse("<h1>Forbidden</h1><p>Invalid edit token.</p>", status_code=403)
+
+    form_data = await request.form()
+    category_ids = [int(v) for k, v in form_data.multi_items() if k == "categories"]
+
+    if name:
+        service.name = name
+    if description is not None:
+        service.description = description
+    if protocol:
+        service.protocol = protocol
+    service.pricing_sats = pricing_sats
+    if pricing_model:
+        service.pricing_model = pricing_model
+    service.owner_name = owner_name
+    service.owner_contact = owner_contact
+    service.logo_url = logo_url
+
+    cats = (await db.execute(select(Category).where(Category.id.in_(category_ids)))).scalars().all()
+    service.categories = list(cats)
+
+    await db.commit()
     return RedirectResponse(f"/services/{slug}", status_code=303)
+
+
+@router.get("/services/{slug}/recover", response_class=HTMLResponse)
+async def recover_form(
+    request: Request,
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Service).where(Service.slug == slug))
+    service = result.scalars().first()
+    if not service:
+        return HTMLResponse("<h1>Not Found</h1>", status_code=404)
+
+    challenge_active = (
+        service.domain_challenge is not None
+        and service.domain_challenge_expires_at is not None
+        and service.domain_challenge_expires_at > datetime.now(timezone.utc)
+    )
+    return templates.TemplateResponse(request, "services/recover.html", {
+        "service": service,
+        "challenge_active": challenge_active,
+    })
+
+
+@router.post("/services/{slug}/recover")
+async def recover_service(
+    request: Request,
+    slug: str,
+    action: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Service).where(Service.slug == slug))
+    service = result.scalars().first()
+    if not service:
+        return HTMLResponse("<h1>Not Found</h1>", status_code=404)
+
+    if action == "generate":
+        import secrets
+        challenge = secrets.token_hex(32)
+        service.domain_challenge = challenge
+        service.domain_challenge_expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
+        await db.commit()
+        return templates.TemplateResponse(request, "services/recover.html", {
+            "service": service,
+            "challenge_active": True,
+        })
+
+    elif action == "verify":
+        if (
+            not service.domain_challenge
+            or not service.domain_challenge_expires_at
+            or service.domain_challenge_expires_at <= datetime.now(timezone.utc)
+        ):
+            return templates.TemplateResponse(request, "services/recover.html", {
+                "service": service,
+                "challenge_active": False,
+                "error": "Challenge expired. Please generate a new one.",
+            })
+
+        verify_url = f"{service.url.rstrip('/')}/.well-known/satring-verify"
+        try:
+            async with httpx.AsyncClient(timeout=10) as http:
+                resp = await http.get(verify_url)
+            fetched = resp.text.strip()
+        except Exception:
+            return templates.TemplateResponse(request, "services/recover.html", {
+                "service": service,
+                "challenge_active": True,
+                "error": f"Could not reach {verify_url}",
+            })
+
+        if fetched != service.domain_challenge:
+            return templates.TemplateResponse(request, "services/recover.html", {
+                "service": service,
+                "challenge_active": True,
+                "error": "Challenge code does not match.",
+            })
+
+        # Success - generate new edit token
+        new_token = generate_edit_token()
+        service.edit_token_hash = hash_token(new_token)
+        service.domain_challenge = None
+        service.domain_challenge_expires_at = None
+        await db.commit()
+        return templates.TemplateResponse(request, "services/recover.html", {
+            "service": service,
+            "challenge_active": False,
+            "new_token": new_token,
+        })
+
+    return HTMLResponse("Bad request", status_code=400)
 
 
 @router.post("/services/{slug}/rate", response_class=HTMLResponse)

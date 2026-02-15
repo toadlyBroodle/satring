@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Service Submitted{% endblock %}
+{% block content %}
+
+<div class="max-w-2xl">
+  <div class="text-amber-400 text-sm mb-1">$ satring submit --success</div>
+  <h1 class="text-xl mb-4">Service Submitted</h1>
+
+  <div class="border border-green-800 p-4 mb-6">
+    <p class="mb-2">Your service <span class="text-amber-400">{{ service.name }}</span> has been listed.</p>
+    <a href="/services/{{ service.slug }}" class="text-green-700 hover:text-amber-400">&gt; view listing</a>
+  </div>
+
+  <div class="border border-amber-400 p-4 mb-6">
+    <div class="text-amber-400 text-sm mb-2">!! IMPORTANT: Save your edit token !!</div>
+    <p class="text-sm mb-3">This token lets you edit your listing. It will <span class="text-amber-400">not be shown again</span>.</p>
+    <div class="flex items-center gap-2 mb-3">
+      <code id="edit-token" class="bg-green-900/30 text-green-400 px-3 py-2 text-sm break-all flex-1 border border-green-800 select-all">{{ edit_token }}</code>
+      <button onclick="navigator.clipboard.writeText(document.getElementById('edit-token').textContent)" class="border border-green-400 text-green-400 px-3 py-2 text-sm hover:bg-green-400 hover:text-black transition-colors whitespace-nowrap">[COPY]</button>
+    </div>
+    <p class="text-green-700 text-xs">If you lose this token, you can recover access via domain verification at <a href="/services/{{ service.slug }}/recover" class="hover:text-amber-400">/services/{{ service.slug }}/recover</a></p>
+  </div>
+
+  <div class="text-sm">
+    <a href="/" class="text-green-700 hover:text-amber-400">&lt; back to directory</a>
+  </div>
+</div>
+
+{% endblock %}

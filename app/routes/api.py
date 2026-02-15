@@ -1,6 +1,8 @@
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+import httpx
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field, HttpUrl
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +12,7 @@ from app.config import settings
 from app.database import get_db
 from app.l402 import require_l402
 from app.models import Service, Category, Rating, service_categories
+from app.utils import generate_edit_token, hash_token, verify_edit_token
 
 router = APIRouter(tags=["API"])
 
@@ -80,6 +83,22 @@ class ServiceCreate(BaseModel):
     category_ids: list[int] = []
 
 
+class ServiceCreateOut(ServiceOut):
+    edit_token: str | None = None
+
+
+class ServiceUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    pricing_sats: int | None = None
+    pricing_model: str | None = None
+    protocol: str | None = None
+    owner_name: str | None = None
+    owner_contact: str | None = None
+    logo_url: str | None = None
+    category_ids: list[int] | None = None
+
+
 # --- Helpers ---
 
 async def paginated_services(db: AsyncSession, query, page: int, page_size: int) -> ServiceListOut:
@@ -140,16 +159,18 @@ async def get_service(slug: str, db: AsyncSession = Depends(get_db)):
     return ServiceOut.model_validate(await get_service_or_404(db, slug))
 
 
-@router.post("/services", response_model=ServiceOut, status_code=201)
+@router.post("/services", response_model=ServiceCreateOut, status_code=201)
 async def create_service(request: Request, body: ServiceCreate, db: AsyncSession = Depends(get_db)):
     await require_l402(request=request, amount_sats=settings.AUTH_SUBMIT_PRICE_SATS, memo="Satring service submission")
     from app.utils import unique_slug
     slug = await unique_slug(db, body.name)
+    edit_token = generate_edit_token()
     service = Service(
         name=body.name, slug=slug, url=str(body.url), description=body.description,
         pricing_sats=body.pricing_sats, pricing_model=body.pricing_model,
         protocol=body.protocol, owner_name=body.owner_name,
         owner_contact=body.owner_contact, logo_url=body.logo_url,
+        edit_token_hash=hash_token(edit_token),
     )
     if body.category_ids:
         cats = (await db.execute(
@@ -163,7 +184,81 @@ async def create_service(request: Request, body: ServiceCreate, db: AsyncSession
     result = await db.execute(
         select(Service).options(selectinload(Service.categories)).where(Service.id == service.id)
     )
+    out = ServiceCreateOut.model_validate(result.scalars().first())
+    out.edit_token = edit_token
+    return out
+
+
+@router.patch("/services/{slug}", response_model=ServiceOut)
+async def update_service(
+    slug: str,
+    body: ServiceUpdate,
+    x_edit_token: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+):
+    service = await get_service_or_404(db, slug)
+    if not service.edit_token_hash or not verify_edit_token(x_edit_token, service.edit_token_hash):
+        raise HTTPException(status_code=403, detail="Invalid edit token")
+
+    for field in ("name", "description", "pricing_sats", "pricing_model", "protocol", "owner_name", "owner_contact", "logo_url"):
+        value = getattr(body, field)
+        if value is not None:
+            setattr(service, field, value)
+
+    if body.category_ids is not None:
+        cats = (await db.execute(
+            select(Category).where(Category.id.in_(body.category_ids))
+        )).scalars().all()
+        service.categories = list(cats)
+
+    await db.commit()
+    result = await db.execute(
+        select(Service).options(selectinload(Service.categories)).where(Service.id == service.id)
+    )
     return ServiceOut.model_validate(result.scalars().first())
+
+
+@router.post("/services/{slug}/recover/generate")
+async def api_recover_generate(slug: str, db: AsyncSession = Depends(get_db)):
+    service = await get_service_or_404(db, slug)
+    challenge = secrets.token_hex(32)
+    service.domain_challenge = challenge
+    service.domain_challenge_expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
+    await db.commit()
+    return {
+        "challenge": challenge,
+        "verify_url": f"{service.url.rstrip('/')}/.well-known/satring-verify",
+        "expires_in_minutes": 30,
+    }
+
+
+@router.post("/services/{slug}/recover/verify")
+async def api_recover_verify(slug: str, db: AsyncSession = Depends(get_db)):
+    service = await get_service_or_404(db, slug)
+    if (
+        not service.domain_challenge
+        or not service.domain_challenge_expires_at
+        or service.domain_challenge_expires_at <= datetime.now(timezone.utc)
+    ):
+        raise HTTPException(status_code=400, detail="No active challenge or challenge expired")
+
+    verify_url = f"{service.url.rstrip('/')}/.well-known/satring-verify"
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            resp = await http.get(verify_url)
+        fetched = resp.text.strip()
+    except Exception:
+        raise HTTPException(status_code=502, detail=f"Could not reach {verify_url}")
+
+    if fetched != service.domain_challenge:
+        raise HTTPException(status_code=403, detail="Challenge code does not match")
+
+    new_token = generate_edit_token()
+    service.edit_token_hash = hash_token(new_token)
+    service.domain_challenge = None
+    service.domain_challenge_expires_at = None
+    await db.commit()
+    return {"edit_token": new_token}
 
 
 @router.get("/search", response_model=ServiceListOut)
