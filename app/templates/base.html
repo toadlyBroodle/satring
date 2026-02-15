@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Satring{% endblock %} — L402 Service Directory</title>
+  <link rel="icon" type="image/png" href="/static/img/satring-logo-trans-bg.png">
   <style>
     body { background: #000; color: #4ade80; font-family: ui-monospace, monospace; opacity: 0; }
     ::selection { background: #22c55e; color: #000; }
@@ -19,7 +20,6 @@
   <script src="https://unpkg.com/htmx.org@2.0.8"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
   <style type="text/tailwindcss">
-    @import "tailwindcss";
     body { opacity: 1; }
   </style>
 </head>
@@ -32,9 +32,9 @@
 / __|/ _` | __| '__| | '_ \ / _` |
 \__ \ (_| | |_| |  | | | | | (_| |
 |___/\__,_|\__|_|  |_|_| |_|\__, |
-                             |___/  <span class="text-amber-400">⚡ L402</span></pre>
+                             |___/  <span class="text-amber-400"><img src="/static/img/satring-logo-trans-bg.png" alt="⚡" class="inline h-5 w-5"> L402</span></pre>
       <nav class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <span class="text-green-700">$</span>
+        <span class="text-amber-400">₿</span>
         <a href="/" class="hover:text-amber-400 transition-colors">&gt; [directory]</a>
         <a href="/submit" class="hover:text-amber-400 transition-colors">&gt; [submit]</a>
         <a href="/docs" target="_blank" hx-boost="false" class="hover:text-amber-400 transition-colors">&gt; [api]</a>
