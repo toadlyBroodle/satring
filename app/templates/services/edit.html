@@ -12,6 +12,9 @@
 
   {% if not token_valid %}
   <!-- Token entry form -->
+  {% if token_invalid is defined and token_invalid %}
+  <div class="border border-red-500 text-red-400 p-3 mb-4 text-sm">Invalid edit token. Please try again.</div>
+  {% endif %}
   <div class="border border-green-800 p-4 mb-4">
     <p class="text-sm mb-3">Enter your edit token to modify this listing.</p>
     <form method="get" action="/services/{{ service.slug }}/edit" class="flex items-center gap-2">

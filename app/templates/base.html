@@ -11,9 +11,22 @@
   <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
   <style type="text/tailwindcss">
     body { opacity: 1; }
+    button:active, input[type="submit"]:active {
+      opacity: 0.6;
+      transform: scale(0.97);
+    }
   </style>
 </head>
 <body class="bg-black text-green-400 font-mono min-h-screen flex flex-col" hx-boost="true">
+<script>
+  // Make htmx swap content on error responses (403, 500, etc.)
+  document.addEventListener('htmx:beforeSwap', function(e) {
+    if (e.detail.xhr.status >= 400) {
+      e.detail.shouldSwap = true;
+      e.detail.isError = false;
+    }
+  });
+</script>
 
   <header class="border-b border-green-800 px-4 py-3">
     <div class="max-w-6xl mx-auto">

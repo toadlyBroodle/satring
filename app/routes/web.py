@@ -220,10 +220,12 @@ async def edit_service_form(
         and service.edit_token_hash is not None
         and verify_edit_token(token, service.edit_token_hash)
     )
+    token_invalid = token is not None and not token_valid
     return templates.TemplateResponse(request, "services/edit.html", {
         "service": service,
         "categories": categories,
         "token_valid": token_valid,
+        "token_invalid": token_invalid,
         "token": token if token_valid else "",
     })
 
@@ -250,7 +252,14 @@ async def edit_service(
     if not service:
         return HTMLResponse("<h1>Not Found</h1>", status_code=404)
     if not service.edit_token_hash or not verify_edit_token(edit_token, service.edit_token_hash):
-        return HTMLResponse("<h1>Forbidden</h1><p>Invalid edit token.</p>", status_code=403)
+        categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
+        return templates.TemplateResponse(request, "services/edit.html", {
+            "service": service,
+            "categories": categories,
+            "token_valid": False,
+            "token_invalid": True,
+            "token": "",
+        }, status_code=403)
 
     form_data = await request.form()
     category_ids = [int(v) for k, v in form_data.multi_items() if k == "categories"]
