@@ -35,6 +35,12 @@ def extract_domain(url: str) -> str:
     return urlparse(url).hostname or ""
 
 
+def domain_root(url: str) -> str:
+    """Return scheme://hostname for a URL (no path, no port)."""
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.hostname}" if parsed.hostname else url
+
+
 async def get_same_domain_services(db: AsyncSession, url: str) -> list[Service]:
     """Return all services whose URL is on the same domain as `url`."""
     domain = extract_domain(url)

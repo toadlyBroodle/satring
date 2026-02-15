@@ -12,7 +12,7 @@ from app.config import settings
 from app.database import get_db
 from app.l402 import require_l402
 from app.models import Service, Category, Rating, service_categories
-from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services
+from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root
 
 router = APIRouter(tags=["API"])
 
@@ -247,7 +247,7 @@ async def api_recover_generate(slug: str, db: AsyncSession = Depends(get_db)):
     await db.commit()
     return {
         "challenge": challenge,
-        "verify_url": f"{service.url.rstrip('/')}/.well-known/satring-verify",
+        "verify_url": f"{domain_root(service.url)}/.well-known/satring-verify",
         "expires_in_minutes": 30,
     }
 
@@ -262,7 +262,7 @@ async def api_recover_verify(slug: str, db: AsyncSession = Depends(get_db)):
     ):
         raise HTTPException(status_code=400, detail="No active challenge or challenge expired")
 
-    verify_url = f"{service.url.rstrip('/')}/.well-known/satring-verify"
+    verify_url = f"{domain_root(service.url)}/.well-known/satring-verify"
     try:
         async with httpx.AsyncClient(timeout=10) as http:
             resp = await http.get(verify_url)

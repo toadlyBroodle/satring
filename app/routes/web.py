@@ -12,7 +12,7 @@ from app.database import get_db
 from app.l402 import create_invoice, check_payment_status, check_and_consume_payment
 from app.main import templates
 from app.models import Service, Category, Rating, service_categories
-from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services
+from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root
 
 router = APIRouter(include_in_schema=False)
 
@@ -294,6 +294,7 @@ async def recover_form(
     return templates.TemplateResponse(request, "services/recover.html", {
         "service": service,
         "challenge_active": challenge_active,
+        "verify_path": f"{domain_root(service.url)}/.well-known/satring-verify",
     })
 
 
@@ -309,6 +310,8 @@ async def recover_service(
     if not service:
         return HTMLResponse("<h1>Not Found</h1>", status_code=404)
 
+    verify_path = f"{domain_root(service.url)}/.well-known/satring-verify"
+
     if action == "generate":
         import secrets
         challenge = secrets.token_hex(32)
@@ -318,6 +321,7 @@ async def recover_service(
         return templates.TemplateResponse(request, "services/recover.html", {
             "service": service,
             "challenge_active": True,
+            "verify_path": verify_path,
         })
 
     elif action == "verify":
@@ -330,18 +334,19 @@ async def recover_service(
                 "service": service,
                 "challenge_active": False,
                 "error": "Challenge expired. Please generate a new one.",
+                "verify_path": verify_path,
             })
 
-        verify_url = f"{service.url.rstrip('/')}/.well-known/satring-verify"
         try:
             async with httpx.AsyncClient(timeout=10) as http:
-                resp = await http.get(verify_url)
+                resp = await http.get(verify_path)
             fetched = resp.text.strip()
         except Exception:
             return templates.TemplateResponse(request, "services/recover.html", {
                 "service": service,
                 "challenge_active": True,
-                "error": f"Could not reach {verify_url}",
+                "error": f"Could not reach {verify_path}",
+                "verify_path": verify_path,
             })
 
         if fetched != service.domain_challenge:
@@ -349,6 +354,7 @@ async def recover_service(
                 "service": service,
                 "challenge_active": True,
                 "error": "Challenge code does not match.",
+                "verify_path": verify_path,
             })
 
         # Success - generate new edit token and apply to all same-domain services
