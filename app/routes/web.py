@@ -14,7 +14,7 @@ from app.main import templates
 from app.models import Service, Category, Rating, service_categories
 from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token
 
-router = APIRouter()
+router = APIRouter(include_in_schema=False)
 
 
 @router.get("/", response_class=HTMLResponse)
