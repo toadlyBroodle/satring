@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 
@@ -46,5 +47,6 @@ templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 from app.routes.web import router as web_router   # noqa: E402
 from app.routes.api import router as api_router    # noqa: E402
 
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(web_router)
 app.include_router(api_router, prefix="/api/v1")
