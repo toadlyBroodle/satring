@@ -8,8 +8,8 @@
 </div>
 
 <div class="mb-4">
-  <div class="text-amber-400 text-sm mb-1">$ satring info {{ service.slug }}</div>
-  <h1 class="text-xl">{{ service.name }}</h1>
+  <div class="text-amber-400 text-sm mb-1">₿ satring info {{ service.slug }}</div>
+  <h1 class="text-xl flex items-center gap-2">{% if service.logo_url %}<img src="{{ service.logo_url }}" alt="" class="h-6 w-6 object-contain">{% endif %}{{ service.name }}</h1>
   <div class="flex items-center gap-2 mt-1 text-sm">
     <span class="text-amber-400">[{{ service.protocol }}]</span>
     {% for cat in service.categories %}
@@ -67,7 +67,7 @@
   <!-- Review Form -->
   <div id="payment-area">
     <div class="border border-green-800 mt-4 p-4">
-      <div class="text-amber-400 text-sm mb-3">$ satring review --submit</div>
+      <div class="text-amber-400 text-sm mb-3">₿ satring review --submit</div>
       <form hx-post="/services/{{ service.slug }}/rate" hx-target="#reviews" hx-swap="afterbegin" hx-on::after-request="this.reset()">
         <div class="mb-3">
           <label for="reviewer_name" class="text-green-700 text-sm block mb-1 cursor-pointer">name&gt;</label>
