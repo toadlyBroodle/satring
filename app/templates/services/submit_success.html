@@ -12,6 +12,10 @@
   </div>
 
   <div class="border border-amber-400 p-4 mb-6">
+    {% if token_reused %}
+    <div class="text-amber-400 text-sm mb-2">!! Token shared from existing service !!</div>
+    <p class="text-sm mb-3">Your existing edit token works for this listing too. Same token, same domain.</p>
+    {% else %}
     <div class="text-amber-400 text-sm mb-2">!! IMPORTANT: Save your edit token !!</div>
     <p class="text-sm mb-3">This token lets you edit your listing. It will <span class="text-amber-400">not be shown again</span>.</p>
     <div class="flex items-center gap-2 mb-3">
@@ -19,6 +23,7 @@
       <button onclick="navigator.clipboard.writeText(document.getElementById('edit-token').textContent)" class="border border-green-400 text-green-400 px-3 py-2 text-sm hover:bg-green-400 hover:text-black transition-colors whitespace-nowrap">[COPY]</button>
     </div>
     <p class="text-green-700 text-xs">If you lose this token, you can recover access via domain verification at <a href="/services/{{ service.slug }}/recover" class="hover:text-amber-400">/services/{{ service.slug }}/recover</a></p>
+    {% endif %}
   </div>
 
   <div class="text-sm">

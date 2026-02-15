@@ -12,7 +12,7 @@ from app.database import get_db
 from app.l402 import create_invoice, check_payment_status, check_and_consume_payment
 from app.main import templates
 from app.models import Service, Category, Rating, service_categories
-from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token
+from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services
 
 router = APIRouter(include_in_schema=False)
 
@@ -116,6 +116,7 @@ async def submit_service(
     owner_name: str = Form(""),
     owner_contact: str = Form(""),
     logo_url: str = Form(""),
+    existing_edit_token: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     form_data = await request.form()
@@ -135,6 +136,7 @@ async def submit_service(
                 "protocol": protocol, "pricing_sats": str(pricing_sats),
                 "pricing_model": pricing_model, "owner_name": owner_name,
                 "owner_contact": owner_contact, "logo_url": logo_url,
+                "existing_edit_token": existing_edit_token,
             }
             for cid in category_ids:
                 form_fields[f"categories_{cid}"] = str(cid)
@@ -156,12 +158,28 @@ async def submit_service(
             )
 
     slug = await unique_slug(db, name)
-    edit_token = generate_edit_token()
+
+    # Check if existing token matches a same-domain service
+    token_reused = False
+    if existing_edit_token:
+        domain_services = await get_same_domain_services(db, url)
+        for ds in domain_services:
+            if ds.edit_token_hash and verify_edit_token(existing_edit_token, ds.edit_token_hash):
+                token_reused = True
+                break
+
+    if token_reused:
+        edit_token = existing_edit_token
+        edit_token_hash = ds.edit_token_hash
+    else:
+        edit_token = generate_edit_token()
+        edit_token_hash = hash_token(edit_token)
+
     service = Service(
         name=name, slug=slug, url=url, description=description,
         protocol=protocol, pricing_sats=pricing_sats, pricing_model=pricing_model,
         owner_name=owner_name, owner_contact=owner_contact, logo_url=logo_url,
-        edit_token_hash=hash_token(edit_token),
+        edit_token_hash=edit_token_hash,
     )
     if category_ids:
         cats = (await db.execute(select(Category).where(Category.id.in_(category_ids)))).scalars().all()
@@ -172,6 +190,7 @@ async def submit_service(
     return templates.TemplateResponse(request, "services/submit_success.html", {
         "service": service,
         "edit_token": edit_token,
+        "token_reused": token_reused,
     })
 
 
@@ -332,9 +351,13 @@ async def recover_service(
                 "error": "Challenge code does not match.",
             })
 
-        # Success - generate new edit token
+        # Success - generate new edit token and apply to all same-domain services
         new_token = generate_edit_token()
-        service.edit_token_hash = hash_token(new_token)
+        new_hash = hash_token(new_token)
+        domain_services = await get_same_domain_services(db, service.url)
+        for ds in domain_services:
+            ds.edit_token_hash = new_hash
+        service.edit_token_hash = new_hash
         service.domain_challenge = None
         service.domain_challenge_expires_at = None
         await db.commit()
@@ -342,6 +365,7 @@ async def recover_service(
             "service": service,
             "challenge_active": False,
             "new_token": new_token,
+            "domain_services": domain_services,
         })
 
     return HTMLResponse("Bad request", status_code=400)

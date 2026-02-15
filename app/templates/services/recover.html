@@ -23,7 +23,18 @@
       <code id="edit-token" class="bg-green-900/30 text-green-400 px-3 py-2 text-sm break-all flex-1 border border-green-800 select-all">{{ new_token }}</code>
       <button onclick="navigator.clipboard.writeText(document.getElementById('edit-token').textContent)" class="border border-green-400 text-green-400 px-3 py-2 text-sm hover:bg-green-400 hover:text-black transition-colors whitespace-nowrap">[COPY]</button>
     </div>
+    {% if domain_services is defined and domain_services|length > 1 %}
+    <div class="mt-3 text-sm">
+      <div class="text-green-700 mb-1">// token applied to all services on this domain:</div>
+      <ul class="text-green-400 list-none space-y-1">
+        {% for ds in domain_services %}
+        <li><a href="/services/{{ ds.slug }}/edit?token={{ new_token }}" class="hover:text-amber-400">&gt; {{ ds.name }}</a></li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% else %}
     <a href="/services/{{ service.slug }}/edit?token={{ new_token }}" class="text-green-700 hover:text-amber-400 text-sm">&gt; edit your listing now</a>
+    {% endif %}
   </div>
 
   {% elif challenge_active %}

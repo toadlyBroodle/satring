@@ -12,7 +12,7 @@ from app.config import settings
 from app.database import get_db
 from app.l402 import require_l402
 from app.models import Service, Category, Rating, service_categories
-from app.utils import generate_edit_token, hash_token, verify_edit_token
+from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services
 
 router = APIRouter(tags=["API"])
 
@@ -81,10 +81,12 @@ class ServiceCreate(BaseModel):
     owner_contact: str = ""
     logo_url: str = ""
     category_ids: list[int] = []
+    existing_edit_token: str | None = None
 
 
 class ServiceCreateOut(ServiceOut):
     edit_token: str | None = None
+    token_reused: bool = False
 
 
 class ServiceUpdate(BaseModel):
@@ -164,13 +166,30 @@ async def create_service(request: Request, body: ServiceCreate, db: AsyncSession
     await require_l402(request=request, amount_sats=settings.AUTH_SUBMIT_PRICE_SATS, memo="satring.com service submission")
     from app.utils import unique_slug
     slug = await unique_slug(db, body.name)
-    edit_token = generate_edit_token()
+    url_str = str(body.url)
+
+    # Check if existing token matches a same-domain service
+    token_reused = False
+    if body.existing_edit_token:
+        domain_services = await get_same_domain_services(db, url_str)
+        for ds in domain_services:
+            if ds.edit_token_hash and verify_edit_token(body.existing_edit_token, ds.edit_token_hash):
+                token_reused = True
+                break
+
+    if token_reused:
+        edit_token = body.existing_edit_token
+        edit_token_hash = ds.edit_token_hash
+    else:
+        edit_token = generate_edit_token()
+        edit_token_hash = hash_token(edit_token)
+
     service = Service(
-        name=body.name, slug=slug, url=str(body.url), description=body.description,
+        name=body.name, slug=slug, url=url_str, description=body.description,
         pricing_sats=body.pricing_sats, pricing_model=body.pricing_model,
         protocol=body.protocol, owner_name=body.owner_name,
         owner_contact=body.owner_contact, logo_url=body.logo_url,
-        edit_token_hash=hash_token(edit_token),
+        edit_token_hash=edit_token_hash,
     )
     if body.category_ids:
         cats = (await db.execute(
@@ -186,6 +205,7 @@ async def create_service(request: Request, body: ServiceCreate, db: AsyncSession
     )
     out = ServiceCreateOut.model_validate(result.scalars().first())
     out.edit_token = edit_token
+    out.token_reused = token_reused
     return out
 
 
@@ -254,11 +274,18 @@ async def api_recover_verify(slug: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Challenge code does not match")
 
     new_token = generate_edit_token()
-    service.edit_token_hash = hash_token(new_token)
+    new_hash = hash_token(new_token)
+    domain_services = await get_same_domain_services(db, service.url)
+    for ds in domain_services:
+        ds.edit_token_hash = new_hash
+    service.edit_token_hash = new_hash
     service.domain_challenge = None
     service.domain_challenge_expires_at = None
     await db.commit()
-    return {"edit_token": new_token}
+    return {
+        "edit_token": new_token,
+        "affected_services": [ds.slug for ds in domain_services],
+    }
 
 
 @router.get("/search", response_model=ServiceListOut)
