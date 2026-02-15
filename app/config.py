@@ -11,7 +11,8 @@ class Settings:
     AUTH_ROOT_KEY: str = os.getenv("AUTH_ROOT_KEY", "test-mode")
     AUTH_PRICE_SATS: int = int(os.getenv("AUTH_PRICE_SATS", "100"))
     AUTH_SUBMIT_PRICE_SATS: int = int(os.getenv("AUTH_SUBMIT_PRICE_SATS", "1000"))
-    AUTH_REVIEW_PRICE_SATS: int = int(os.getenv("AUTH_REVIEW_PRICE_SATS", "100"))
+    AUTH_REVIEW_PRICE_SATS: int = int(os.getenv("AUTH_REVIEW_PRICE_SATS", "10"))
+    AUTH_BULK_PRICE_SATS: int = int(os.getenv("AUTH_BULK_PRICE_SATS", "1000"))
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
 
 

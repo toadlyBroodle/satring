@@ -134,7 +134,7 @@ async def get_service_or_404(db: AsyncSession, slug: str) -> Service:
 # IMPORTANT: /services/bulk BEFORE /services/{slug}
 @router.get("/services/bulk", response_model=list[ServiceOut])
 async def bulk_export(request: Request, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request)
+    await require_l402(request=request, amount_sats=settings.AUTH_BULK_PRICE_SATS, memo="Satring bulk export")
     result = await db.execute(
         select(Service).options(selectinload(Service.categories)).order_by(Service.id)
     )
