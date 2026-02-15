@@ -246,7 +246,7 @@ def main():
         show_help()
         return
 
-    print("\n=== Satring Smoke Test ===\n")
+    print("\n=== satring Smoke Test ===\n")
 
     # In standalone mode, start server and pass None as live_server arg
     if _server_running():

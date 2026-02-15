@@ -29,7 +29,7 @@ def check_and_consume_payment(payment_hash: str) -> bool:
     return True
 
 
-async def create_invoice(amount_sats: int, memo: str = "Satring L402") -> dict:
+async def create_invoice(amount_sats: int, memo: str = "satring.com L402") -> dict:
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{settings.PAYMENT_URL}/api/v1/payments",
@@ -112,7 +112,7 @@ async def require_l402(
 
     # No auth header — issue a 402 challenge
     price = amount_sats if amount_sats is not None else settings.AUTH_PRICE_SATS
-    inv_memo = memo or "Satring premium API access"
+    inv_memo = memo or "satring.com premium API access"
     invoice_data = await create_invoice(price, inv_memo)
     macaroon_b64 = mint_macaroon(invoice_data["payment_hash"])
 

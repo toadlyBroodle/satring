@@ -470,7 +470,7 @@ class TestL402PriceAmounts:
              patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.get("/api/v1/services/bulk")
-            mock_inv.assert_called_once_with(settings.AUTH_BULK_PRICE_SATS, "Satring bulk export")
+            mock_inv.assert_called_once_with(settings.AUTH_BULK_PRICE_SATS, "satring.com bulk export")
 
     @pytest.mark.asyncio
     async def test_analytics_uses_default_price(self, client: AsyncClient):
@@ -478,7 +478,7 @@ class TestL402PriceAmounts:
              patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.get("/api/v1/analytics")
-            mock_inv.assert_called_once_with(settings.AUTH_PRICE_SATS, "Satring premium API access")
+            mock_inv.assert_called_once_with(settings.AUTH_PRICE_SATS, "satring.com premium API access")
 
     @pytest.mark.asyncio
     async def test_reputation_uses_default_price(self, client: AsyncClient, sample_service: Service):
@@ -486,7 +486,7 @@ class TestL402PriceAmounts:
              patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.get("/api/v1/services/test-api/reputation")
-            mock_inv.assert_called_once_with(settings.AUTH_PRICE_SATS, "Satring premium API access")
+            mock_inv.assert_called_once_with(settings.AUTH_PRICE_SATS, "satring.com premium API access")
 
     @pytest.mark.asyncio
     async def test_create_service_uses_submit_price(self, client: AsyncClient):
@@ -496,7 +496,7 @@ class TestL402PriceAmounts:
             await client.post("/api/v1/services", json={
                 "name": "X", "url": "https://x.com",
             })
-            mock_inv.assert_called_once_with(settings.AUTH_SUBMIT_PRICE_SATS, "Satring service submission")
+            mock_inv.assert_called_once_with(settings.AUTH_SUBMIT_PRICE_SATS, "satring.com service submission")
 
     @pytest.mark.asyncio
     async def test_create_rating_uses_review_price(self, client: AsyncClient, sample_service: Service):
@@ -504,7 +504,7 @@ class TestL402PriceAmounts:
              patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.post("/api/v1/services/test-api/ratings", json={"score": 3})
-            mock_inv.assert_called_once_with(settings.AUTH_REVIEW_PRICE_SATS, "Satring review submission")
+            mock_inv.assert_called_once_with(settings.AUTH_REVIEW_PRICE_SATS, "satring.com review submission")
 
 
 # ---------------------------------------------------------------------------
