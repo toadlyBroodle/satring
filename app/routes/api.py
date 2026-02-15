@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -243,7 +243,7 @@ async def api_recover_generate(slug: str, db: AsyncSession = Depends(get_db)):
     service = await get_service_or_404(db, slug)
     challenge = secrets.token_hex(32)
     service.domain_challenge = challenge
-    service.domain_challenge_expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
+    service.domain_challenge_expires_at = datetime.utcnow() + timedelta(minutes=30)
     await db.commit()
     return {
         "challenge": challenge,
@@ -258,7 +258,7 @@ async def api_recover_verify(slug: str, db: AsyncSession = Depends(get_db)):
     if (
         not service.domain_challenge
         or not service.domain_challenge_expires_at
-        or service.domain_challenge_expires_at <= datetime.now(timezone.utc)
+        or service.domain_challenge_expires_at <= datetime.utcnow()
     ):
         raise HTTPException(status_code=400, detail="No active challenge or challenge expired")
 
