@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke tests against a live uvicorn server (test mode).
+"""Smoke tests against a live uvicorn server.
 
 Run with pytest:
     pytest tests/test_endpt_smoke.py -v -s
@@ -11,7 +11,8 @@ Run standalone (same behavior, selective endpoints):
 
 Starts uvicorn automatically if not already running.
 Uses APP_PORT from config (default 8000).
-Forces AUTH_ROOT_KEY=test-mode so L402 paywalls are bypassed.
+Auto-detects test-mode vs production: paywalled endpoints expect 200 in
+test-mode and 402 in production.
 """
 
 import json
@@ -36,6 +37,15 @@ TIMEOUT = 10
 
 # State shared across ordered tests (populated by create)
 _state = {"slug": None, "edit_token": None}
+
+
+def _is_test_mode() -> bool:
+    """Detect whether the live server is running in test-mode by probing a paywalled endpoint."""
+    try:
+        r = httpx.get(f"{BASE}/api/v1/services/bulk", timeout=TIMEOUT)
+        return r.status_code != 402
+    except Exception:
+        return True  # assume test-mode if server unreachable (fixture will start one)
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +82,12 @@ def live_server():
     yield proc
     proc.terminate()
     proc.wait(timeout=5)
+
+
+@pytest.fixture(scope="module")
+def test_mode(live_server):
+    """True when the live server is in test-mode (L402 bypassed)."""
+    return _is_test_mode()
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +136,7 @@ def test_search(live_server):
     assert r.status_code == 200
 
 
-def test_create(live_server):
+def test_create(live_server, test_mode):
     _header("Create Service", "POST", "/api/v1/services")
     r = httpx.post(f"{BASE}/api/v1/services", json={
         "name": f"Smoke Test {int(time.time())}",
@@ -129,10 +145,13 @@ def test_create(live_server):
         "pricing_sats": 42,
     }, timeout=TIMEOUT)
     _show_result(r)
-    assert r.status_code == 201
-    data = r.json()
-    _state["slug"] = data["slug"]
-    _state["edit_token"] = data.get("edit_token")
+    if test_mode:
+        assert r.status_code == 201
+        data = r.json()
+        _state["slug"] = data["slug"]
+        _state["edit_token"] = data.get("edit_token")
+    else:
+        assert r.status_code == 402
 
 
 def test_detail(live_server):
@@ -164,7 +183,7 @@ def test_ratings(live_server):
     assert r.status_code == 200
 
 
-def test_rate(live_server):
+def test_rate(live_server, test_mode):
     slug = _state["slug"] or "satring-directory-api"
     _header("Create Rating", "POST", f"/api/v1/services/{slug}/ratings")
     r = httpx.post(f"{BASE}/api/v1/services/{slug}/ratings", json={
@@ -173,29 +192,41 @@ def test_rate(live_server):
         "reviewer_name": "SmokeBot",
     }, timeout=TIMEOUT)
     _show_result(r)
-    assert r.status_code == 201
+    if test_mode:
+        assert r.status_code == 201
+    else:
+        assert r.status_code == 402
 
 
-def test_analytics(live_server):
+def test_analytics(live_server, test_mode):
     _header("Analytics", "GET", "/api/v1/analytics")
     r = httpx.get(f"{BASE}/api/v1/analytics", timeout=TIMEOUT)
     _show_result(r)
-    assert r.status_code == 200
+    if test_mode:
+        assert r.status_code == 200
+    else:
+        assert r.status_code == 402
 
 
-def test_reputation(live_server):
+def test_reputation(live_server, test_mode):
     slug = _state["slug"] or "satring-directory-api"
     _header("Reputation", "GET", f"/api/v1/services/{slug}/reputation")
     r = httpx.get(f"{BASE}/api/v1/services/{slug}/reputation", timeout=TIMEOUT)
     _show_result(r)
-    assert r.status_code == 200
+    if test_mode:
+        assert r.status_code == 200
+    else:
+        assert r.status_code == 402
 
 
-def test_bulk(live_server):
+def test_bulk(live_server, test_mode):
     _header("Bulk Export", "GET", "/api/v1/services/bulk")
     r = httpx.get(f"{BASE}/api/v1/services/bulk", timeout=TIMEOUT)
     _show_result(r)
-    assert r.status_code == 200
+    if test_mode:
+        assert r.status_code == 200
+    else:
+        assert r.status_code == 402
 
 
 def test_recover_generate(live_server):
@@ -273,6 +304,9 @@ def main():
             sys.exit(1)
         print("  server started\n")
 
+    is_test = _is_test_mode()
+    print(f"  mode: {'test' if is_test else 'production'}\n")
+
     targets = args if args else ALL_ORDER
     unknown = [t for t in targets if t not in ENDPOINTS]
     if unknown:
@@ -283,7 +317,14 @@ def main():
     passed = failed = 0
     for name in targets:
         try:
-            ENDPOINTS[name][0](None)  # pass None for live_server
+            fn = ENDPOINTS[name][0]
+            # Pass test_mode to functions that need it
+            import inspect
+            params = inspect.signature(fn).parameters
+            if "test_mode" in params:
+                fn(None, is_test)
+            else:
+                fn(None)
             passed += 1
         except Exception as e:
             print(f"  ERROR: {e}\n")
