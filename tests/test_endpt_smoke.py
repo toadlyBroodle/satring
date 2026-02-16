@@ -237,27 +237,45 @@ def test_recover_generate(live_server):
     assert r.status_code == 200
 
 
+def test_delete(live_server):
+    slug = _state.get("slug")
+    token = _state.get("edit_token")
+    if not slug or not token:
+        pytest.skip("no service created yet")
+    _header("Delete Service", "DELETE", f"/api/v1/services/{slug}")
+    r = httpx.delete(f"{BASE}/api/v1/services/{slug}",
+                     headers={"X-Edit-Token": token}, timeout=TIMEOUT)
+    _show_result(r)
+    assert r.status_code == 200
+    assert r.json() == {"deleted": slug}
+
+    # Confirm it's gone
+    r2 = httpx.get(f"{BASE}/api/v1/services/{slug}", timeout=TIMEOUT)
+    assert r2.status_code == 404
+
+
 # ---------------------------------------------------------------------------
 # Standalone CLI mode
 # ---------------------------------------------------------------------------
 
 # (function, method, path, description)
 ENDPOINTS = {
-    "list":       (test_list,             "GET",  "/api/v1/services",                  "Paginated service listing"),
-    "detail":     (test_detail,           "GET",  "/api/v1/services/{slug}",            "Single service by slug"),
-    "search":     (test_search,           "GET",  "/api/v1/search?q=...",               "Full-text search"),
-    "create":     (test_create,           "POST", "/api/v1/services",                   "Submit new service (returns edit token)"),
-    "patch":      (test_patch,            "PATCH","/api/v1/services/{slug}",            "Edit service with token"),
-    "ratings":    (test_ratings,          "GET",  "/api/v1/services/{slug}/ratings",    "List ratings for a service"),
-    "rate":       (test_rate,             "POST", "/api/v1/services/{slug}/ratings",    "Submit a rating"),
-    "analytics":  (test_analytics,        "GET",  "/api/v1/analytics",                  "Aggregate directory stats (L402)"),
-    "reputation": (test_reputation,       "GET",  "/api/v1/services/{slug}/reputation", "Reputation report (L402)"),
-    "bulk":       (test_bulk,             "GET",  "/api/v1/services/bulk",              "Full JSON export (L402)"),
-    "recover":    (test_recover_generate, "POST", "/api/v1/services/{slug}/recover/generate", "Domain verification challenge"),
+    "list":       (test_list,             "GET",    "/api/v1/services",                  "Paginated service listing"),
+    "detail":     (test_detail,           "GET",    "/api/v1/services/{slug}",            "Single service by slug"),
+    "search":     (test_search,           "GET",    "/api/v1/search?q=...",               "Full-text search"),
+    "create":     (test_create,           "POST",   "/api/v1/services",                   "Submit new service (returns edit token)"),
+    "patch":      (test_patch,            "PATCH",  "/api/v1/services/{slug}",            "Edit service with token"),
+    "ratings":    (test_ratings,          "GET",    "/api/v1/services/{slug}/ratings",    "List ratings for a service"),
+    "rate":       (test_rate,             "POST",   "/api/v1/services/{slug}/ratings",    "Submit a rating"),
+    "analytics":  (test_analytics,        "GET",    "/api/v1/analytics",                  "Aggregate directory stats (L402)"),
+    "reputation": (test_reputation,       "GET",    "/api/v1/services/{slug}/reputation", "Reputation report (L402)"),
+    "bulk":       (test_bulk,             "GET",    "/api/v1/services/bulk",              "Full JSON export (L402)"),
+    "recover":    (test_recover_generate, "POST",   "/api/v1/services/{slug}/recover/generate", "Domain verification challenge"),
+    "delete":     (test_delete,           "DELETE", "/api/v1/services/{slug}",            "Delete service with token"),
 }
 
 ALL_ORDER = ["list", "search", "create", "detail", "patch", "ratings", "rate",
-             "analytics", "reputation", "bulk", "recover"]
+             "analytics", "reputation", "bulk", "recover", "delete"]
 
 
 def show_help():

@@ -1,11 +1,11 @@
-"""Tests for edit token utilities, web edit flow, and API PATCH flow."""
+"""Tests for edit token utilities, web edit flow, API PATCH flow, and delete flow."""
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Service
+from app.models import Service, Rating
 from app.utils import generate_edit_token, hash_token, verify_edit_token
 
 
@@ -266,3 +266,133 @@ class TestWebSubmitReturnsToken:
         assert "Token Display Test" in resp.text
         # The token should be displayed somewhere on the page
         assert "edit-token" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# Integration: Delete lifecycle (class-scoped DB — earlier tests create
+# services, later tests delete them)
+# ---------------------------------------------------------------------------
+
+import re
+from sqlalchemy import func
+
+
+class TestDeleteLifecycle:
+    """Shares one DB across all methods so services accumulate then get deleted."""
+
+    # -- setup: create services via web + API, add ratings ----------------
+
+    @pytest.mark.asyncio
+    async def test_1_web_submit_creates_service(self, class_client: AsyncClient, class_db: AsyncSession):
+        resp = await class_client.post("/submit", data={
+            "name": "Web Created",
+            "url": "https://web-created.example.com",
+            "description": "From web form",
+        }, follow_redirects=False)
+        assert resp.status_code == 200
+        match = re.search(r'id="edit-token"[^>]*>([^<]+)<', resp.text)
+        assert match
+        # stash on the class so later tests can use it
+        TestDeleteLifecycle.web_token = match.group(1).strip()
+
+        svc = (await class_db.execute(
+            select(Service).where(Service.name == "Web Created")
+        )).scalars().first()
+        assert svc is not None
+        TestDeleteLifecycle.web_slug = svc.slug
+
+    @pytest.mark.asyncio
+    async def test_2_api_create_service(self, class_client: AsyncClient, class_db: AsyncSession):
+        resp = await class_client.post("/api/v1/services", json={
+            "name": "API Created",
+            "url": "https://api-created.example.com",
+        })
+        assert resp.status_code == 201
+        data = resp.json()
+        TestDeleteLifecycle.api_slug = data["slug"]
+        TestDeleteLifecycle.api_token = data["edit_token"]
+        TestDeleteLifecycle.api_service_id = data["id"]
+
+    @pytest.mark.asyncio
+    async def test_3_add_ratings_to_api_service(self, class_client: AsyncClient, class_db: AsyncSession):
+        slug = TestDeleteLifecycle.api_slug
+        for score in (5, 4, 3):
+            resp = await class_client.post(f"/api/v1/services/{slug}/ratings", json={
+                "score": score, "comment": f"Score {score}", "reviewer_name": "Tester",
+            })
+            assert resp.status_code == 201
+
+        count = (await class_db.execute(
+            select(func.count(Rating.id)).where(Rating.service_id == TestDeleteLifecycle.api_service_id)
+        )).scalar()
+        assert count == 3
+
+    # -- auth checks (services survive) -----------------------------------
+
+    @pytest.mark.asyncio
+    async def test_4_web_delete_invalid_token_returns_403(self, class_client: AsyncClient, class_db: AsyncSession):
+        resp = await class_client.post(f"/services/{TestDeleteLifecycle.web_slug}/delete", data={
+            "edit_token": "wrong-token",
+        }, follow_redirects=False)
+        assert resp.status_code == 403
+
+        svc = (await class_db.execute(
+            select(Service).where(Service.slug == TestDeleteLifecycle.web_slug)
+        )).scalars().first()
+        assert svc is not None
+
+    @pytest.mark.asyncio
+    async def test_5_api_delete_invalid_token_returns_403(self, class_client: AsyncClient, class_db: AsyncSession):
+        resp = await class_client.delete(
+            f"/api/v1/services/{TestDeleteLifecycle.api_slug}",
+            headers={"X-Edit-Token": "bad-token"},
+        )
+        assert resp.status_code == 403
+
+        svc = (await class_db.execute(
+            select(Service).where(Service.slug == TestDeleteLifecycle.api_slug)
+        )).scalars().first()
+        assert svc is not None
+
+    # -- actual deletes (services + cascaded ratings removed) -------------
+
+    @pytest.mark.asyncio
+    async def test_6_web_delete_removes_service(self, class_client: AsyncClient, class_db: AsyncSession):
+        resp = await class_client.post(f"/services/{TestDeleteLifecycle.web_slug}/delete", data={
+            "edit_token": TestDeleteLifecycle.web_token,
+        }, follow_redirects=False)
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/"
+
+        svc = (await class_db.execute(
+            select(Service).where(Service.slug == TestDeleteLifecycle.web_slug)
+        )).scalars().first()
+        assert svc is None
+
+    @pytest.mark.asyncio
+    async def test_7_api_delete_cascades_ratings(self, class_client: AsyncClient, class_db: AsyncSession):
+        slug = TestDeleteLifecycle.api_slug
+        service_id = TestDeleteLifecycle.api_service_id
+
+        resp = await class_client.delete(
+            f"/api/v1/services/{slug}",
+            headers={"X-Edit-Token": TestDeleteLifecycle.api_token},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": slug}
+
+        svc = (await class_db.execute(
+            select(Service).where(Service.slug == slug)
+        )).scalars().first()
+        assert svc is None
+
+        ratings = (await class_db.execute(
+            select(Rating).where(Rating.service_id == service_id)
+        )).scalars().all()
+        assert ratings == []
+
+    @pytest.mark.asyncio
+    async def test_8_no_test_services_remain(self, class_client: AsyncClient, class_db: AsyncSession):
+        """After deletes, zero services should be left in the DB."""
+        count = (await class_db.execute(select(func.count(Service.id)))).scalar()
+        assert count == 0

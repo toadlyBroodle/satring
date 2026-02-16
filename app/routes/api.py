@@ -239,6 +239,21 @@ async def update_service(
     return ServiceOut.model_validate(result.scalars().first())
 
 
+@router.delete("/services/{slug}")
+async def delete_service(
+    slug: str,
+    x_edit_token: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+):
+    service = await get_service_or_404(db, slug)
+    if not service.edit_token_hash or not verify_edit_token(x_edit_token, service.edit_token_hash):
+        raise HTTPException(status_code=403, detail="Invalid edit token")
+
+    await db.delete(service)
+    await db.commit()
+    return {"deleted": slug}
+
+
 @router.post("/services/{slug}/recover/generate")
 async def api_recover_generate(slug: str, db: AsyncSession = Depends(get_db)):
     service = await get_service_or_404(db, slug)
