@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Column, Integer, String, Text, Float, DateTime, ForeignKey, Table
+    Boolean, Column, Integer, String, Text, Float, DateTime, ForeignKey, Table
 )
 from sqlalchemy.orm import relationship
 
@@ -44,6 +44,7 @@ class Service(Base):
     edit_token_hash = Column(String(64), nullable=True, index=True)
     domain_challenge = Column(String(64), nullable=True)
     domain_challenge_expires_at = Column(DateTime, nullable=True)
+    domain_verified = Column(Boolean, default=False)
     avg_rating = Column(Float, default=0.0)
     rating_count = Column(Integer, default=0)
     status = Column(String(20), default="unverified")  # confirmed | live | dead | unverified
