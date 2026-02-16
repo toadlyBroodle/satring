@@ -38,7 +38,7 @@
 <div class="mb-2 flex flex-wrap gap-2 text-sm">
   <span class="text-green-700 py-0.5">filter&gt;</span>
   <a href="/?{{ ('category=' ~ active_category) if active_category else '' }}{{ qs_sort }}" class="border border-green-800 px-2 py-0.5 {% if not active_status and active_verified != 'true' %}bg-green-400 text-black{% else %}hover:text-amber-400{% endif %}">[all]</a>
-  <a href="/?verified=true{{ qs_cat }}{{ qs_sort }}" class="border border-green-800 px-2 py-0.5 {% if active_verified == 'true' %}bg-amber-400 text-black{% else %}hover:text-amber-400{% endif %}">[verified]</a>
+  <a href="/?verified=true{{ qs_cat }}{{ qs_sort }}" class="filter-verified border border-green-800 px-2 py-0.5 {% if active_verified == 'true' %}active{% else %}hover:text-amber-400{% endif %}">[verified]</a>
   {% for st in ['confirmed', 'live', 'unverified', 'dead'] %}
   <a href="/?status={{ st }}{{ qs_cat }}{{ qs_sort }}" class="border border-green-800 px-2 py-0.5 {% if active_status == st %}bg-amber-400 text-black{% else %}hover:text-amber-400{% endif %}">[{{ st }}]</a>
   {% endfor %}

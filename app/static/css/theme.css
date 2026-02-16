@@ -11,6 +11,8 @@
   --border:       #166534;
   --border-dim:   #14532d;
   --select-bg:    #22c55e;
+  --verified:     #22d3ee;
+  --verified-dim: #155e75;
   --danger:       #991b1b;
   --danger-text:  #f87171;
 }
@@ -29,6 +31,11 @@ body { opacity: 0; margin: 0; }
 ::-webkit-scrollbar-thumb { background: var(--text-muted); }
 ::-webkit-scrollbar-thumb:hover { background: var(--select-bg); }
 input, select, textarea { caret-color: var(--text); }
+
+/* ── Verified filter button ── */
+.filter-verified       { color: var(--verified); border-color: var(--verified-dim); }
+.filter-verified:hover { background: var(--verified); color: var(--bg); }
+.filter-verified.active { background: var(--verified); color: var(--bg); }
 
 /* ── Tailwind page: category checkboxes ── */
 .category-check::before { content: '[\00a0]'; }
