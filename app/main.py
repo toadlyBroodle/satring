@@ -15,8 +15,8 @@ SEED_CATEGORIES = [
     ("Finance", "finance", "Financial data, trading, and payment APIs"),
     ("Identity", "identity", "KYC, authentication, and verification"),
     ("Media", "media", "Image, video, and audio processing"),
-    ("Messaging", "messaging", "Email, SMS, and push notification APIs"),
     ("Search", "search", "Web search, indexing, and discovery"),
+    ("Social", "social", "Social networks, communications, and notification APIs"),
     ("Storage", "storage", "File storage and content delivery"),
     ("Tools", "tools", "Developer tools, utilities, and infrastructure"),
 ]

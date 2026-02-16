@@ -65,7 +65,7 @@
       <label class="text-green-700 block mb-1">categories&gt;</label>
       <div class="flex flex-wrap gap-x-4 gap-y-2">
         {% for cat in categories %}
-        <label class="cursor-pointer flex items-center gap-1.5 hover:text-amber-400 category-label">
+        <label class="cursor-pointer flex items-center gap-1.5 hover:text-amber-400 category-label" data-tip="{{ cat.description }}">
           <input type="checkbox" name="categories" value="{{ cat.id }}" class="hidden peer" />
           <span class="peer-checked:text-amber-400 category-check"></span>
           <span class="peer-checked:text-amber-400">{{ cat.name }}</span>
