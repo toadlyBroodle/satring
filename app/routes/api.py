@@ -57,6 +57,7 @@ class ServiceOut(BaseModel):
     logo_url: str
     avg_rating: float
     rating_count: int
+    domain_verified: bool
     categories: list[CategoryOut]
     created_at: datetime
 
@@ -278,7 +279,9 @@ async def api_recover_verify(slug: str, db: AsyncSession = Depends(get_db)):
     domain_services = await get_same_domain_services(db, service.url)
     for ds in domain_services:
         ds.edit_token_hash = new_hash
+        ds.domain_verified = True
     service.edit_token_hash = new_hash
+    service.domain_verified = True
     service.domain_challenge = None
     service.domain_challenge_expires_at = None
     await db.commit()

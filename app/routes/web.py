@@ -23,6 +23,7 @@ async def directory(
     category: str | None = None,
     status: str | None = None,
     sort: str | None = None,
+    verified: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
@@ -32,6 +33,8 @@ async def directory(
         query = query.join(service_categories).join(Category).where(Category.slug == category)
     if status:
         query = query.where(Service.status == status)
+    if verified == "true":
+        query = query.where(Service.domain_verified == True)
 
     sort_map = {
         "top-rated": Service.avg_rating.desc(),
@@ -47,6 +50,7 @@ async def directory(
         "active_category": category,
         "active_status": status,
         "active_sort": sort,
+        "active_verified": verified,
     })
 
 
@@ -57,6 +61,7 @@ async def search(
     category: str | None = None,
     status: str | None = None,
     sort: str | None = None,
+    verified: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Service).options(selectinload(Service.categories))
@@ -67,6 +72,8 @@ async def search(
         query = query.join(service_categories).join(Category).where(Category.slug == category)
     if status:
         query = query.where(Service.status == status)
+    if verified == "true":
+        query = query.where(Service.domain_verified == True)
 
     sort_map = {
         "top-rated": Service.avg_rating.desc(),
@@ -372,7 +379,9 @@ async def recover_service(
         domain_services = await get_same_domain_services(db, service.url)
         for ds in domain_services:
             ds.edit_token_hash = new_hash
+            ds.domain_verified = True
         service.edit_token_hash = new_hash
+        service.domain_verified = True
         service.domain_challenge = None
         service.domain_challenge_expires_at = None
         await db.commit()

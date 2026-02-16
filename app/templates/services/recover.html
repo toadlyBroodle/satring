@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Recover Edit Access - {{ service.name }}{% endblock %}
+{% block title %}Verify Domain Ownership - {{ service.name }}{% endblock %}
 {% block content %}
 
 <div class="max-w-2xl">
@@ -7,8 +7,8 @@
     <a href="/services/{{ service.slug }}" class="text-green-700 hover:text-amber-400">&lt; back to {{ service.name }}</a>
   </div>
 
-  <div class="text-amber-400 text-sm mb-1">₿ satring recover {{ service.slug }}</div>
-  <h1 class="text-xl mb-4">Recover Edit Access</h1>
+  <div class="text-amber-400 text-sm mb-1">₿ satring verify {{ service.slug }}</div>
+  <h1 class="text-xl mb-4">Verify Domain Ownership</h1>
 
   {% if error is defined and error %}
   <div class="border border-red-500 text-red-400 p-3 mb-4 text-sm">{{ error }}</div>
@@ -17,8 +17,8 @@
   {% if new_token is defined and new_token %}
   <!-- Success: show new token -->
   <div class="border border-amber-400 p-4 mb-6">
-    <div class="text-amber-400 text-sm mb-2">!! Domain verified - new token generated !!</div>
-    <p class="text-sm mb-3">Save this token. It will <span class="text-amber-400">not be shown again</span>.</p>
+    <div class="text-amber-400 text-sm mb-2">!! Domain ownership verified !!</div>
+    <p class="text-sm mb-3">Your listing now shows a <span class="text-cyan-400">[domain verified]</span> badge. Save this token — it will <span class="text-amber-400">not be shown again</span>.</p>
     <div class="flex items-center gap-2 mb-3">
       <code id="edit-token" class="bg-green-900/30 text-green-400 px-3 py-2 text-sm break-all flex-1 border border-green-800 select-all">{{ new_token }}</code>
       <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('edit-token').textContent);this.textContent='[COPIED]';setTimeout(()=>this.textContent='[COPY]',1500)" class="border border-green-400 text-green-400 px-3 py-2 text-sm hover:bg-green-400 hover:text-black transition-colors whitespace-nowrap">[COPY]</button>
@@ -65,7 +65,7 @@
   <!-- Initial: explain process -->
   <div class="border border-green-800 p-4 mb-4">
     <div class="text-amber-400 text-sm mb-2">// domain verification</div>
-    <p class="text-sm mb-3">If you've lost your edit token, you can prove ownership of <span class="text-amber-400">{{ service.url }}</span> to get a new one.</p>
+    <p class="text-sm mb-3">Verify ownership of <span class="text-amber-400">{{ service.url }}</span> to earn a <span class="text-cyan-400">[verified]</span> badge and get your edit token.</p>
     <ol class="text-sm text-green-700 mb-4 list-decimal list-inside space-y-1">
       <li>Click "Generate Challenge" to create a verification code</li>
       <li>Place the code at <code>{{ verify_path }}</code></li>

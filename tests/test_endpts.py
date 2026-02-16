@@ -50,7 +50,7 @@ class TestListServicesResponse:
         expected_fields = {
             "id", "name", "slug", "url", "description", "pricing_sats",
             "pricing_model", "protocol", "owner_name", "logo_url",
-            "avg_rating", "rating_count", "categories", "created_at",
+            "avg_rating", "rating_count", "domain_verified", "categories", "created_at",
         }
         assert set(svc.keys()) == expected_fields
         assert "edit_token" not in svc

@@ -12,8 +12,9 @@
 {% set qs_status = '&status=' ~ active_status if active_status else '' %}
 {% set qs_sort = '&sort=' ~ active_sort if active_sort and active_sort != 'newest' else '' %}
 {% set qs_cat = '&category=' ~ active_category if active_category else '' %}
+{% set qs_verified = '&verified=true' if active_verified == 'true' else '' %}
 {% set qs_cat_status = ('category=' ~ active_category if active_category else '') ~ (('&' if active_category else '') ~ 'status=' ~ active_status if active_status else '') %}
-{% set qs_base = qs_cat_status ~ (('&' if qs_cat_status else '') ~ 'sort=' ~ active_sort if active_sort and active_sort != 'newest' else '') %}
+{% set qs_base = qs_cat_status ~ qs_verified ~ (('&' if qs_cat_status or qs_verified else '') ~ 'sort=' ~ active_sort if active_sort and active_sort != 'newest' else '') %}
 
 <!-- Search -->
 <div class="mb-4">
@@ -28,26 +29,27 @@
 <!-- Category Filters -->
 <div class="mb-2 flex flex-wrap gap-2 text-sm">
   <span class="text-green-700 py-0.5">cat&gt;</span>
-  <a href="/?{{ ('status=' ~ active_status) if active_status else '' }}{{ ('&sort=' ~ active_sort) if active_sort and active_sort != 'newest' else '' }}" class="border border-green-800 px-2 py-0.5 {% if not active_category %}bg-green-400 text-black{% else %}hover:text-amber-400{% endif %}">[all]</a>
+  <a href="/?{{ ('status=' ~ active_status) if active_status else '' }}{{ qs_verified }}{{ ('&sort=' ~ active_sort) if active_sort and active_sort != 'newest' else '' }}" class="border border-green-800 px-2 py-0.5 {% if not active_category %}bg-green-400 text-black{% else %}hover:text-amber-400{% endif %}">[all]</a>
   {% for cat in categories %}
-  <a href="/?category={{ cat.slug }}{{ qs_status }}{{ qs_sort }}" class="border border-green-800 px-2 py-0.5 {% if active_category == cat.slug %}bg-amber-400 text-black{% else %}hover:text-amber-400{% endif %}">[{{ cat.name }}]</a>
+  <a href="/?category={{ cat.slug }}{{ qs_status }}{{ qs_verified }}{{ qs_sort }}" class="border border-green-800 px-2 py-0.5 {% if active_category == cat.slug %}bg-amber-400 text-black{% else %}hover:text-amber-400{% endif %}">[{{ cat.name }}]</a>
   {% endfor %}
 </div>
 
 <!-- Status Filters -->
 <div class="mb-2 flex flex-wrap gap-2 text-sm">
   <span class="text-green-700 py-0.5">filter&gt;</span>
-  <a href="/?{{ ('category=' ~ active_category) if active_category else '' }}{{ qs_sort }}" class="border border-green-800 px-2 py-0.5 {% if not active_status %}bg-green-400 text-black{% else %}hover:text-amber-400{% endif %}">[all]</a>
+  <a href="/?{{ ('category=' ~ active_category) if active_category else '' }}{{ qs_verified }}{{ qs_sort }}" class="border border-green-800 px-2 py-0.5 {% if not active_status %}bg-green-400 text-black{% else %}hover:text-amber-400{% endif %}">[all]</a>
   {% for st in ['live', 'confirmed', 'dead', 'unverified'] %}
-  <a href="/?status={{ st }}{{ qs_cat }}{{ qs_sort }}" class="border border-green-800 px-2 py-0.5 {% if active_status == st %}bg-amber-400 text-black{% else %}hover:text-amber-400{% endif %}">[{{ st }}]</a>
+  <a href="/?status={{ st }}{{ qs_cat }}{{ qs_verified }}{{ qs_sort }}" class="border border-green-800 px-2 py-0.5 {% if active_status == st %}bg-amber-400 text-black{% else %}hover:text-amber-400{% endif %}">[{{ st }}]</a>
   {% endfor %}
+  <a href="/?verified=true{{ qs_cat }}{{ qs_status }}{{ qs_sort }}" class="border border-cyan-800 px-2 py-0.5 {% if active_verified == 'true' %}bg-cyan-400 text-black{% else %}text-cyan-400 hover:bg-cyan-400 hover:text-black{% endif %}">[verified]</a>
 </div>
 
 <!-- Sort Options -->
 <div class="mb-4 flex flex-wrap gap-2 text-sm">
   <span class="text-green-700 py-0.5">sort&gt;</span>
   {% for sort_key, sort_label in [('newest', 'newest'), ('top-rated', 'top-rated'), ('cheapest', 'cheapest'), ('most-reviewed', 'most-reviewed')] %}
-  <a href="/?{{ qs_cat_status }}{{ ('&' if qs_cat_status else '') }}sort={{ sort_key }}" class="border border-green-800 px-2 py-0.5 {% if active_sort == sort_key or (sort_key == 'newest' and not active_sort) %}bg-green-400 text-black{% else %}hover:text-amber-400{% endif %}">[{{ sort_label }}]</a>
+  <a href="/?{{ qs_cat_status }}{{ qs_verified }}{{ ('&' if qs_cat_status or qs_verified else '') }}sort={{ sort_key }}" class="border border-green-800 px-2 py-0.5 {% if active_sort == sort_key or (sort_key == 'newest' and not active_sort) %}bg-green-400 text-black{% else %}hover:text-amber-400{% endif %}">[{{ sort_label }}]</a>
   {% endfor %}
 </div>
 
