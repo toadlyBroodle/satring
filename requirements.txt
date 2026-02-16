@@ -7,3 +7,5 @@ python-dotenv
 pymacaroons
 httpx
 python-multipart
+pytest
+pytest-asyncio
