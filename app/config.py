@@ -14,6 +14,7 @@ class Settings:
     AUTH_REVIEW_PRICE_SATS: int = int(os.getenv("AUTH_REVIEW_PRICE_SATS", "10"))
     AUTH_BULK_PRICE_SATS: int = int(os.getenv("AUTH_BULK_PRICE_SATS", "1000"))
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
+    APP_PORT: int = int(os.getenv("APP_PORT", "8000"))
 
 
 settings = Settings()
