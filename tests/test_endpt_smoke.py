@@ -9,7 +9,8 @@ Run standalone (same behavior, selective endpoints):
     python tests/test_endpt_smoke.py list detail      # Hit specific ones
     python tests/test_endpt_smoke.py --help           # Show available endpoint names
 
-Starts uvicorn automatically if not already running on :8000.
+Starts uvicorn automatically if not already running.
+Uses APP_PORT from config (default 8000).
 Forces AUTH_ROOT_KEY=test-mode so L402 paywalls are bypassed.
 """
 
@@ -27,7 +28,10 @@ os.environ["AUTH_ROOT_KEY"] = "test-mode"
 
 import httpx
 
-BASE = "http://localhost:8000"
+from app.config import settings
+
+PORT = settings.APP_PORT
+BASE = f"http://localhost:{PORT}"
 TIMEOUT = 10
 
 # State shared across ordered tests (populated by create)
@@ -40,7 +44,7 @@ _state = {"slug": None, "edit_token": None}
 
 def _server_running() -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(("localhost", 8000)) == 0
+        return s.connect_ex(("localhost", PORT)) == 0
 
 
 @pytest.fixture(scope="module")
@@ -52,7 +56,7 @@ def live_server():
 
     env = {**os.environ, "AUTH_ROOT_KEY": "test-mode"}
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "app.main:app", "--port", "8000"],
+        [sys.executable, "-m", "uvicorn", "app.main:app", "--port", str(PORT)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         env=env,
@@ -250,13 +254,13 @@ def main():
 
     # In standalone mode, start server and pass None as live_server arg
     if _server_running():
-        print("  server already running on :8000\n")
+        print(f"  server already running on :{PORT}\n")
         proc = None
     else:
         print("  starting uvicorn (test-mode)...")
         env = {**os.environ, "AUTH_ROOT_KEY": "test-mode"}
         proc = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "app.main:app", "--port", "8000"],
+            [sys.executable, "-m", "uvicorn", "app.main:app", "--port", str(PORT)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
         )
         for _ in range(30):
