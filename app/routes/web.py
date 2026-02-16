@@ -291,6 +291,25 @@ async def edit_service(
     return RedirectResponse(f"/services/{slug}", status_code=303)
 
 
+@router.post("/services/{slug}/delete")
+async def delete_service(
+    request: Request,
+    slug: str,
+    edit_token: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Service).where(Service.slug == slug))
+    service = result.scalars().first()
+    if not service:
+        return HTMLResponse("<h1>Not Found</h1>", status_code=404)
+    if not service.edit_token_hash or not verify_edit_token(edit_token, service.edit_token_hash):
+        return HTMLResponse("Forbidden", status_code=403)
+
+    await db.delete(service)
+    await db.commit()
+    return RedirectResponse("/", status_code=303)
+
+
 @router.get("/services/{slug}/recover", response_class=HTMLResponse)
 async def recover_form(
     request: Request,

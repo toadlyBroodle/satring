@@ -18,30 +18,60 @@ def anyio_backend():
     return "asyncio"
 
 
-@pytest_asyncio.fixture
-async def db():
+async def _make_db():
+    """Create a fresh in-memory DB engine + seeded session."""
     engine = create_async_engine("sqlite+aiosqlite://", echo=False)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    async with session_factory() as session:
-        # Seed categories
-        for name, slug, description in SEED_CATEGORIES:
-            session.add(Category(name=name, slug=slug, description=description))
-        await session.commit()
-        yield session
+    session = session_factory()
+    for name, slug, description in SEED_CATEGORIES:
+        session.add(Category(name=name, slug=slug, description=description))
+    await session.commit()
+    return engine, session
 
+
+async def _teardown_db(engine, session):
+    await session.close()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
 
 
 @pytest_asyncio.fixture
+async def db():
+    engine, session = await _make_db()
+    yield session
+    await _teardown_db(engine, session)
+
+
+@pytest_asyncio.fixture(scope="class")
+async def class_db():
+    """Class-scoped DB: all tests in a class share one database."""
+    engine, session = await _make_db()
+    yield session
+    await _teardown_db(engine, session)
+
+
+@pytest_asyncio.fixture
 async def client(db: AsyncSession):
     async def override_get_db():
         yield db
+
+    app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture(scope="class")
+async def class_client(class_db: AsyncSession):
+    """Class-scoped client sharing the class_db session."""
+    async def override_get_db():
+        yield class_db
 
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
