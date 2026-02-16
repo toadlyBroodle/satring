@@ -32,17 +32,20 @@ import httpx
 from app.config import settings
 
 PORT = settings.APP_PORT
-BASE = f"http://localhost:{PORT}"
 TIMEOUT = 10
 
 # State shared across ordered tests (populated by create)
-_state = {"slug": None, "edit_token": None}
+_state = {"slug": None, "edit_token": None, "base": None}
 
 
-def _is_test_mode() -> bool:
+def _base_url():
+    return _state["base"] or f"http://localhost:{PORT}"
+
+
+def _is_test_mode(base: str) -> bool:
     """Detect whether the live server is running in test-mode by probing a paywalled endpoint."""
     try:
-        r = httpx.get(f"{BASE}/api/v1/services/bulk", timeout=TIMEOUT)
+        r = httpx.get(f"{base}/api/v1/services/bulk", timeout=TIMEOUT)
         return r.status_code != 402
     except Exception:
         return True  # assume test-mode if server unreachable (fixture will start one)
@@ -52,28 +55,33 @@ def _is_test_mode() -> bool:
 # Fixture: start uvicorn for the module, stop when done
 # ---------------------------------------------------------------------------
 
-def _server_running() -> bool:
+def _port_open(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(("localhost", PORT)) == 0
+        return s.connect_ex(("localhost", port)) == 0
+
+
+def _find_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
 
 
 @pytest.fixture(scope="module")
 def live_server():
-    """Start a uvicorn server in test-mode for the duration of this module."""
-    if _server_running():
-        yield None  # already running externally
-        return
+    """Always start a dedicated test-mode uvicorn on a free port."""
+    port = _find_free_port()
+    _state["base"] = f"http://localhost:{port}"
 
     env = {**os.environ, "AUTH_ROOT_KEY": "test-mode"}
     proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "app.main:app", "--port", str(PORT)],
+        [sys.executable, "-m", "uvicorn", "app.main:app", "--port", str(port)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         env=env,
     )
     for _ in range(30):
         time.sleep(0.3)
-        if _server_running():
+        if _port_open(port):
             break
     else:
         proc.kill()
@@ -87,7 +95,7 @@ def live_server():
 @pytest.fixture(scope="module")
 def test_mode(live_server):
     """True when the live server is in test-mode (L402 bypassed)."""
-    return _is_test_mode()
+    return _is_test_mode(_base_url())
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +129,7 @@ def _show_result(resp):
 
 def test_list(live_server):
     _header("List Services", "GET", "/api/v1/services")
-    r = httpx.get(f"{BASE}/api/v1/services?page_size=3", timeout=TIMEOUT)
+    r = httpx.get(f"{_base_url()}/api/v1/services?page_size=3", timeout=TIMEOUT)
     _show_result(r)
     assert r.status_code == 200
     services = r.json().get("services", [])
@@ -131,14 +139,14 @@ def test_list(live_server):
 
 def test_search(live_server):
     _header("Search", "GET", "/api/v1/search?q=satring")
-    r = httpx.get(f"{BASE}/api/v1/search?q=satring", timeout=TIMEOUT)
+    r = httpx.get(f"{_base_url()}/api/v1/search?q=satring", timeout=TIMEOUT)
     _show_result(r)
     assert r.status_code == 200
 
 
 def test_create(live_server, test_mode):
     _header("Create Service", "POST", "/api/v1/services")
-    r = httpx.post(f"{BASE}/api/v1/services", json={
+    r = httpx.post(f"{_base_url()}/api/v1/services", json={
         "name": f"Smoke Test {int(time.time())}",
         "url": f"https://smoke-{int(time.time())}.example.com",
         "description": "Created by smoke test",
@@ -155,9 +163,9 @@ def test_create(live_server, test_mode):
 
 
 def test_detail(live_server):
-    slug = _state["slug"] or "satring-directory-api"
+    slug = _state["slug"]
     _header("Service Detail", "GET", f"/api/v1/services/{slug}")
-    r = httpx.get(f"{BASE}/api/v1/services/{slug}", timeout=TIMEOUT)
+    r = httpx.get(f"{_base_url()}/api/v1/services/{slug}", timeout=TIMEOUT)
     _show_result(r)
     assert r.status_code == 200
 
@@ -168,7 +176,7 @@ def test_patch(live_server):
     if not slug or not token:
         pytest.skip("no service created yet")
     _header("Patch Service", "PATCH", f"/api/v1/services/{slug}")
-    r = httpx.patch(f"{BASE}/api/v1/services/{slug}", json={
+    r = httpx.patch(f"{_base_url()}/api/v1/services/{slug}", json={
         "description": "Updated by smoke test",
     }, headers={"X-Edit-Token": token}, timeout=TIMEOUT)
     _show_result(r)
@@ -176,17 +184,17 @@ def test_patch(live_server):
 
 
 def test_ratings(live_server):
-    slug = _state["slug"] or "satring-directory-api"
+    slug = _state["slug"]
     _header("List Ratings", "GET", f"/api/v1/services/{slug}/ratings")
-    r = httpx.get(f"{BASE}/api/v1/services/{slug}/ratings", timeout=TIMEOUT)
+    r = httpx.get(f"{_base_url()}/api/v1/services/{slug}/ratings", timeout=TIMEOUT)
     _show_result(r)
     assert r.status_code == 200
 
 
 def test_rate(live_server, test_mode):
-    slug = _state["slug"] or "satring-directory-api"
+    slug = _state["slug"]
     _header("Create Rating", "POST", f"/api/v1/services/{slug}/ratings")
-    r = httpx.post(f"{BASE}/api/v1/services/{slug}/ratings", json={
+    r = httpx.post(f"{_base_url()}/api/v1/services/{slug}/ratings", json={
         "score": 5,
         "comment": "Smoke test review",
         "reviewer_name": "SmokeBot",
@@ -200,7 +208,7 @@ def test_rate(live_server, test_mode):
 
 def test_analytics(live_server, test_mode):
     _header("Analytics", "GET", "/api/v1/analytics")
-    r = httpx.get(f"{BASE}/api/v1/analytics", timeout=TIMEOUT)
+    r = httpx.get(f"{_base_url()}/api/v1/analytics", timeout=TIMEOUT)
     _show_result(r)
     if test_mode:
         assert r.status_code == 200
@@ -209,9 +217,9 @@ def test_analytics(live_server, test_mode):
 
 
 def test_reputation(live_server, test_mode):
-    slug = _state["slug"] or "satring-directory-api"
+    slug = _state["slug"]
     _header("Reputation", "GET", f"/api/v1/services/{slug}/reputation")
-    r = httpx.get(f"{BASE}/api/v1/services/{slug}/reputation", timeout=TIMEOUT)
+    r = httpx.get(f"{_base_url()}/api/v1/services/{slug}/reputation", timeout=TIMEOUT)
     _show_result(r)
     if test_mode:
         assert r.status_code == 200
@@ -221,7 +229,7 @@ def test_reputation(live_server, test_mode):
 
 def test_bulk(live_server, test_mode):
     _header("Bulk Export", "GET", "/api/v1/services/bulk")
-    r = httpx.get(f"{BASE}/api/v1/services/bulk", timeout=TIMEOUT)
+    r = httpx.get(f"{_base_url()}/api/v1/services/bulk", timeout=TIMEOUT)
     _show_result(r)
     if test_mode:
         assert r.status_code == 200
@@ -230,9 +238,9 @@ def test_bulk(live_server, test_mode):
 
 
 def test_recover_generate(live_server):
-    slug = _state["slug"] or "satring-directory-api"
+    slug = _state["slug"]
     _header("Recover Generate", "POST", f"/api/v1/services/{slug}/recover/generate")
-    r = httpx.post(f"{BASE}/api/v1/services/{slug}/recover/generate", timeout=TIMEOUT)
+    r = httpx.post(f"{_base_url()}/api/v1/services/{slug}/recover/generate", timeout=TIMEOUT)
     _show_result(r)
     assert r.status_code == 200
 
@@ -243,14 +251,14 @@ def test_delete(live_server):
     if not slug or not token:
         pytest.skip("no service created yet")
     _header("Delete Service", "DELETE", f"/api/v1/services/{slug}")
-    r = httpx.delete(f"{BASE}/api/v1/services/{slug}",
+    r = httpx.delete(f"{_base_url()}/api/v1/services/{slug}",
                      headers={"X-Edit-Token": token}, timeout=TIMEOUT)
     _show_result(r)
     assert r.status_code == 200
     assert r.json() == {"deleted": slug}
 
     # Confirm it's gone
-    r2 = httpx.get(f"{BASE}/api/v1/services/{slug}", timeout=TIMEOUT)
+    r2 = httpx.get(f"{_base_url()}/api/v1/services/{slug}", timeout=TIMEOUT)
     assert r2.status_code == 404
 
 
@@ -301,12 +309,14 @@ def main():
 
     print("\n=== satring Smoke Test ===\n")
 
-    # In standalone mode, start server and pass None as live_server arg
-    if _server_running():
+    # In standalone mode, reuse running server or start one on APP_PORT
+    if _port_open(PORT):
+        _state["base"] = f"http://localhost:{PORT}"
         print(f"  server already running on :{PORT}\n")
         proc = None
     else:
         print("  starting uvicorn (test-mode)...")
+        _state["base"] = f"http://localhost:{PORT}"
         env = {**os.environ, "AUTH_ROOT_KEY": "test-mode"}
         proc = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "app.main:app", "--port", str(PORT)],
@@ -314,7 +324,7 @@ def main():
         )
         for _ in range(30):
             time.sleep(0.3)
-            if _server_running():
+            if _port_open(PORT):
                 break
         else:
             proc.kill()
@@ -322,7 +332,7 @@ def main():
             sys.exit(1)
         print("  server started\n")
 
-    is_test = _is_test_mode()
+    is_test = _is_test_mode(_base_url())
     print(f"  mode: {'test' if is_test else 'production'}\n")
 
     targets = args if args else ALL_ORDER
