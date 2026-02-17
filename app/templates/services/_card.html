@@ -1,5 +1,5 @@
 <a href="/services/{{ service.slug }}" class="block border border-green-800 p-3 hover:border-green-400 transition-colors">
-  <div class="flex items-center justify-between gap-4 text-sm">
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
     <div class="flex items-center gap-2 min-w-0">
       {% if service.logo_url %}<img src="{{ service.logo_url }}" alt="" class="h-5 w-5 shrink-0 object-contain">{% endif %}
       {% if service.domain_verified %}<span class="text-cyan-400 shrink-0">[verified]</span>{% endif %}
@@ -7,7 +7,7 @@
       {% if service.status != 'unverified' %}<span class="shrink-0 {% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% else %}text-green-700{% endif %}">[{{ service.status }}]</span>{% endif %}
       <span class="text-green-400 truncate">{{ service.name }}</span>
     </div>
-    <div class="flex items-center gap-3 shrink-0">
+    <div class="flex items-center gap-3 min-w-0">
       <span class="text-green-700">{{ service.pricing_sats }} sats/{{ service.pricing_model }}</span>
       <span class="text-amber-400">[{% for i in range(5) %}{% if i < (service.avg_rating | round(0, 'floor') | int) %}*{% else %}-{% endif %}{% endfor %}]</span>
       <span class="text-green-700">({{ service.rating_count }})</span>
