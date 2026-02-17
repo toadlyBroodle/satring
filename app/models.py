@@ -47,7 +47,7 @@ class Service(Base):
     domain_verified = Column(Boolean, default=False)
     avg_rating = Column(Float, default=0.0)
     rating_count = Column(Integer, default=0)
-    status = Column(String(20), default="unverified")  # confirmed | live | dead | unverified
+    status = Column(String(20), default="unverified")  # confirmed | live | dead
     last_probed_at = Column(DateTime, nullable=True)
     dead_since = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
