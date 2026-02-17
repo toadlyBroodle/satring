@@ -24,7 +24,7 @@ AI agents can now [pay for APIs autonomously](https://lightning.engineering/post
 - Shared edit tokens across same-domain services — one token manages all your listings
 - JSON API for programmatic access and agent queries
 - Premium endpoints (bulk export, analytics, reputation) gated via L402 macaroons
-- Health probing and service status tracking (live / confirmed / dead / unverified)
+- Health probing and service status tracking (live / confirmed / dead)
 
 ## Quick Start
 
