@@ -8,3 +8,5 @@ deploy/
 tests/test_paywall.py
 app/.well-known/*
 !app/.well-known/.gitkeep
+logs/*
+!logs/.gitkeep
