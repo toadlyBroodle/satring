@@ -53,9 +53,16 @@ input, select, textarea { caret-color: var(--text); }
   color: var(--text);
   border: 1px solid var(--border);
   font-size: 0.7rem;
-  white-space: nowrap;
+  white-space: normal;
+  max-width: 200px;
   z-index: 50;
   pointer-events: none;
+}
+@media (max-width: 640px) {
+  [data-tip]:hover::after {
+    left: 0;
+    transform: none;
+  }
 }
 
 /* ── Tailwind page: category checkboxes ── */
