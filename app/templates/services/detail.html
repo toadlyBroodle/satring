@@ -39,21 +39,17 @@
 </div>
 
 <!-- Stats Box -->
-{% set r_val = ("%.1f/5"|format(service.avg_rating)) if service.avg_rating else "  —" %}
+{% set r_val = ("%.1f/5"|format(service.avg_rating)) if service.avg_rating else "—" %}
 {% set r_count = "(" ~ service.rating_count|string ~ " review" ~ ("s" if service.rating_count != 1 else "") ~ ")" %}
-{% set r_pad = [20 - r_val|length - r_count|length, 0]|max %}
-{% set p_sats = service.pricing_sats|string ~ " sats" %}
-{% set p_pad = [19 - p_sats|length - service.pricing_model|length, 0]|max %}
 {% set s_val = service.status if service.status != 'unverified' else '' %}
-{% if service.domain_verified %}{% set s_display = "[verified] " ~ s_val %}{% else %}{% set s_display = s_val %}{% endif %}
-{% set s_pad = [22 - s_display|length, 0]|max %}
-<div class="overflow-x-auto mb-6">
-<pre class="text-xs sm:text-sm">┌─ stats ───────────────────────┐
-│ rating: <span class="text-amber-400">{{ r_val }}</span>  {{ r_count }}{{ " " * r_pad }}│
-│ price:  <span class="text-amber-400">{{ p_sats }}</span> / {{ service.pricing_model }}{{ " " * p_pad }}│
-│ proto:  {{ service.protocol }}{{ " " * (22 - service.protocol|length) }}│
-│ status: {% if service.domain_verified %}<span class="text-cyan-400">[verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% else %}text-green-700{% endif %}">{{ s_val }}</span>{% endif %}{{ " " * s_pad }}│
-└───────────────────────────────┘</pre>
+<div class="border border-green-800 mb-6 text-sm">
+  <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ stats ─</div>
+  <div class="px-3 py-2 space-y-0.5">
+    <div><span class="text-green-700">rating:</span> <span class="text-amber-400">{{ r_val }}</span>  {{ r_count }}</div>
+    <div><span class="text-green-700">price:</span>  <span class="text-amber-400">{{ service.pricing_sats }} sats</span> / {{ service.pricing_model }}</div>
+    <div><span class="text-green-700">proto:</span>  {{ service.protocol }}</div>
+    <div><span class="text-green-700">status:</span> {% if service.domain_verified %}<span class="text-cyan-400">[verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% else %}text-green-700{% endif %}">{{ s_val }}</span>{% endif %}</div>
+  </div>
 </div>
 
 <!-- Reviews -->
