@@ -4,10 +4,10 @@ import re
 import secrets
 from urllib.parse import urlparse
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Service
+from app.models import Service, Category, Rating
 
 
 def slugify(text: str) -> str:
@@ -47,7 +47,9 @@ async def get_same_domain_services(db: AsyncSession, url: str) -> list[Service]:
     if not domain:
         return []
     # Broad LIKE filter, then exact post-filter on parsed hostname
-    result = await db.execute(select(Service).where(Service.url.ilike(f"%{domain}%")))
+    result = await db.execute(
+        select(Service).where(Service.url.ilike(f"%{domain}%")).where(Service.status != "purged")
+    )
     return [s for s in result.scalars().all() if extract_domain(s.url) == domain]
 
 
@@ -64,3 +66,64 @@ async def unique_slug(db: AsyncSession, text: str) -> str:
         if result.scalars().first() is None:
             return slug
         counter += 1
+
+
+async def find_purged_service(db: AsyncSession, url: str) -> Service | None:
+    """Find a purged service with the given URL, if any."""
+    result = await db.execute(
+        select(Service).where(Service.url == url, Service.status == "purged")
+    )
+    return result.scalars().first()
+
+
+async def overwrite_purged_service(
+    db: AsyncSession,
+    service: Service,
+    *,
+    name: str,
+    slug: str,
+    description: str = "",
+    pricing_sats: int = 0,
+    pricing_model: str = "per-request",
+    protocol: str = "L402",
+    owner_name: str = "",
+    owner_contact: str = "",
+    logo_url: str = "",
+    edit_token_hash: str | None = None,
+    status: str = "unverified",
+    category_ids: list[int] | None = None,
+) -> None:
+    """Overwrite a purged service's fields for re-submission. Preserves ratings."""
+    service.name = name
+    service.slug = slug
+    service.description = description
+    service.pricing_sats = pricing_sats
+    service.pricing_model = pricing_model
+    service.protocol = protocol
+    service.owner_name = owner_name
+    service.owner_contact = owner_contact
+    service.logo_url = logo_url
+    service.status = status
+    service.dead_since = None
+    service.last_probed_at = None
+    service.domain_verified = False
+    service.domain_challenge = None
+    service.domain_challenge_expires_at = None
+    if edit_token_hash is not None:
+        service.edit_token_hash = edit_token_hash
+
+    # Update categories
+    if category_ids is not None:
+        cats = (await db.execute(
+            select(Category).where(Category.id.in_(category_ids))
+        )).scalars().all()
+        service.categories = list(cats)
+
+    # Recalculate avg_rating / rating_count from preserved ratings
+    avg_result = await db.execute(
+        select(func.avg(Rating.score), func.count(Rating.id))
+        .where(Rating.service_id == service.id)
+    )
+    row = avg_result.one()
+    service.avg_rating = round(float(row[0]), 1) if row[0] else 0.0
+    service.rating_count = row[1] or 0

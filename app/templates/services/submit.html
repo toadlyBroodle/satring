@@ -6,22 +6,26 @@
   <div class="text-amber-400 text-sm mb-1">₿ satring submit --new</div>
   <h1 class="text-xl mb-4">Submit a Service</h1>
 
+  {% if error %}
+  <div class="border border-red-500 text-red-400 p-3 mb-4 text-sm">{{ error }}</div>
+  {% endif %}
+
   <form method="post" action="/submit" class="space-y-4 text-sm">
     <div>
       <label for="name" class="text-green-700 block mb-1 cursor-pointer">name&gt; <span class="text-green-900">*</span></label>
-      <input type="text" id="name" name="name" required placeholder="My Lightning API"
+      <input type="text" id="name" name="name" required placeholder="My Lightning API" value="{{ form.name if form else '' }}"
         class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400 placeholder-green-900" />
     </div>
 
     <div>
       <label for="url" class="text-green-700 block mb-1 cursor-pointer">url&gt; <span class="text-green-900">*</span></label>
-      <input type="url" id="url" name="url" required placeholder="https://api.example.com"
+      <input type="url" id="url" name="url" required placeholder="https://api.example.com" value="{{ form.url if form else '' }}"
         class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400 placeholder-green-900" />
     </div>
 
     <div>
       <label for="existing_edit_token" class="text-green-700 block mb-1 cursor-pointer">existing edit token&gt;</label>
-      <input type="text" id="existing_edit_token" name="existing_edit_token" placeholder="paste token from another service on this domain"
+      <input type="text" id="existing_edit_token" name="existing_edit_token" placeholder="paste token from another service on this domain" value="{{ form.existing_edit_token if form else '' }}"
         class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400 placeholder-green-900" />
       <p class="text-green-900 text-xs mt-1">If you already have a service on the same domain, paste its edit token here to share access.</p>
     </div>
@@ -29,7 +33,7 @@
     <div>
       <label for="description" class="text-green-700 block mb-1 cursor-pointer">description&gt;</label>
       <textarea id="description" name="description" rows="4" placeholder="What does this service do?"
-        class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400 placeholder-green-900"></textarea>
+        class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400 placeholder-green-900">{{ form.description if form else '' }}</textarea>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -37,14 +41,14 @@
         <label for="protocol" class="text-green-700 block mb-1 cursor-pointer">protocol&gt;</label>
         <select id="protocol" name="protocol"
           class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400">
-          <option value="L402" selected>L402</option>
-          <option value="X402">X402</option>
+          <option value="L402" {% if not form or form.protocol == 'L402' %}selected{% endif %}>L402</option>
+          <option value="X402" {% if form and form.protocol == 'X402' %}selected{% endif %}>X402</option>
         </select>
       </div>
 
       <div>
         <label for="pricing_sats" class="text-green-700 block mb-1 cursor-pointer">price (sats)&gt;</label>
-        <input type="number" id="pricing_sats" name="pricing_sats" value="0" min="0"
+        <input type="number" id="pricing_sats" name="pricing_sats" value="{{ form.pricing_sats if form else 0 }}" min="0"
           class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400" />
       </div>
 
@@ -52,27 +56,47 @@
         <label for="pricing_model" class="text-green-700 block mb-1 cursor-pointer">model&gt;</label>
         <select id="pricing_model" name="pricing_model"
           class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400">
-          <option value="per-request" selected>per-request</option>
-          <option value="per-minute">per-minute</option>
-          <option value="per-mb">per-mb</option>
-          <option value="flat">flat</option>
+          <option value="per-request" {% if not form or form.pricing_model == 'per-request' %}selected{% endif %}>per-request</option>
+          <option value="per-minute" {% if form and form.pricing_model == 'per-minute' %}selected{% endif %}>per-minute</option>
+          <option value="per-mb" {% if form and form.pricing_model == 'per-mb' %}selected{% endif %}>per-mb</option>
+          <option value="flat" {% if form and form.pricing_model == 'flat' %}selected{% endif %}>flat</option>
         </select>
       </div>
     </div>
 
     <!-- Categories -->
     <div>
-      <label class="text-green-700 block mb-1">categories&gt;</label>
-      <div class="flex flex-wrap gap-x-4 gap-y-2">
+      <label class="text-green-700 block mb-1">categories&gt; <span class="text-green-900">* (pick 1–2)</span></label>
+      <div class="flex flex-wrap gap-x-4 gap-y-2" id="category-group">
         {% for cat in categories %}
         <label class="cursor-pointer flex items-center gap-1.5 hover:text-amber-400 category-label" data-tip="{{ cat.description }}">
-          <input type="checkbox" name="categories" value="{{ cat.id }}" class="hidden peer" />
+          <input type="checkbox" name="categories" value="{{ cat.id }}" {% if (selected_category_ids is defined and selected_category_ids and cat.id in selected_category_ids) or (selected_category_ids is not defined and cat.slug == 'tools') %}checked{% endif %} class="hidden peer category-cb" />
           <span class="peer-checked:text-amber-400 category-check"></span>
           <span class="peer-checked:text-amber-400">{{ cat.name }}</span>
         </label>
         {% endfor %}
       </div>
+      <p class="text-red-400 text-xs mt-1 hidden" id="category-error">Select 1–2 categories.</p>
     </div>
+    <script>
+      (function() {
+        const cbs = document.querySelectorAll('.category-cb');
+        const err = document.getElementById('category-error');
+        function enforce() {
+          const checked = document.querySelectorAll('.category-cb:checked');
+          cbs.forEach(cb => cb.disabled = !cb.checked && checked.length >= 2);
+          err.classList.toggle('hidden', checked.length >= 1);
+        }
+        cbs.forEach(cb => cb.addEventListener('change', enforce));
+        enforce();
+        document.querySelector('form').addEventListener('submit', function(e) {
+          if (document.querySelectorAll('.category-cb:checked').length < 1) {
+            e.preventDefault();
+            err.classList.remove('hidden');
+          }
+        });
+      })();
+    </script>
 
     <div class="border-t border-green-900 pt-4 mt-4">
       <div class="text-green-700 mb-2">// provider info (optional)</div>
@@ -81,19 +105,19 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
         <label for="owner_name" class="text-green-700 block mb-1 cursor-pointer">your name&gt;</label>
-        <input type="text" id="owner_name" name="owner_name" placeholder="Satoshi"
+        <input type="text" id="owner_name" name="owner_name" placeholder="Satoshi" value="{{ form.owner_name if form else '' }}"
           class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400 placeholder-green-900" />
       </div>
       <div>
         <label for="owner_contact" class="text-green-700 block mb-1 cursor-pointer">contact&gt;</label>
-        <input type="text" id="owner_contact" name="owner_contact" placeholder="email or nostr npub"
+        <input type="text" id="owner_contact" name="owner_contact" placeholder="email or nostr npub" value="{{ form.owner_contact if form else '' }}"
           class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400 placeholder-green-900" />
       </div>
     </div>
 
     <div>
       <label for="logo_url" class="text-green-700 block mb-1 cursor-pointer">logo url&gt;</label>
-      <input type="url" id="logo_url" name="logo_url" placeholder="https://example.com/logo.png"
+      <input type="url" id="logo_url" name="logo_url" placeholder="https://example.com/logo.png" value="{{ form.logo_url if form else '' }}"
         class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400 placeholder-green-900" />
     </div>
 

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,7 +12,7 @@ from app.config import settings
 from app.database import get_db
 from app.l402 import require_l402
 from app.models import Service, Category, Rating, service_categories
-from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root
+from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, find_purged_service, overwrite_purged_service
 
 router = APIRouter(tags=["API"])
 
@@ -81,8 +81,15 @@ class ServiceCreate(BaseModel):
     owner_name: str = ""
     owner_contact: str = ""
     logo_url: str = ""
-    category_ids: list[int] = []
+    category_ids: list[int] = Field(default_factory=lambda: [], description="1–2 category IDs required")
     existing_edit_token: str | None = None
+
+    @field_validator("category_ids")
+    @classmethod
+    def check_category_count(cls, v: list[int]) -> list[int]:
+        if len(v) < 1 or len(v) > 2:
+            raise ValueError("Select 1–2 categories")
+        return v
 
 
 class ServiceCreateOut(ServiceOut):
@@ -100,6 +107,13 @@ class ServiceUpdate(BaseModel):
     owner_contact: str | None = None
     logo_url: str | None = None
     category_ids: list[int] | None = None
+
+    @field_validator("category_ids")
+    @classmethod
+    def check_category_count(cls, v: list[int] | None) -> list[int] | None:
+        if v is not None and (len(v) < 1 or len(v) > 2):
+            raise ValueError("Select 1–2 categories")
+        return v
 
 
 # --- Helpers ---
@@ -125,6 +139,7 @@ async def get_service_or_404(db: AsyncSession, slug: str) -> Service:
         select(Service)
         .options(selectinload(Service.categories))
         .where(Service.slug == slug)
+        .where(Service.status != "purged")
     )
     service = result.scalars().first()
     if not service:
@@ -139,7 +154,9 @@ async def get_service_or_404(db: AsyncSession, slug: str) -> Service:
 async def bulk_export(request: Request, db: AsyncSession = Depends(get_db)):
     await require_l402(request=request, amount_sats=settings.AUTH_BULK_PRICE_SATS, memo="satring.com bulk export")
     result = await db.execute(
-        select(Service).options(selectinload(Service.categories)).order_by(Service.id)
+        select(Service).options(selectinload(Service.categories))
+        .where(Service.status != "purged")
+        .order_by(Service.id)
     )
     return [ServiceOut.model_validate(s) for s in result.scalars().all()]
 
@@ -151,7 +168,7 @@ async def list_services(
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Service).order_by(Service.created_at.desc())
+    query = select(Service).where(Service.status != "purged").order_by(Service.created_at.desc())
     if category:
         query = query.join(service_categories).join(Category).where(Category.slug == category)
     return await paginated_services(db, query, page, page_size)
@@ -185,20 +202,34 @@ async def create_service(request: Request, body: ServiceCreate, db: AsyncSession
         edit_token = generate_edit_token()
         edit_token_hash = hash_token(edit_token)
 
-    service = Service(
-        name=body.name, slug=slug, url=url_str, description=body.description,
-        pricing_sats=body.pricing_sats, pricing_model=body.pricing_model,
-        protocol=body.protocol, owner_name=body.owner_name,
-        owner_contact=body.owner_contact, logo_url=body.logo_url,
-        edit_token_hash=edit_token_hash,
-    )
-    if body.category_ids:
-        cats = (await db.execute(
-            select(Category).where(Category.id.in_(body.category_ids))
-        )).scalars().all()
-        service.categories = list(cats)
+    # Check for purged service with the same URL — overwrite instead of creating new
+    purged = await find_purged_service(db, url_str)
+    if purged:
+        await overwrite_purged_service(
+            db, purged,
+            name=body.name, slug=slug, description=body.description,
+            pricing_sats=body.pricing_sats, pricing_model=body.pricing_model,
+            protocol=body.protocol, owner_name=body.owner_name,
+            owner_contact=body.owner_contact, logo_url=body.logo_url,
+            edit_token_hash=edit_token_hash,
+            category_ids=body.category_ids,
+        )
+        service = purged
+    else:
+        service = Service(
+            name=body.name, slug=slug, url=url_str, description=body.description,
+            pricing_sats=body.pricing_sats, pricing_model=body.pricing_model,
+            protocol=body.protocol, owner_name=body.owner_name,
+            owner_contact=body.owner_contact, logo_url=body.logo_url,
+            edit_token_hash=edit_token_hash,
+        )
+        if body.category_ids:
+            cats = (await db.execute(
+                select(Category).where(Category.id.in_(body.category_ids))
+            )).scalars().all()
+            service.categories = list(cats)
+        db.add(service)
 
-    db.add(service)
     await db.commit()
     await db.refresh(service)
     result = await db.execute(
@@ -313,7 +344,7 @@ async def search_services(
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Service).order_by(Service.created_at.desc())
+    query = select(Service).where(Service.status != "purged").order_by(Service.created_at.desc())
     if q.strip():
         pattern = f"%{q.strip()}%"
         query = query.where(Service.name.ilike(pattern) | Service.description.ilike(pattern))
@@ -359,12 +390,19 @@ async def create_rating(request: Request, slug: str, body: RatingCreate, db: Asy
 async def analytics(request: Request, db: AsyncSession = Depends(get_db)):
     await require_l402(request=request)
 
-    total_services = (await db.execute(select(func.count(Service.id)))).scalar() or 0
-    total_ratings = (await db.execute(select(func.count(Rating.id)))).scalar() or 0
-    avg_price = (await db.execute(select(func.avg(Service.pricing_sats)))).scalar() or 0
+    total_services = (await db.execute(
+        select(func.count(Service.id)).where(Service.status != "purged")
+    )).scalar() or 0
+    total_ratings = (await db.execute(
+        select(func.count(Rating.id)).join(Service).where(Service.status != "purged")
+    )).scalar() or 0
+    avg_price = (await db.execute(
+        select(func.avg(Service.pricing_sats)).where(Service.status != "purged")
+    )).scalar() or 0
 
     top_rated = await db.execute(
         select(Service).options(selectinload(Service.categories))
+        .where(Service.status != "purged")
         .where(Service.rating_count >= 1)
         .order_by(Service.avg_rating.desc()).limit(10)
     )
