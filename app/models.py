@@ -57,6 +57,13 @@ class Service(Base):
     ratings = relationship("Rating", back_populates="service", cascade="all, delete-orphan")
 
 
+class ConsumedPayment(Base):
+    __tablename__ = "consumed_payments"
+
+    payment_hash = Column(String(64), primary_key=True)
+    consumed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class Rating(Base):
     __tablename__ = "ratings"
 

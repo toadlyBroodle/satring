@@ -1,5 +1,33 @@
 {% extends "base.html" %}
 {% block title %}{{ service.name }}{% endblock %}
+{% block meta_description %}{{ service.name }} — {{ service.description[:160] if service.description else 'An L402 service on satring' }}{% endblock %}
+{% block og_title %}{{ service.name }} — satring{% endblock %}
+{% block og_description %}{{ service.description[:200] if service.description else 'L402 service listed on satring' }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_image %}{{ service.logo_url if service.logo_url else '/static/img/satring-logo-trans-bg.png' }}{% endblock %}
+{% block twitter_title %}{{ service.name }} — satring{% endblock %}
+{% block twitter_description %}{{ service.description[:200] if service.description else 'L402 service listed on satring' }}{% endblock %}
+{% block twitter_image %}{{ service.logo_url if service.logo_url else '/static/img/satring-logo-trans-bg.png' }}{% endblock %}
+{% block extra_head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": {{ service.name | tojson }},
+  "url": {{ service.url | tojson }},
+  "description": {{ (service.description or '') | tojson }},
+  "applicationCategory": "WebApplication",
+  "operatingSystem": "Any"{% if service.rating_count > 0 %},
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": {{ service.avg_rating }},
+    "ratingCount": {{ service.rating_count }},
+    "bestRating": 5,
+    "worstRating": 1
+  }{% endif %}
+}
+</script>
+{% endblock %}
 {% block content %}
 
 <div class="mb-4 text-sm flex flex-wrap gap-4">
@@ -57,7 +85,7 @@
   <div class="text-amber-400 text-sm mb-2">## reviews ({{ service.rating_count }})</div>
 
   <div id="reviews">
-    {% for rating in service.ratings | sort(attribute='created_at', reverse=True) %}
+    {% for rating in (service.ratings | sort(attribute='created_at', reverse=True))[:20] %}
       {% include "services/_review_bubble.html" %}
     {% else %}
       <p id="no-reviews" class="text-green-700 text-sm">No reviews yet. Be the first!</p>
@@ -68,7 +96,7 @@
   <div id="payment-area">
     <div class="border border-green-800 mt-4 p-4">
       <div class="text-amber-400 text-sm mb-3">₿ satring review --submit</div>
-      <form hx-post="/services/{{ service.slug }}/rate" hx-target="#reviews" hx-swap="afterbegin" hx-on::after-request="this.reset()">
+      <form hx-post="/services/{{ service.slug }}/rate" hx-target="#reviews" hx-swap="afterbegin" hx-on::after-request="this.reset()" hx-indicator="#review-indicator" hx-disabled-elt="#review-submit-btn">
         <div class="mb-3">
           <label for="reviewer_name" class="text-green-700 text-sm block mb-1 cursor-pointer">name&gt;</label>
           <input type="text" id="reviewer_name" name="reviewer_name" placeholder="Anonymous"
@@ -90,7 +118,8 @@
           <textarea id="comment" name="comment" rows="3" placeholder="What did you think?"
             class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1 text-sm w-full outline-none focus:border-green-400 placeholder-green-900"></textarea>
         </div>
-        <button type="submit" class="border border-green-400 text-green-400 px-4 py-1 text-sm hover:bg-green-400 hover:text-black transition-colors">[SUBMIT]</button>
+        <button type="submit" id="review-submit-btn" class="border border-green-400 text-green-400 px-4 py-1 text-sm hover:bg-green-400 hover:text-black transition-colors">[SUBMIT]</button>
+        <span id="review-indicator" class="htmx-indicator text-amber-400 text-sm ml-2">submitting<span class="blink">_</span></span>
       </form>
     </div>
   </div>

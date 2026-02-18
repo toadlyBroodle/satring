@@ -352,10 +352,17 @@ async def search_services(
 
 
 @router.get("/services/{slug}/ratings", response_model=list[RatingOut])
-async def list_ratings(slug: str, db: AsyncSession = Depends(get_db)):
+async def list_ratings(
+    slug: str,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
     service = await get_service_or_404(db, slug)
     result = await db.execute(
-        select(Rating).where(Rating.service_id == service.id).order_by(Rating.created_at.desc())
+        select(Rating).where(Rating.service_id == service.id)
+        .order_by(Rating.created_at.desc())
+        .offset(offset).limit(limit)
     )
     return [RatingOut.model_validate(r) for r in result.scalars().all()]
 
