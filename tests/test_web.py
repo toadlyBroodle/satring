@@ -107,14 +107,7 @@ class TestSubmitService:
 
     @pytest.mark.asyncio
     async def test_submit_creates_service(self, client: AsyncClient, db: AsyncSession):
-        resp = await client.post("/submit", data={
-            "name": "New Service",
-            "url": "https://new.example.com",
-            "description": "Brand new",
-            "protocol": "L402",
-            "pricing_sats": "50",
-            "pricing_model": "per-request",
-        }, follow_redirects=False)
+        resp = await client.post("/submit", content="name=New+Service&url=https%3A%2F%2Fnew.example.com&description=Brand+new&protocol=L402&pricing_sats=50&pricing_model=per-request&categories=9", headers={"Content-Type": "application/x-www-form-urlencoded"}, follow_redirects=False)
         assert resp.status_code == 200
         assert "New Service" in resp.text
         assert "edit token" in resp.text.lower() or "edit-token" in resp.text.lower()
@@ -137,10 +130,7 @@ class TestSubmitService:
 
     @pytest.mark.asyncio
     async def test_duplicate_name_gets_unique_slug(self, client: AsyncClient, sample_service: Service, db: AsyncSession):
-        resp = await client.post("/submit", data={
-            "name": "Test API",
-            "url": "https://other.example.com",
-        }, follow_redirects=False)
+        resp = await client.post("/submit", content="name=Test+API&url=https%3A%2F%2Fother.example.com&categories=9", headers={"Content-Type": "application/x-www-form-urlencoded"}, follow_redirects=False)
         assert resp.status_code == 200
 
         # Should have created a service with a different slug

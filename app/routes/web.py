@@ -12,7 +12,7 @@ from app.database import get_db
 from app.l402 import create_invoice, check_payment_status, check_and_consume_payment
 from app.main import templates
 from app.models import Service, Category, Rating, service_categories
-from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root
+from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, find_purged_service, overwrite_purged_service
 
 router = APIRouter(include_in_schema=False)
 
@@ -28,7 +28,7 @@ async def directory(
 ):
     categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
 
-    query = select(Service).options(selectinload(Service.categories))
+    query = select(Service).options(selectinload(Service.categories)).where(Service.status != "purged")
     if category:
         query = query.join(service_categories).join(Category).where(Category.slug == category)
     if status:
@@ -64,7 +64,7 @@ async def search(
     verified: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Service).options(selectinload(Service.categories))
+    query = select(Service).options(selectinload(Service.categories)).where(Service.status != "purged")
     if q.strip():
         pattern = f"%{q.strip()}%"
         query = query.where(Service.name.ilike(pattern) | Service.description.ilike(pattern))
@@ -94,6 +94,7 @@ async def service_detail(request: Request, slug: str, db: AsyncSession = Depends
         select(Service)
         .options(selectinload(Service.categories), selectinload(Service.ratings))
         .where(Service.slug == slug)
+        .where(Service.status != "purged")
     )
     service = result.scalars().first()
     if not service:
@@ -128,6 +129,22 @@ async def submit_service(
 ):
     form_data = await request.form()
     category_ids = [int(v) for k, v in form_data.multi_items() if k == "categories"]
+
+    # Validate category count (1–2 required)
+    if len(category_ids) < 1 or len(category_ids) > 2:
+        categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
+        return templates.TemplateResponse(request, "services/submit.html", {
+            "categories": categories,
+            "error": "Select 1–2 categories.",
+            "form": {
+                "name": name, "url": url, "description": description,
+                "protocol": protocol, "pricing_sats": pricing_sats,
+                "pricing_model": pricing_model, "owner_name": owner_name,
+                "owner_contact": owner_contact, "logo_url": logo_url,
+                "existing_edit_token": existing_edit_token,
+            },
+            "selected_category_ids": category_ids,
+        }, status_code=422)
 
     # Payment gate (skipped in test mode)
     if settings.AUTH_ROOT_KEY != "test-mode":
@@ -182,17 +199,30 @@ async def submit_service(
         edit_token = generate_edit_token()
         edit_token_hash = hash_token(edit_token)
 
-    service = Service(
-        name=name, slug=slug, url=url, description=description,
-        protocol=protocol, pricing_sats=pricing_sats, pricing_model=pricing_model,
-        owner_name=owner_name, owner_contact=owner_contact, logo_url=logo_url,
-        edit_token_hash=edit_token_hash,
-    )
-    if category_ids:
-        cats = (await db.execute(select(Category).where(Category.id.in_(category_ids)))).scalars().all()
-        service.categories = list(cats)
+    # Check for purged service with the same URL — overwrite instead of creating new
+    purged = await find_purged_service(db, url)
+    if purged:
+        await overwrite_purged_service(
+            db, purged,
+            name=name, slug=slug, description=description,
+            pricing_sats=pricing_sats, pricing_model=pricing_model,
+            protocol=protocol, owner_name=owner_name, owner_contact=owner_contact,
+            logo_url=logo_url, edit_token_hash=edit_token_hash,
+            category_ids=category_ids,
+        )
+        service = purged
+    else:
+        service = Service(
+            name=name, slug=slug, url=url, description=description,
+            protocol=protocol, pricing_sats=pricing_sats, pricing_model=pricing_model,
+            owner_name=owner_name, owner_contact=owner_contact, logo_url=logo_url,
+            edit_token_hash=edit_token_hash,
+        )
+        if category_ids:
+            cats = (await db.execute(select(Category).where(Category.id.in_(category_ids)))).scalars().all()
+            service.categories = list(cats)
+        db.add(service)
 
-    db.add(service)
     await db.commit()
     return templates.TemplateResponse(request, "services/submit_success.html", {
         "service": service,
@@ -215,7 +245,9 @@ async def edit_service_form(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Service).options(selectinload(Service.categories)).where(Service.slug == slug)
+        select(Service).options(selectinload(Service.categories))
+        .where(Service.slug == slug)
+        .where(Service.status != "purged")
     )
     service = result.scalars().first()
     if not service:
@@ -253,7 +285,9 @@ async def edit_service(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Service).options(selectinload(Service.categories)).where(Service.slug == slug)
+        select(Service).options(selectinload(Service.categories))
+        .where(Service.slug == slug)
+        .where(Service.status != "purged")
     )
     service = result.scalars().first()
     if not service:
@@ -270,6 +304,29 @@ async def edit_service(
 
     form_data = await request.form()
     category_ids = [int(v) for k, v in form_data.multi_items() if k == "categories"]
+
+    # Validate category count (1–2 required)
+    if len(category_ids) < 1 or len(category_ids) > 2:
+        # Apply submitted values for template rendering (not committed)
+        if name:
+            service.name = name
+        service.description = description
+        service.protocol = protocol or service.protocol
+        service.pricing_sats = pricing_sats
+        service.pricing_model = pricing_model or service.pricing_model
+        service.owner_name = owner_name
+        service.owner_contact = owner_contact
+        service.logo_url = logo_url
+        categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
+        return templates.TemplateResponse(request, "services/edit.html", {
+            "service": service,
+            "categories": categories,
+            "token_valid": True,
+            "token_invalid": False,
+            "token": edit_token,
+            "error": "Select 1–2 categories.",
+            "selected_category_ids": category_ids,
+        }, status_code=422)
 
     if name:
         service.name = name
@@ -298,7 +355,9 @@ async def delete_service(
     edit_token: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Service).where(Service.slug == slug))
+    result = await db.execute(
+        select(Service).where(Service.slug == slug).where(Service.status != "purged")
+    )
     service = result.scalars().first()
     if not service:
         return HTMLResponse("<h1>Not Found</h1>", status_code=404)
@@ -316,7 +375,9 @@ async def recover_form(
     slug: str,
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Service).where(Service.slug == slug))
+    result = await db.execute(
+        select(Service).where(Service.slug == slug).where(Service.status != "purged")
+    )
     service = result.scalars().first()
     if not service:
         return HTMLResponse("<h1>Not Found</h1>", status_code=404)
@@ -340,7 +401,9 @@ async def recover_service(
     action: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Service).where(Service.slug == slug))
+    result = await db.execute(
+        select(Service).where(Service.slug == slug).where(Service.status != "purged")
+    )
     service = result.scalars().first()
     if not service:
         return HTMLResponse("<h1>Not Found</h1>", status_code=404)
@@ -423,7 +486,9 @@ async def rate_service(
     reviewer_name: str = Form("Anonymous"),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Service).where(Service.slug == slug))
+    result = await db.execute(
+        select(Service).where(Service.slug == slug).where(Service.status != "purged")
+    )
     service = result.scalars().first()
     if not service:
         return HTMLResponse("Not Found", status_code=404)

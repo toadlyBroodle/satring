@@ -99,17 +99,12 @@ class TestWebEditFlow:
     @pytest.mark.asyncio
     async def test_edit_post_with_valid_token_updates(self, client: AsyncClient, db: AsyncSession):
         svc, token = await create_service_with_token(db)
-        resp = await client.post(f"/services/{svc.slug}/edit", data={
-            "edit_token": token,
-            "name": "Updated Name",
-            "description": "Updated desc",
-            "protocol": "X402",
-            "pricing_sats": "200",
-            "pricing_model": "flat",
-            "owner_name": "New Owner",
-            "owner_contact": "new@example.com",
-            "logo_url": "",
-        }, follow_redirects=False)
+        resp = await client.post(
+            f"/services/{svc.slug}/edit",
+            content=f"edit_token={token}&name=Updated+Name&description=Updated+desc&protocol=X402&pricing_sats=200&pricing_model=flat&owner_name=New+Owner&owner_contact=new%40example.com&logo_url=&categories=9",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            follow_redirects=False,
+        )
         assert resp.status_code == 303
         assert f"/services/{svc.slug}" in resp.headers["location"]
 
@@ -258,10 +253,7 @@ class TestAPICreateReturnsToken:
 class TestWebSubmitReturnsToken:
     @pytest.mark.asyncio
     async def test_submit_shows_edit_token(self, client: AsyncClient, db: AsyncSession):
-        resp = await client.post("/submit", data={
-            "name": "Token Display Test",
-            "url": "https://tokendisplay.example.com",
-        }, follow_redirects=False)
+        resp = await client.post("/submit", content="name=Token+Display+Test&url=https%3A%2F%2Ftokendisplay.example.com&categories=9", headers={"Content-Type": "application/x-www-form-urlencoded"}, follow_redirects=False)
         assert resp.status_code == 200
         assert "Token Display Test" in resp.text
         # The token should be displayed somewhere on the page
@@ -284,11 +276,7 @@ class TestDeleteLifecycle:
 
     @pytest.mark.asyncio
     async def test_1_web_submit_creates_service(self, class_client: AsyncClient, class_db: AsyncSession):
-        resp = await class_client.post("/submit", data={
-            "name": "Web Created",
-            "url": "https://web-created.example.com",
-            "description": "From web form",
-        }, follow_redirects=False)
+        resp = await class_client.post("/submit", content="name=Web+Created&url=https%3A%2F%2Fweb-created.example.com&description=From+web+form&categories=9", headers={"Content-Type": "application/x-www-form-urlencoded"}, follow_redirects=False)
         assert resp.status_code == 200
         match = re.search(r'id="edit-token"[^>]*>([^<]+)<', resp.text)
         assert match
@@ -306,6 +294,7 @@ class TestDeleteLifecycle:
         resp = await class_client.post("/api/v1/services", json={
             "name": "API Created",
             "url": "https://api-created.example.com",
+            "category_ids": [9],
         })
         assert resp.status_code == 201
         data = resp.json()
