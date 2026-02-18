@@ -1,0 +1,19 @@
+{% if total_pages > 1 %}
+<div class="flex items-center justify-center gap-4 text-sm mt-4 py-2">
+  {% if page > 1 %}
+  <a href="/?{{ qs_base }}{{ '&' if qs_base else '' }}page={{ page - 1 }}"
+     class="border border-green-800 px-3 py-0.5 hover:text-amber-400 hover:border-amber-400 transition-colors">[&lt; prev]</a>
+  {% else %}
+  <span class="border border-green-900 px-3 py-0.5 text-green-900">[&lt; prev]</span>
+  {% endif %}
+
+  <span class="text-green-700">page <span class="text-green-400">{{ page }}</span>/{{ total_pages }}</span>
+
+  {% if page < total_pages %}
+  <a href="/?{{ qs_base }}{{ '&' if qs_base else '' }}page={{ page + 1 }}"
+     class="border border-green-800 px-3 py-0.5 hover:text-amber-400 hover:border-amber-400 transition-colors">[next &gt;]</a>
+  {% else %}
+  <span class="border border-green-900 px-3 py-0.5 text-green-900">[next &gt;]</span>
+  {% endif %}
+</div>
+{% endif %}

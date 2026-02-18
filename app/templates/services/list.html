@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Directory{% endblock %}
+{% block meta_description %}Browse {{ services|length }}+ Lightning-paywalled L402 services. Filter by category, status, and ratings. Find APIs for your AI agents.{% endblock %}
+{% block og_title %}satring — L402 Service Directory{% endblock %}
+{% block og_description %}Browse Lightning-paywalled L402 services. Filter by category, status, and ratings.{% endblock %}
+{% block twitter_title %}satring — L402 Service Directory{% endblock %}
+{% block twitter_description %}Browse Lightning-paywalled L402 services. Filter by category, status, and ratings.{% endblock %}
 {% block content %}
 
 <div class="mb-4">
@@ -13,7 +18,7 @@
 {% set qs_cat = '&category=' ~ active_category if active_category else '' %}
 {% set qs_filter = '&verified=true' if active_verified == 'true' else ('&status=' ~ active_status if active_status else '') %}
 {% set qs_cat_filter = ('category=' ~ active_category if active_category else '') ~ (('&' if active_category else '') ~ qs_filter[1:] if qs_filter else '') %}
-{% set qs_base = qs_cat_filter ~ (('&' if qs_cat_filter else '') ~ 'sort=' ~ active_sort if active_sort and active_sort != 'newest' else '') %}
+{% set qs_base_filters = qs_cat_filter ~ (('&' if qs_cat_filter else '') ~ 'sort=' ~ active_sort if active_sort and active_sort != 'newest' else '') %}
 
 <!-- Search -->
 <div class="mb-4">
@@ -21,7 +26,8 @@
     <label for="search" class="text-green-700 pl-2 text-sm cursor-pointer">search&gt;</label>
     <input type="text" id="search" name="q" placeholder="_"
       class="bg-black text-green-400 border-none outline-none w-full px-2 py-1.5 text-sm placeholder-green-900"
-      hx-get="/search?{{ qs_base }}" hx-trigger="input changed delay:300ms" hx-target="#service-grid" />
+      hx-get="/search?{{ qs_base_filters }}" hx-trigger="input changed delay:300ms" hx-target="#service-results" hx-indicator="#search-indicator" />
+    <span id="search-indicator" class="htmx-indicator text-amber-400 pr-2 blink">_</span>
   </div>
 </div>
 
@@ -54,15 +60,18 @@
 </div>
 
 <!-- Service List -->
-<div id="service-grid" class="flex flex-col gap-2">
-  {% for service in services %}
-    {% include "services/_card.html" %}
-  {% else %}
-    <div class="border border-green-900 py-8 text-center text-green-700">
-      <p>No services found.</p>
-      <a href="/submit" class="text-amber-400 hover:underline mt-2 inline-block">&gt; [submit the first one]</a>
-    </div>
-  {% endfor %}
+<div id="service-results">
+  <div id="service-grid" class="flex flex-col gap-2">
+    {% for service in services %}
+      {% include "services/_card.html" %}
+    {% else %}
+      <div class="border border-green-900 py-8 text-center text-green-700">
+        <p>No services found.</p>
+        <a href="/submit" class="text-amber-400 hover:underline mt-2 inline-block">&gt; [submit the first one]</a>
+      </div>
+    {% endfor %}
+  </div>
+  {% include "services/_pagination.html" %}
 </div>
 
 {% endblock %}

@@ -65,6 +65,26 @@ input, select, textarea { caret-color: var(--text); }
   }
 }
 
+/* ── HTMX loading indicators ── */
+@keyframes terminal-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.htmx-indicator {
+  display: none;
+}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  display: inline;
+}
+.blink {
+  animation: terminal-blink 0.8s step-end infinite;
+}
+button[disabled], input[type="submit"][disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── Tailwind page: category checkboxes ── */
 .category-check::before { content: '[\00a0]'; }
 input:checked ~ .category-check::before { content: '[x]'; }

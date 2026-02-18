@@ -1,7 +1,10 @@
-{% for service in services %}
-  {% include "services/_card.html" %}
-{% else %}
-  <div class="border border-green-900 py-8 text-center text-green-700">
-    <p>No services found.</p>
-  </div>
-{% endfor %}
+<div id="service-grid" class="flex flex-col gap-2">
+  {% for service in services %}
+    {% include "services/_card.html" %}
+  {% else %}
+    <div class="border border-green-900 py-8 text-center text-green-700">
+      <p>No services found.</p>
+    </div>
+  {% endfor %}
+</div>
+{% include "services/_pagination.html" %}

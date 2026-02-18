@@ -1,7 +1,8 @@
+import math
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import APIRouter, Request, Depends, Form
+from fastapi import APIRouter, Request, Depends, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,8 @@ from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_
 
 router = APIRouter(include_in_schema=False)
 
+PAGE_SIZE = 20
+
 
 @router.get("/", response_class=HTMLResponse)
 async def directory(
@@ -24,6 +27,7 @@ async def directory(
     status: str | None = None,
     sort: str | None = None,
     verified: str | None = None,
+    page: int = Query(1, ge=1),
     db: AsyncSession = Depends(get_db),
 ):
     categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
@@ -43,7 +47,26 @@ async def directory(
     }
     query = query.order_by(sort_map.get(sort, Service.created_at.desc()))
 
-    services = (await db.execute(query)).scalars().all()
+    # Count total for pagination
+    count_q = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_q)).scalar() or 0
+    total_pages = max(1, math.ceil(total / PAGE_SIZE))
+    page = min(page, total_pages)
+
+    services = (await db.execute(query.offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE))).scalars().all()
+
+    # Build qs_base for pagination links (preserving existing filters)
+    qs_parts = []
+    if category:
+        qs_parts.append(f"category={category}")
+    if verified == "true":
+        qs_parts.append("verified=true")
+    elif status:
+        qs_parts.append(f"status={status}")
+    if sort and sort != "newest":
+        qs_parts.append(f"sort={sort}")
+    qs_base = "&".join(qs_parts)
+
     return templates.TemplateResponse(request, "services/list.html", {
         "services": services,
         "categories": categories,
@@ -51,6 +74,9 @@ async def directory(
         "active_status": status,
         "active_sort": sort,
         "active_verified": verified,
+        "page": page,
+        "total_pages": total_pages,
+        "qs_base": qs_base,
     })
 
 
@@ -62,6 +88,7 @@ async def search(
     status: str | None = None,
     sort: str | None = None,
     verified: str | None = None,
+    page: int = Query(1, ge=1),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Service).options(selectinload(Service.categories)).where(Service.status != "purged")
@@ -82,9 +109,33 @@ async def search(
     }
     query = query.order_by(sort_map.get(sort, Service.created_at.desc()))
 
-    services = (await db.execute(query)).scalars().all()
+    # Count total for pagination
+    count_q = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_q)).scalar() or 0
+    total_pages = max(1, math.ceil(total / PAGE_SIZE))
+    page = min(page, total_pages)
+
+    services = (await db.execute(query.offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE))).scalars().all()
+
+    # Build qs_base for pagination links
+    qs_parts = []
+    if q.strip():
+        qs_parts.append(f"q={q.strip()}")
+    if category:
+        qs_parts.append(f"category={category}")
+    if verified == "true":
+        qs_parts.append("verified=true")
+    elif status:
+        qs_parts.append(f"status={status}")
+    if sort and sort != "newest":
+        qs_parts.append(f"sort={sort}")
+    qs_base = "&".join(qs_parts)
+
     return templates.TemplateResponse(request, "services/_card_grid.html", {
         "services": services,
+        "page": page,
+        "total_pages": total_pages,
+        "qs_base": qs_base,
     })
 
 
@@ -175,7 +226,7 @@ async def submit_service(
 
         # Verify payment
         paid = await check_payment_status(payment_hash)
-        if not paid or not check_and_consume_payment(payment_hash):
+        if not paid or not await check_and_consume_payment(payment_hash, db):
             return HTMLResponse(
                 "<h1>Payment not verified</h1><p>Invoice not paid or already used.</p>",
                 status_code=402,
@@ -524,7 +575,7 @@ async def rate_service(
             return html
 
         paid = await check_payment_status(payment_hash)
-        if not paid or not check_and_consume_payment(payment_hash):
+        if not paid or not await check_and_consume_payment(payment_hash, db):
             return HTMLResponse(
                 '<div class="text-red-400 text-sm">Payment not verified or already used.</div>',
                 status_code=402,
@@ -559,3 +610,70 @@ async def payment_status(payment_hash: str):
         return JSONResponse({"paid": True})
     paid = await check_payment_status(payment_hash)
     return JSONResponse({"paid": paid})
+
+
+@router.get("/sitemap.xml")
+async def sitemap():
+    from fastapi.responses import Response
+    base = settings.BASE_URL.rstrip("/")
+
+    urls = [
+        f'  <url><loc>{base}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>',
+        f'  <url><loc>{base}/submit</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>',
+        f'  <url><loc>{base}/docs</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>',
+    ]
+
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    xml += '\n'.join(urls)
+    xml += '\n</urlset>'
+    return Response(content=xml, media_type="application/xml")
+
+
+@router.get("/robots.txt")
+async def robots_txt():
+    base = settings.BASE_URL.rstrip("/")
+    content = f"User-agent: *\nAllow: /\n\nSitemap: {base}/sitemap.xml\nLlms-txt: {base}/llms.txt\n"
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(content)
+
+
+@router.get("/llms.txt")
+async def llms_txt():
+    from fastapi.responses import PlainTextResponse
+    from app.main import SEED_CATEGORIES
+    base = settings.BASE_URL.rstrip("/")
+
+    lines = [
+        "# satring",
+        "",
+        "> L402 service directory — discover Lightning-paywalled APIs for AI agents and developers.",
+        "",
+        "Satring indexes L402 services: APIs that accept Bitcoin Lightning micropayments.",
+        "AI agents use satring to find and connect to paid APIs autonomously.",
+        "Humans use it to discover, rate, and submit services.",
+        "",
+        f"- [Browse directory]({base}/): Search and filter services by category, status, rating",
+        f"- [Submit a service]({base}/submit): List your L402 API (Lightning payment required)",
+        f"- [API docs]({base}/docs): OpenAPI/Swagger interactive documentation",
+        f"- [JSON API]({base}/api/v1/services): Programmatic access to the full catalog",
+        "",
+        "## API",
+        "",
+        f"- [List services]({base}/api/v1/services): GET — paginated, filterable by category. Returns name, url, pricing, protocol, ratings, categories.",
+        f"- [Search]({base}/api/v1/search?q=example): GET — full-text search across names and descriptions",
+        f"- [Service detail]({base}/api/v1/services/{{slug}}): GET — full service info with categories",
+        f"- [Ratings]({base}/api/v1/services/{{slug}}/ratings): GET — paginated reviews for a service",
+        f"- [Submit service]({base}/api/v1/services): POST — create a new listing (L402 payment required)",
+        f"- [Submit rating]({base}/api/v1/services/{{slug}}/ratings): POST — rate a service (L402 payment required)",
+        f"- [Bulk export]({base}/api/v1/services/bulk): GET — all services as JSON (L402 payment required)",
+        f"- [Analytics]({base}/api/v1/analytics): GET — aggregate directory stats (L402 payment required)",
+        "",
+        "## Categories",
+        "",
+    ]
+    for name, slug, description in SEED_CATEGORIES:
+        lines.append(f"- [{name}]({base}/?category={slug}): {description}")
+
+    lines.append("")
+    return PlainTextResponse("\n".join(lines), media_type="text/plain")

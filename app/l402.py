@@ -4,11 +4,11 @@ import hashlib
 import httpx
 from fastapi import HTTPException, Request
 from pymacaroons import Macaroon, Verifier
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-
-
-_consumed_hashes: set[str] = set()
+from app.models import ConsumedPayment
 
 
 async def check_payment_status(payment_hash: str) -> bool:
@@ -22,11 +22,14 @@ async def check_payment_status(payment_hash: str) -> bool:
         return resp.json().get("paid", False)
 
 
-def check_and_consume_payment(payment_hash: str) -> bool:
-    if payment_hash in _consumed_hashes:
+async def check_and_consume_payment(payment_hash: str, db: AsyncSession) -> bool:
+    try:
+        db.add(ConsumedPayment(payment_hash=payment_hash))
+        await db.flush()
+        return True
+    except IntegrityError:
+        await db.rollback()
         return False
-    _consumed_hashes.add(payment_hash)
-    return True
 
 
 async def create_invoice(amount_sats: int, memo: str = "satring.com L402") -> dict:

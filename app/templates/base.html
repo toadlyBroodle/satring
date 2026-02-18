@@ -4,6 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}satring{% endblock %} — L402 Service Directory</title>
+  <meta name="description" content="{% block meta_description %}Discover and list Lightning-paywalled L402 APIs for AI agents. The open directory for machine-to-machine commerce.{% endblock %}">
+  <!-- Open Graph -->
+  <meta property="og:title" content="{% block og_title %}satring — L402 Service Directory{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}Discover and list Lightning-paywalled L402 APIs for AI agents.{% endblock %}">
+  <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+  <meta property="og:image" content="{% block og_image %}/static/img/satring-logo-trans-bg.png{% endblock %}">
+  <meta property="og:site_name" content="satring">
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="{% block twitter_title %}satring — L402 Service Directory{% endblock %}">
+  <meta name="twitter:description" content="{% block twitter_description %}Discover and list Lightning-paywalled L402 APIs for AI agents.{% endblock %}">
+  <meta name="twitter:image" content="{% block twitter_image %}/static/img/satring-logo-trans-bg.png{% endblock %}">
+  {% block extra_head %}{% endblock %}
   <link rel="icon" type="image/png" href="/static/img/satring-logo-trans-bg.png">
   <link rel="stylesheet" href="/static/css/theme.css">
   <script type="module" src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
