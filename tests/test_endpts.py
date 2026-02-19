@@ -4,6 +4,8 @@ Covers: status codes, response schema fields, L402 402 challenge format,
 token non-exposure across all listing endpoints, and recover flow.
 """
 
+import json
+
 import pytest
 from unittest.mock import patch, AsyncMock
 
@@ -228,6 +230,8 @@ class TestAnalyticsResponse:
         resp = await client.get("/api/v1/analytics")
         assert resp.status_code == 200
         data = resp.json()
+        print("\n=== ANALYTICS RESPONSE ===")
+        print(json.dumps(data, indent=2))
         assert set(data.keys()) == {
             "generated_at", "total_services", "total_ratings", "total_categories",
             "health", "pricing", "categories", "growth",
@@ -278,6 +282,8 @@ class TestReputationResponse:
         resp = await client.get("/api/v1/services/test-api/reputation")
         assert resp.status_code == 200
         data = resp.json()
+        print("\n=== REPUTATION RESPONSE ===")
+        print(json.dumps(data, indent=2))
         assert set(data.keys()) == {
             "generated_at", "service", "rating_summary",
             "rating_trend", "peer_comparison", "review_activity",
