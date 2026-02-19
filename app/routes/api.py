@@ -1,10 +1,11 @@
+import math
 import secrets
 from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field, HttpUrl, field_validator
-from sqlalchemy import select, func
+from sqlalchemy import case, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -116,6 +117,144 @@ class ServiceUpdate(BaseModel):
         return v
 
 
+# --- Analytics Schemas ---
+
+
+class LeaderboardEntry(BaseModel):
+    name: str
+    slug: str
+    avg_rating: float
+    rating_count: int
+    pricing_sats: int
+
+    model_config = {"from_attributes": True}
+
+
+class CategoryStats(BaseModel):
+    name: str
+    slug: str
+    service_count: int
+    avg_rating: float
+    avg_price_sats: float
+    live_count: int
+
+
+class HealthOverview(BaseModel):
+    by_status: dict[str, int]
+    live_percentage: float
+    domain_verified_count: int
+    domain_verified_percentage: float
+
+
+class PricingStats(BaseModel):
+    avg_sats: float
+    median_sats: float
+    min_sats: int
+    max_sats: int
+    free_count: int
+    by_model: dict[str, int]
+    by_protocol: dict[str, int]
+
+
+class GrowthStats(BaseModel):
+    services_added_last_7d: int
+    services_added_last_30d: int
+    ratings_added_last_7d: int
+    ratings_added_last_30d: int
+    newest_service: dict | None
+
+
+class AnalyticsResponse(BaseModel):
+    generated_at: str
+    total_services: int
+    total_ratings: int
+    total_categories: int
+    health: HealthOverview
+    pricing: PricingStats
+    categories: list[CategoryStats]
+    growth: GrowthStats
+    top_rated: list[LeaderboardEntry]
+    most_reviewed: list[LeaderboardEntry]
+    recently_added: list[LeaderboardEntry]
+
+
+# --- Reputation Schemas ---
+
+
+class ServiceDetail(BaseModel):
+    name: str
+    slug: str
+    url: str
+    description: str
+    pricing_sats: int
+    pricing_model: str
+    protocol: str
+    owner_name: str
+    logo_url: str
+    domain_verified: bool
+    status: str
+    last_probed_at: datetime | None
+    dead_since: datetime | None
+    categories: list[CategoryOut]
+    created_at: datetime
+    age_days: int
+
+
+class RatingSummary(BaseModel):
+    avg_rating: float
+    rating_count: int
+    distribution: dict[str, int]
+    distribution_pct: dict[str, float]
+    std_deviation: float
+    sentiment_label: str
+
+
+class MonthlyTrend(BaseModel):
+    month: str
+    count: int
+    avg_score: float
+
+
+class PeerEntry(BaseModel):
+    name: str
+    slug: str
+    avg_rating: float
+    rating_count: int
+
+
+class PeerComparison(BaseModel):
+    category_avg_rating: float
+    category_avg_price_sats: float
+    category_total_services: int
+    rating_rank: int
+    rating_percentile: float
+    price_rank: int
+    review_volume_rank: int
+    peers_rated_higher: list[PeerEntry]
+    peers_rated_lower: list[PeerEntry]
+
+
+class ReviewActivity(BaseModel):
+    first_review_at: datetime | None
+    latest_review_at: datetime | None
+    days_since_last_review: int | None
+    unique_reviewers: int
+    anonymous_count: int
+    avg_comment_length: float
+    reviews_with_comments: int
+    reviews_without_comments: int
+
+
+class ReputationResponse(BaseModel):
+    generated_at: str
+    service: ServiceDetail
+    rating_summary: RatingSummary
+    rating_trend: list[MonthlyTrend]
+    peer_comparison: PeerComparison | None
+    review_activity: ReviewActivity
+    recent_reviews: list[RatingOut]
+
+
 # --- Helpers ---
 
 async def paginated_services(db: AsyncSession, query, page: int, page_size: int) -> ServiceListOut:
@@ -145,6 +284,40 @@ async def get_service_or_404(db: AsyncSession, slug: str) -> Service:
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
     return service
+
+
+def compute_median(values: list) -> float:
+    if not values:
+        return 0.0
+    s = sorted(values)
+    n = len(s)
+    mid = n // 2
+    if n % 2 == 0:
+        return (s[mid - 1] + s[mid]) / 2.0
+    return float(s[mid])
+
+
+def std_deviation_from_dist(distribution: dict[int, int]) -> float:
+    total = sum(distribution.values())
+    if total == 0:
+        return 0.0
+    mean = sum(k * v for k, v in distribution.items()) / total
+    variance = sum(v * (k - mean) ** 2 for k, v in distribution.items()) / total
+    return round(math.sqrt(variance), 2)
+
+
+def sentiment_label(avg: float, count: int) -> str:
+    if count == 0:
+        return "no_reviews"
+    if avg >= 4.5:
+        return "very_positive"
+    if avg >= 3.5:
+        return "positive"
+    if avg >= 2.5:
+        return "mixed"
+    if avg >= 1.5:
+        return "negative"
+    return "very_negative"
 
 
 # --- Free Endpoints ---
@@ -395,55 +568,324 @@ async def create_rating(request: Request, slug: str, body: RatingCreate, db: Asy
 
 @router.get("/analytics")
 async def analytics(request: Request, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request)
+    await require_l402(request=request, memo="satring.com analytics access")
 
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # --- Totals ---
     total_services = (await db.execute(
         select(func.count(Service.id)).where(Service.status != "purged")
     )).scalar() or 0
     total_ratings = (await db.execute(
         select(func.count(Rating.id)).join(Service).where(Service.status != "purged")
     )).scalar() or 0
-    avg_price = (await db.execute(
-        select(func.avg(Service.pricing_sats)).where(Service.status != "purged")
+    total_categories = (await db.execute(
+        select(func.count(Category.id))
     )).scalar() or 0
 
-    top_rated = await db.execute(
-        select(Service).options(selectinload(Service.categories))
+    # --- Health ---
+    status_rows = (await db.execute(
+        select(Service.status, func.count(Service.id))
         .where(Service.status != "purged")
-        .where(Service.rating_count >= 1)
-        .order_by(Service.avg_rating.desc()).limit(10)
-    )
+        .group_by(Service.status)
+    )).all()
+    by_status = {row[0]: row[1] for row in status_rows}
+    live_pct = round(by_status.get("live", 0) / total_services * 100, 1) if total_services else 0.0
 
-    return {
-        "total_services": total_services,
-        "total_ratings": total_ratings,
-        "avg_price_sats": round(float(avg_price), 1),
-        "top_rated": [ServiceOut.model_validate(s) for s in top_rated.scalars().all()],
-    }
+    domain_verified_count = (await db.execute(
+        select(func.count(Service.id))
+        .where(Service.status != "purged")
+        .where(Service.domain_verified == True)
+    )).scalar() or 0
+    domain_verified_pct = round(domain_verified_count / total_services * 100, 1) if total_services else 0.0
+
+    # --- Pricing ---
+    pricing_agg = (await db.execute(
+        select(
+            func.avg(Service.pricing_sats),
+            func.min(Service.pricing_sats),
+            func.max(Service.pricing_sats),
+        ).where(Service.status != "purged")
+    )).one()
+    all_prices = (await db.execute(
+        select(Service.pricing_sats).where(Service.status != "purged").order_by(Service.pricing_sats)
+    )).scalars().all()
+    free_count = (await db.execute(
+        select(func.count(Service.id)).where(Service.status != "purged").where(Service.pricing_sats == 0)
+    )).scalar() or 0
+    by_model_rows = (await db.execute(
+        select(Service.pricing_model, func.count(Service.id))
+        .where(Service.status != "purged")
+        .group_by(Service.pricing_model)
+    )).all()
+    by_protocol_rows = (await db.execute(
+        select(Service.protocol, func.count(Service.id))
+        .where(Service.status != "purged")
+        .group_by(Service.protocol)
+    )).all()
+
+    # --- Categories ---
+    cat_rows = (await db.execute(
+        select(
+            Category.name,
+            Category.slug,
+            func.count(Service.id),
+            func.coalesce(func.avg(Service.avg_rating), 0.0),
+            func.coalesce(func.avg(Service.pricing_sats), 0.0),
+            func.sum(case((Service.status == "live", 1), else_=0)),
+        )
+        .join(service_categories, Category.id == service_categories.c.category_id)
+        .join(Service, Service.id == service_categories.c.service_id)
+        .where(Service.status != "purged")
+        .group_by(Category.id)
+        .order_by(func.count(Service.id).desc())
+    )).all()
+
+    # --- Growth ---
+    seven_ago = now - timedelta(days=7)
+    thirty_ago = now - timedelta(days=30)
+    svc_7d = (await db.execute(
+        select(func.count(Service.id)).where(Service.status != "purged").where(Service.created_at >= seven_ago)
+    )).scalar() or 0
+    svc_30d = (await db.execute(
+        select(func.count(Service.id)).where(Service.status != "purged").where(Service.created_at >= thirty_ago)
+    )).scalar() or 0
+    rat_7d = (await db.execute(
+        select(func.count(Rating.id)).join(Service).where(Service.status != "purged").where(Rating.created_at >= seven_ago)
+    )).scalar() or 0
+    rat_30d = (await db.execute(
+        select(func.count(Rating.id)).join(Service).where(Service.status != "purged").where(Rating.created_at >= thirty_ago)
+    )).scalar() or 0
+    newest_row = (await db.execute(
+        select(Service.name, Service.slug, Service.created_at)
+        .where(Service.status != "purged")
+        .order_by(Service.created_at.desc()).limit(1)
+    )).first()
+
+    # --- Leaderboards ---
+    top_rated_rows = (await db.execute(
+        select(Service).where(Service.status != "purged")
+        .where(Service.rating_count >= 3)
+        .order_by(Service.avg_rating.desc(), Service.rating_count.desc()).limit(10)
+    )).scalars().all()
+    most_reviewed_rows = (await db.execute(
+        select(Service).where(Service.status != "purged")
+        .where(Service.rating_count >= 1)
+        .order_by(Service.rating_count.desc(), Service.avg_rating.desc()).limit(10)
+    )).scalars().all()
+    recently_added_rows = (await db.execute(
+        select(Service).where(Service.status != "purged")
+        .order_by(Service.created_at.desc()).limit(10)
+    )).scalars().all()
+
+    def _lb(s: Service) -> LeaderboardEntry:
+        return LeaderboardEntry(
+            name=s.name, slug=s.slug, avg_rating=s.avg_rating,
+            rating_count=s.rating_count, pricing_sats=s.pricing_sats,
+        )
+
+    return AnalyticsResponse(
+        generated_at=now.isoformat(),
+        total_services=total_services,
+        total_ratings=total_ratings,
+        total_categories=total_categories,
+        health=HealthOverview(
+            by_status=by_status,
+            live_percentage=live_pct,
+            domain_verified_count=domain_verified_count,
+            domain_verified_percentage=domain_verified_pct,
+        ),
+        pricing=PricingStats(
+            avg_sats=round(float(pricing_agg[0] or 0), 1),
+            median_sats=compute_median(all_prices),
+            min_sats=pricing_agg[1] or 0,
+            max_sats=pricing_agg[2] or 0,
+            free_count=free_count,
+            by_model={r[0]: r[1] for r in by_model_rows},
+            by_protocol={r[0]: r[1] for r in by_protocol_rows},
+        ),
+        categories=[
+            CategoryStats(
+                name=r[0], slug=r[1], service_count=r[2],
+                avg_rating=round(float(r[3]), 1),
+                avg_price_sats=round(float(r[4]), 1),
+                live_count=int(r[5] or 0),
+            ) for r in cat_rows
+        ],
+        growth=GrowthStats(
+            services_added_last_7d=svc_7d,
+            services_added_last_30d=svc_30d,
+            ratings_added_last_7d=rat_7d,
+            ratings_added_last_30d=rat_30d,
+            newest_service={
+                "name": newest_row[0], "slug": newest_row[1],
+                "created_at": newest_row[2].isoformat() if newest_row[2] else None,
+            } if newest_row else None,
+        ),
+        top_rated=[_lb(s) for s in top_rated_rows],
+        most_reviewed=[_lb(s) for s in most_reviewed_rows],
+        recently_added=[_lb(s) for s in recently_added_rows],
+    )
 
 
 @router.get("/services/{slug}/reputation")
 async def reputation(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request)
+    await require_l402(request=request, memo="satring.com reputation lookup")
 
     service = await get_service_or_404(db, slug)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # --- Service detail ---
+    age_days = (now - service.created_at).days if service.created_at else 0
+    service_detail = ServiceDetail(
+        name=service.name, slug=service.slug, url=service.url,
+        description=service.description, pricing_sats=service.pricing_sats,
+        pricing_model=service.pricing_model, protocol=service.protocol,
+        owner_name=service.owner_name, logo_url=service.logo_url,
+        domain_verified=service.domain_verified, status=service.status,
+        last_probed_at=service.last_probed_at, dead_since=service.dead_since,
+        categories=[CategoryOut.model_validate(c) for c in service.categories],
+        created_at=service.created_at, age_days=age_days,
+    )
+
+    # --- Rating distribution ---
     dist_result = await db.execute(
         select(Rating.score, func.count(Rating.id))
         .where(Rating.service_id == service.id)
         .group_by(Rating.score)
     )
-    distribution = {row[0]: row[1] for row in dist_result.all()}
+    distribution = {i: 0 for i in range(1, 6)}
+    for row in dist_result.all():
+        distribution[row[0]] = row[1]
+    total_ratings = sum(distribution.values())
 
+    dist_pct = {
+        str(k): round(v / total_ratings * 100, 1) if total_ratings else 0.0
+        for k, v in distribution.items()
+    }
+    dist_str = {str(k): v for k, v in distribution.items()}
+
+    rating_summary = RatingSummary(
+        avg_rating=service.avg_rating,
+        rating_count=service.rating_count,
+        distribution=dist_str,
+        distribution_pct=dist_pct,
+        std_deviation=std_deviation_from_dist(distribution),
+        sentiment_label=sentiment_label(service.avg_rating, service.rating_count),
+    )
+
+    # --- Monthly trend (SQLite strftime) ---
+    trend_rows = (await db.execute(
+        select(
+            func.strftime('%Y-%m', Rating.created_at),
+            func.count(Rating.id),
+            func.avg(Rating.score),
+        )
+        .where(Rating.service_id == service.id)
+        .group_by(func.strftime('%Y-%m', Rating.created_at))
+        .order_by(func.strftime('%Y-%m', Rating.created_at))
+    )).all()
+    rating_trend = [
+        MonthlyTrend(month=r[0], count=r[1], avg_score=round(float(r[2]), 1))
+        for r in trend_rows
+    ]
+
+    # --- Peer comparison (based on first category) ---
+    peer_comparison = None
+    if service.categories:
+        primary_cat = service.categories[0]
+        peers = (await db.execute(
+            select(Service)
+            .join(service_categories)
+            .where(service_categories.c.category_id == primary_cat.id)
+            .where(Service.status != "purged")
+        )).scalars().all()
+
+        cat_total = len(peers)
+        cat_avg_rating = round(sum(p.avg_rating for p in peers) / cat_total, 1) if cat_total else 0.0
+        cat_avg_price = round(sum(p.pricing_sats for p in peers) / cat_total, 1) if cat_total else 0.0
+
+        by_rating = sorted(peers, key=lambda p: (-p.avg_rating, -p.rating_count))
+        rating_rank = next((i + 1 for i, p in enumerate(by_rating) if p.id == service.id), 0)
+        rating_pctl = round((cat_total - rating_rank) / cat_total * 100, 1) if cat_total and rating_rank else 0.0
+
+        by_price = sorted(peers, key=lambda p: p.pricing_sats)
+        price_rank = next((i + 1 for i, p in enumerate(by_price) if p.id == service.id), 0)
+
+        by_volume = sorted(peers, key=lambda p: -p.rating_count)
+        volume_rank = next((i + 1 for i, p in enumerate(by_volume) if p.id == service.id), 0)
+
+        higher = [
+            PeerEntry(name=p.name, slug=p.slug, avg_rating=p.avg_rating, rating_count=p.rating_count)
+            for p in by_rating if p.avg_rating > service.avg_rating and p.id != service.id
+        ][:5]
+        lower = [
+            PeerEntry(name=p.name, slug=p.slug, avg_rating=p.avg_rating, rating_count=p.rating_count)
+            for p in reversed(by_rating) if p.avg_rating < service.avg_rating and p.id != service.id
+        ][:5]
+
+        peer_comparison = PeerComparison(
+            category_avg_rating=cat_avg_rating,
+            category_avg_price_sats=cat_avg_price,
+            category_total_services=cat_total,
+            rating_rank=rating_rank,
+            rating_percentile=rating_pctl,
+            price_rank=price_rank,
+            review_volume_rank=volume_rank,
+            peers_rated_higher=higher,
+            peers_rated_lower=lower,
+        )
+
+    # --- Review activity ---
+    activity = (await db.execute(
+        select(
+            func.min(Rating.created_at),
+            func.max(Rating.created_at),
+            func.count(func.distinct(Rating.reviewer_name)),
+        ).where(Rating.service_id == service.id)
+    )).one()
+    first_review = activity[0]
+    latest_review = activity[1]
+    unique_reviewers = activity[2] or 0
+
+    anon_count = (await db.execute(
+        select(func.count(Rating.id))
+        .where(Rating.service_id == service.id)
+        .where(Rating.reviewer_name == "Anonymous")
+    )).scalar() or 0
+
+    comment_agg = (await db.execute(
+        select(
+            func.avg(func.length(Rating.comment)),
+            func.sum(case((Rating.comment != "", 1), else_=0)),
+        ).where(Rating.service_id == service.id)
+    )).one()
+    avg_comment_len = round(float(comment_agg[0] or 0), 1)
+    with_comments = int(comment_agg[1] or 0)
+
+    review_activity = ReviewActivity(
+        first_review_at=first_review,
+        latest_review_at=latest_review,
+        days_since_last_review=(now - latest_review).days if latest_review else None,
+        unique_reviewers=unique_reviewers,
+        anonymous_count=anon_count,
+        avg_comment_length=avg_comment_len,
+        reviews_with_comments=with_comments,
+        reviews_without_comments=total_ratings - with_comments,
+    )
+
+    # --- Recent reviews ---
     recent = await db.execute(
         select(Rating).where(Rating.service_id == service.id)
         .order_by(Rating.created_at.desc()).limit(20)
     )
 
-    return {
-        "service": service.name,
-        "slug": service.slug,
-        "avg_rating": service.avg_rating,
-        "rating_count": service.rating_count,
-        "distribution": {str(i): distribution.get(i, 0) for i in range(1, 6)},
-        "recent_reviews": [RatingOut.model_validate(r) for r in recent.scalars().all()],
-    }
+    return ReputationResponse(
+        generated_at=now.isoformat(),
+        service=service_detail,
+        rating_summary=rating_summary,
+        rating_trend=rating_trend,
+        peer_comparison=peer_comparison,
+        review_activity=review_activity,
+        recent_reviews=[RatingOut.model_validate(r) for r in recent.scalars().all()],
+    )
