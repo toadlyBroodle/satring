@@ -228,8 +228,44 @@ class TestAnalyticsResponse:
         resp = await client.get("/api/v1/analytics")
         assert resp.status_code == 200
         data = resp.json()
-        assert set(data.keys()) == {"total_services", "total_ratings", "avg_price_sats", "top_rated"}
+        assert set(data.keys()) == {
+            "generated_at", "total_services", "total_ratings", "total_categories",
+            "health", "pricing", "categories", "growth",
+            "top_rated", "most_reviewed", "recently_added",
+        }
+        # health
+        assert set(data["health"].keys()) == {
+            "by_status", "live_percentage",
+            "domain_verified_count", "domain_verified_percentage",
+        }
+        # pricing
+        assert set(data["pricing"].keys()) == {
+            "avg_sats", "median_sats", "min_sats", "max_sats",
+            "free_count", "by_model", "by_protocol",
+        }
+        assert data["pricing"]["median_sats"] == 100  # single service at 100 sats
+        # categories
+        assert isinstance(data["categories"], list)
+        assert len(data["categories"]) >= 1
+        cat = data["categories"][0]
+        assert set(cat.keys()) == {
+            "name", "slug", "service_count", "avg_rating",
+            "avg_price_sats", "live_count",
+        }
+        # growth
+        assert set(data["growth"].keys()) == {
+            "services_added_last_7d", "services_added_last_30d",
+            "ratings_added_last_7d", "ratings_added_last_30d",
+            "newest_service",
+        }
+        assert data["growth"]["newest_service"] is not None
+        # leaderboards
         assert isinstance(data["top_rated"], list)
+        assert isinstance(data["most_reviewed"], list)
+        assert isinstance(data["recently_added"], list)
+        assert len(data["recently_added"]) >= 1
+        entry = data["recently_added"][0]
+        assert set(entry.keys()) == {"name", "slug", "avg_rating", "rating_count", "pricing_sats"}
 
 
 # ---------------------------------------------------------------------------
@@ -243,11 +279,46 @@ class TestReputationResponse:
         assert resp.status_code == 200
         data = resp.json()
         assert set(data.keys()) == {
-            "service", "slug", "avg_rating", "rating_count",
-            "distribution", "recent_reviews",
+            "generated_at", "service", "rating_summary",
+            "rating_trend", "peer_comparison", "review_activity",
+            "recent_reviews",
         }
-        assert set(data["distribution"].keys()) == {"1", "2", "3", "4", "5"}
+        # service detail
+        svc = data["service"]
+        assert svc["name"] == "Test API"
+        assert svc["slug"] == "test-api"
+        assert "age_days" in svc
+        assert "categories" in svc
+        assert svc["pricing_sats"] == 100
+        assert svc["status"] == "unverified"
+        # rating_summary
+        summary = data["rating_summary"]
+        assert set(summary.keys()) == {
+            "avg_rating", "rating_count", "distribution",
+            "distribution_pct", "std_deviation", "sentiment_label",
+        }
+        assert set(summary["distribution"].keys()) == {"1", "2", "3", "4", "5"}
+        assert set(summary["distribution_pct"].keys()) == {"1", "2", "3", "4", "5"}
+        assert summary["sentiment_label"] == "positive"  # avg 4.0
+        assert summary["std_deviation"] > 0
+        # rating_trend
+        assert isinstance(data["rating_trend"], list)
+        # peer_comparison (service has categories so should exist)
+        assert data["peer_comparison"] is not None
+        pc = data["peer_comparison"]
+        assert "rating_rank" in pc
+        assert "rating_percentile" in pc
+        assert "peers_rated_higher" in pc
+        assert "peers_rated_lower" in pc
+        # review_activity
+        ra = data["review_activity"]
+        assert ra["unique_reviewers"] == 3
+        assert ra["anonymous_count"] == 0
+        assert ra["reviews_with_comments"] == 3
+        assert ra["reviews_without_comments"] == 0
+        # recent_reviews
         assert isinstance(data["recent_reviews"], list)
+        assert len(data["recent_reviews"]) == 3
 
 
 # ---------------------------------------------------------------------------
@@ -478,7 +549,7 @@ class TestL402PriceAmounts:
              patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.get("/api/v1/analytics")
-            mock_inv.assert_called_once_with(settings.AUTH_PRICE_SATS, "satring.com premium API access")
+            mock_inv.assert_called_once_with(settings.AUTH_PRICE_SATS, "satring.com analytics access")
 
     @pytest.mark.asyncio
     async def test_reputation_uses_default_price(self, client: AsyncClient, sample_service: Service):
@@ -486,7 +557,7 @@ class TestL402PriceAmounts:
              patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.get("/api/v1/services/test-api/reputation")
-            mock_inv.assert_called_once_with(settings.AUTH_PRICE_SATS, "satring.com premium API access")
+            mock_inv.assert_called_once_with(settings.AUTH_PRICE_SATS, "satring.com reputation lookup")
 
     @pytest.mark.asyncio
     async def test_create_service_uses_submit_price(self, client: AsyncClient):
