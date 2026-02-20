@@ -58,8 +58,9 @@ class TestAPIVerifySetsFlag:
         gen_resp = await client.post(f"/api/v1/services/{svc.slug}/recover/generate")
         challenge = gen_resp.json()["challenge"]
 
-        # Mock HTTP fetch to return correct challenge
-        with patch("app.routes.api.httpx.AsyncClient") as MockClient:
+        # Mock HTTP fetch to return correct challenge + bypass SSRF check
+        with patch("app.routes.api.httpx.AsyncClient") as MockClient, \
+             patch("app.routes.api.is_public_hostname", return_value=True):
             mock_resp = AsyncMock()
             mock_resp.text = challenge
             mock_instance = AsyncMock()
@@ -82,7 +83,8 @@ class TestAPIVerifySetsFlag:
         gen_resp = await client.post(f"/api/v1/services/{svc1.slug}/recover/generate")
         challenge = gen_resp.json()["challenge"]
 
-        with patch("app.routes.api.httpx.AsyncClient") as MockClient:
+        with patch("app.routes.api.httpx.AsyncClient") as MockClient, \
+             patch("app.routes.api.is_public_hostname", return_value=True):
             mock_resp = AsyncMock()
             mock_resp.text = challenge
             mock_instance = AsyncMock()
@@ -108,8 +110,9 @@ class TestWebVerifySetsFlag:
         await db.refresh(svc)
         challenge = svc.domain_challenge
 
-        # Verify via web
-        with patch("app.routes.web.httpx.AsyncClient") as MockClient:
+        # Verify via web — bypass SSRF check since hostname won't resolve in tests
+        with patch("app.routes.web.httpx.AsyncClient") as MockClient, \
+             patch("app.routes.web.is_public_hostname", return_value=True):
             mock_resp = AsyncMock()
             mock_resp.text = challenge
             mock_instance = AsyncMock()
@@ -132,7 +135,8 @@ class TestWebVerifySetsFlag:
         await db.refresh(svc1)
         challenge = svc1.domain_challenge
 
-        with patch("app.routes.web.httpx.AsyncClient") as MockClient:
+        with patch("app.routes.web.httpx.AsyncClient") as MockClient, \
+             patch("app.routes.web.is_public_hostname", return_value=True):
             mock_resp = AsyncMock()
             mock_resp.text = challenge
             mock_instance = AsyncMock()

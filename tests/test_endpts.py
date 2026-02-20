@@ -367,8 +367,9 @@ class TestRecoverVerifyResponse:
         # Generate a challenge first
         await client.post(f"/api/v1/services/{svc.slug}/recover/generate")
 
-        # Mock the HTTP fetch to return wrong content
-        with patch("app.routes.api.httpx.AsyncClient") as MockClient:
+        # Mock the HTTP fetch to return wrong content + bypass SSRF check
+        with patch("app.routes.api.httpx.AsyncClient") as MockClient, \
+             patch("app.routes.api.is_public_hostname", return_value=True):
             mock_resp = AsyncMock()
             mock_resp.text = "wrong-challenge-value"
             mock_instance = AsyncMock()
@@ -387,8 +388,9 @@ class TestRecoverVerifyResponse:
         gen_resp = await client.post(f"/api/v1/services/{svc.slug}/recover/generate")
         challenge = gen_resp.json()["challenge"]
 
-        # Mock the HTTP fetch to return the correct challenge
-        with patch("app.routes.api.httpx.AsyncClient") as MockClient:
+        # Mock the HTTP fetch to return the correct challenge + bypass SSRF check
+        with patch("app.routes.api.httpx.AsyncClient") as MockClient, \
+             patch("app.routes.api.is_public_hostname", return_value=True):
             mock_resp = AsyncMock()
             mock_resp.text = challenge
             mock_instance = AsyncMock()
@@ -426,7 +428,9 @@ class TestRecoverVerifyResponse:
         svc, _ = await _create_service(db, slug="recover-unreachable")
         await client.post(f"/api/v1/services/{svc.slug}/recover/generate")
 
-        with patch("app.routes.api.httpx.AsyncClient") as MockClient:
+        # Bypass SSRF check but let httpx raise
+        with patch("app.routes.api.httpx.AsyncClient") as MockClient, \
+             patch("app.routes.api.is_public_hostname", return_value=True):
             mock_instance = AsyncMock()
             mock_instance.get.side_effect = Exception("Connection refused")
             MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_instance)

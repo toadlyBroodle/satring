@@ -12,10 +12,12 @@ from sqlalchemy.orm import selectinload
 from app.config import (
     settings, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT,
+    RATE_SUBMIT, RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_REVIEW,
+    RATE_SEARCH, RATE_PAYMENT_STATUS,
 )
 from app.database import get_db
 from app.l402 import create_invoice, check_payment_status, check_and_consume_payment
-from app.main import templates
+from app.main import templates, limiter
 from app.models import Service, Category, Rating, service_categories
 from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, overwrite_purged_service
 
@@ -85,6 +87,7 @@ async def directory(
 
 
 @router.get("/search", response_class=HTMLResponse)
+@limiter.limit(RATE_SEARCH)
 async def search(
     request: Request,
     q: str = "",
@@ -168,6 +171,7 @@ async def submit_form(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/submit")
+@limiter.limit(RATE_SUBMIT)
 async def submit_service(
     request: Request,
     name: str = Form(...),
@@ -365,6 +369,7 @@ async def edit_service_form(
 
 
 @router.post("/services/{slug}/edit")
+@limiter.limit(RATE_EDIT)
 async def edit_service(
     request: Request,
     slug: str,
@@ -444,6 +449,7 @@ async def edit_service(
 
 
 @router.post("/services/{slug}/delete")
+@limiter.limit(RATE_DELETE)
 async def delete_service(
     request: Request,
     slug: str,
@@ -490,6 +496,7 @@ async def recover_form(
 
 
 @router.post("/services/{slug}/recover")
+@limiter.limit(RATE_RECOVER)
 async def recover_service(
     request: Request,
     slug: str,
@@ -583,6 +590,7 @@ async def recover_service(
 
 
 @router.post("/services/{slug}/rate", response_class=HTMLResponse)
+@limiter.limit(RATE_REVIEW)
 async def rate_service(
     request: Request,
     slug: str,
@@ -663,7 +671,8 @@ async def rate_service(
 
 
 @router.get("/payment-status/{payment_hash}")
-async def payment_status(payment_hash: str):
+@limiter.limit(RATE_PAYMENT_STATUS)
+async def payment_status(request: Request, payment_hash: str):
     if settings.AUTH_ROOT_KEY == "test-mode":
         return JSONResponse({"paid": True})
     paid = await check_payment_status(payment_hash)

@@ -31,3 +31,12 @@ MAX_LOGO_URL = 500
 MAX_REVIEWER_NAME = 200
 MAX_COMMENT = 2000
 MAX_PRICING_SATS = 1_000_000
+
+# SECURITY: Rate limits per IP. Change values here — not in individual files.
+RATE_SUBMIT = "20/hour"
+RATE_EDIT = "20/hour"
+RATE_DELETE = "10/hour"
+RATE_RECOVER = "20/hour"
+RATE_REVIEW = "20/hour"
+RATE_SEARCH = "2/minute"
+RATE_PAYMENT_STATUS = "30/minute"

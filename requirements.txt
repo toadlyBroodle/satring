@@ -6,6 +6,7 @@ jinja2
 python-dotenv
 pymacaroons
 httpx
+slowapi
 python-multipart
 pytest
 pytest-asyncio
