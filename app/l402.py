@@ -7,7 +7,7 @@ from pymacaroons import Macaroon, Verifier
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
+from app.config import settings, payments_enabled
 from app.models import ConsumedPayment
 
 
@@ -97,7 +97,7 @@ async def require_l402(
     memo: str | None = None,
 ):
     # Dev/test mode: skip L402 entirely
-    if settings.AUTH_ROOT_KEY == "test-mode":
+    if not payments_enabled():
         return
 
     if request is None:

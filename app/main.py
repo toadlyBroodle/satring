@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
@@ -90,8 +91,20 @@ async def seed_categories():
         await db.commit()
 
 
+logger = logging.getLogger("satring")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # SECURITY: Refuse to start without an explicit AUTH_ROOT_KEY.
+    # Operators must set a real key for production or "test-mode" for development.
+    if not settings.AUTH_ROOT_KEY:
+        raise RuntimeError(
+            "AUTH_ROOT_KEY is not set. Set it to a secure random key for production, "
+            "or 'test-mode' to explicitly disable payment gates for development."
+        )
+    if settings.AUTH_ROOT_KEY == "test-mode":
+        logger.warning("AUTH_ROOT_KEY is 'test-mode' — payment gates are bypassed.")
     await init_db()
     await seed_categories()
     yield

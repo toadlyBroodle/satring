@@ -48,16 +48,14 @@ class TestMintAndVerify:
 class TestRequireL402:
     @pytest.mark.asyncio
     async def test_test_mode_passes_through(self):
-        with patch("app.l402.settings") as mock_settings:
-            mock_settings.AUTH_ROOT_KEY = "test-mode"
+        with patch("app.l402.payments_enabled", return_value=False):
             result = await require_l402(request=None)
             assert result is None
 
     @pytest.mark.asyncio
     async def test_no_request_outside_test_mode_raises_500(self):
         from fastapi import HTTPException
-        with patch("app.l402.settings") as mock_settings:
-            mock_settings.AUTH_ROOT_KEY = "real-key"
+        with patch("app.l402.payments_enabled", return_value=True):
             with pytest.raises(HTTPException) as exc_info:
                 await require_l402(request=None)
             assert exc_info.value.status_code == 500
@@ -77,7 +75,8 @@ class TestRequireL402:
         }
         request = Request(scope)
 
-        with patch("app.l402.settings") as mock_settings, \
+        with patch("app.l402.payments_enabled", return_value=True), \
+             patch("app.l402.settings") as mock_settings, \
              patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_invoice:
             mock_settings.AUTH_ROOT_KEY = "real-key"
             mock_settings.AUTH_PRICE_SATS = 100
@@ -106,7 +105,8 @@ class TestRequireL402:
 
         root_key = "test-root-key-for-verify"
 
-        with patch("app.l402.settings") as mock_settings:
+        with patch("app.l402.payments_enabled", return_value=True), \
+             patch("app.l402.settings") as mock_settings:
             mock_settings.AUTH_ROOT_KEY = root_key
 
             mac_b64 = mint_macaroon(payment_hash)
@@ -128,7 +128,8 @@ class TestRequireL402:
         from fastapi import HTTPException
         from starlette.requests import Request
 
-        with patch("app.l402.settings") as mock_settings:
+        with patch("app.l402.payments_enabled", return_value=True), \
+             patch("app.l402.settings") as mock_settings:
             mock_settings.AUTH_ROOT_KEY = "real-key"
 
             scope = {
@@ -150,7 +151,8 @@ class TestRequireL402:
         from fastapi import HTTPException
         from starlette.requests import Request
 
-        with patch("app.l402.settings") as mock_settings:
+        with patch("app.l402.payments_enabled", return_value=True), \
+             patch("app.l402.settings") as mock_settings:
             mock_settings.AUTH_ROOT_KEY = "real-key"
 
             scope = {
@@ -175,7 +177,8 @@ class TestRequireL402:
 
         root_key = "lsat-root-key"
 
-        with patch("app.l402.settings") as mock_settings:
+        with patch("app.l402.payments_enabled", return_value=True), \
+             patch("app.l402.settings") as mock_settings:
             mock_settings.AUTH_ROOT_KEY = root_key
 
             mac_b64 = mint_macaroon(payment_hash)

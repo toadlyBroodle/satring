@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import (
-    settings, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
+    settings, payments_enabled, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT,
     RATE_SUBMIT, RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_REVIEW,
     RATE_SEARCH, RATE_PAYMENT_STATUS,
@@ -247,7 +247,7 @@ async def submit_service(
         }, status_code=422)
 
     # Payment gate (skipped in test mode)
-    if settings.AUTH_ROOT_KEY != "test-mode":
+    if payments_enabled():
         payment_hash = request.query_params.get("payment_hash")
         if not payment_hash:
             # Create invoice and show payment page
@@ -617,7 +617,7 @@ async def rate_service(
         return HTMLResponse("Input exceeds maximum length.", status_code=422)
 
     # Payment gate (skipped in test mode)
-    if settings.AUTH_ROOT_KEY != "test-mode":
+    if payments_enabled():
         payment_hash = request.query_params.get("payment_hash")
         if not payment_hash:
             invoice = await create_invoice(
@@ -674,7 +674,7 @@ async def rate_service(
 @router.get("/payment-status/{payment_hash}")
 @limiter.limit(RATE_PAYMENT_STATUS)
 async def payment_status(request: Request, payment_hash: str):
-    if settings.AUTH_ROOT_KEY == "test-mode":
+    if not payments_enabled():
         return JSONResponse({"paid": True})
     paid = await check_payment_status(payment_hash)
     return JSONResponse({"paid": paid})
