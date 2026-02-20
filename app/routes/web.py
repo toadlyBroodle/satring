@@ -19,7 +19,7 @@ from app.database import get_db
 from app.l402 import create_invoice, check_payment_status, check_and_consume_payment
 from app.main import templates, limiter
 from app.models import Service, Category, Rating, service_categories
-from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, overwrite_purged_service
+from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, overwrite_purged_service, escape_like
 
 router = APIRouter(include_in_schema=False)
 
@@ -100,8 +100,9 @@ async def search(
 ):
     query = select(Service).options(selectinload(Service.categories)).where(Service.status != "purged")
     if q.strip():
-        pattern = f"%{q.strip()}%"
-        query = query.where(Service.name.ilike(pattern) | Service.description.ilike(pattern))
+        # SECURITY: escape LIKE wildcards so user input is matched literally
+        pattern = f"%{escape_like(q.strip())}%"
+        query = query.where(Service.name.ilike(pattern, escape="\\") | Service.description.ilike(pattern, escape="\\"))
     if category:
         query = query.join(service_categories).join(Category).where(Category.slug == category)
     if status:
