@@ -1,4 +1,6 @@
 """Tests for security fixes: XSS, SSRF, CSRF, input length limits, rate limiting."""
+from unittest.mock import patch
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -487,3 +489,21 @@ class TestLikeWildcardInjection:
         resp = await client.get("/api/v1/search?q=Test+API")
         assert resp.status_code == 200
         assert len(resp.json()["services"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# 10. Default test-mode — empty AUTH_ROOT_KEY must prevent startup
+# ---------------------------------------------------------------------------
+
+class TestEmptyAuthRootKey:
+    """App must refuse to start when AUTH_ROOT_KEY is not set."""
+
+    @pytest.mark.asyncio
+    async def test_empty_auth_root_key_raises_runtime_error(self):
+        from app.main import lifespan, app as fastapi_app
+
+        with patch("app.main.settings") as mock_settings:
+            mock_settings.AUTH_ROOT_KEY = ""
+            with pytest.raises(RuntimeError, match="AUTH_ROOT_KEY is not set"):
+                async with lifespan(fastapi_app):
+                    pass
