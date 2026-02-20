@@ -233,7 +233,7 @@ class TestPremiumEndpoints:
         data = resp.json()
         assert data["total_services"] == 1
         assert data["total_ratings"] == 3
-        assert data["avg_price_sats"] == 100.0
+        assert data["pricing"]["avg_sats"] == 100.0
         assert len(data["top_rated"]) == 1
 
     @pytest.mark.asyncio
@@ -249,13 +249,13 @@ class TestPremiumEndpoints:
         resp = await client.get("/api/v1/services/test-api/reputation")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["service"] == "Test API"
-        assert data["avg_rating"] == 4.0
-        assert data["rating_count"] == 3
-        assert data["distribution"]["5"] == 1
-        assert data["distribution"]["4"] == 1
-        assert data["distribution"]["3"] == 1
-        assert data["distribution"]["1"] == 0
+        assert data["service"]["name"] == "Test API"
+        assert data["rating_summary"]["avg_rating"] == 4.0
+        assert data["rating_summary"]["rating_count"] == 3
+        assert data["rating_summary"]["distribution"]["5"] == 1
+        assert data["rating_summary"]["distribution"]["4"] == 1
+        assert data["rating_summary"]["distribution"]["3"] == 1
+        assert data["rating_summary"]["distribution"]["1"] == 0
         assert len(data["recent_reviews"]) == 3
 
     @pytest.mark.asyncio
