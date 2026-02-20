@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from app.config import settings
 from app.database import Base, get_db
 from app.models import Category, Service, Rating
-from app.main import app, SEED_CATEGORIES
+from app.main import app, limiter, SEED_CATEGORIES
 
 # Bypass L402 paywall in tests
 settings.AUTH_ROOT_KEY = "test-mode"
@@ -61,6 +61,7 @@ async def client(db: AsyncSession):
         yield db
 
     app.dependency_overrides[get_db] = override_get_db
+    limiter.reset()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
@@ -74,6 +75,7 @@ async def class_client(class_db: AsyncSession):
         yield class_db
 
     app.dependency_overrides[get_db] = override_get_db
+    limiter.reset()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

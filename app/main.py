@@ -5,12 +5,18 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.database import init_db, async_session
 from app.models import Category
+
+# SECURITY: Rate limiter to prevent abuse and DoS. Applied per-endpoint in route files.
+limiter = Limiter(key_func=get_remote_address)
 
 
 class OriginCheckMiddleware(BaseHTTPMiddleware):
@@ -65,6 +71,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="satring", description="L402 Service Directory", lifespan=lifespan, docs_url=None)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(OriginCheckMiddleware)
 
 

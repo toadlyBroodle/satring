@@ -13,9 +13,11 @@ from sqlalchemy.orm import selectinload
 from app.config import (
     settings, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT, MAX_PRICING_SATS,
+    RATE_SUBMIT, RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_REVIEW, RATE_SEARCH,
 )
 from app.database import get_db
 from app.l402 import require_l402
+from app.main import limiter
 from app.models import Service, Category, Rating, service_categories
 from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, overwrite_purged_service
 
@@ -367,6 +369,7 @@ async def get_service(slug: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/services", response_model=ServiceCreateOut, status_code=201)
+@limiter.limit(RATE_SUBMIT)
 async def create_service(request: Request, body: ServiceCreate, db: AsyncSession = Depends(get_db)):
     await require_l402(request=request, amount_sats=settings.AUTH_SUBMIT_PRICE_SATS, memo="satring.com service submission")
     from app.utils import unique_slug
@@ -429,7 +432,9 @@ async def create_service(request: Request, body: ServiceCreate, db: AsyncSession
 
 
 @router.patch("/services/{slug}", response_model=ServiceOut)
+@limiter.limit(RATE_EDIT)
 async def update_service(
+    request: Request,
     slug: str,
     body: ServiceUpdate,
     x_edit_token: str = Header(...),
@@ -458,7 +463,9 @@ async def update_service(
 
 
 @router.delete("/services/{slug}")
+@limiter.limit(RATE_DELETE)
 async def delete_service(
+    request: Request,
     slug: str,
     x_edit_token: str = Header(...),
     db: AsyncSession = Depends(get_db),
@@ -473,7 +480,8 @@ async def delete_service(
 
 
 @router.post("/services/{slug}/recover/generate")
-async def api_recover_generate(slug: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit(RATE_RECOVER)
+async def api_recover_generate(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     service = await get_service_or_404(db, slug)
     challenge = secrets.token_hex(32)
     service.domain_challenge = challenge
@@ -487,7 +495,8 @@ async def api_recover_generate(slug: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/services/{slug}/recover/verify")
-async def api_recover_verify(slug: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit(RATE_RECOVER)
+async def api_recover_verify(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     service = await get_service_or_404(db, slug)
     if (
         not service.domain_challenge
@@ -531,7 +540,9 @@ async def api_recover_verify(slug: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/search", response_model=ServiceListOut)
+@limiter.limit(RATE_SEARCH)
 async def search_services(
+    request: Request,
     q: str = "",
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -561,6 +572,7 @@ async def list_ratings(
 
 
 @router.post("/services/{slug}/ratings", response_model=RatingOut, status_code=201)
+@limiter.limit(RATE_REVIEW)
 async def create_rating(request: Request, slug: str, body: RatingCreate, db: AsyncSession = Depends(get_db)):
     await require_l402(request=request, amount_sats=settings.AUTH_REVIEW_PRICE_SATS, memo="satring.com review submission")
     service = await get_service_or_404(db, slug)
