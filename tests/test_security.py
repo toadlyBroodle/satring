@@ -8,7 +8,7 @@ from app.config import (
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT,
 )
 from app.models import Service
-from app.utils import is_public_hostname
+from app.utils import is_public_hostname, escape_like
 
 
 # ---------------------------------------------------------------------------
@@ -415,3 +415,75 @@ class TestRateLimiting:
             if last_status == 429:
                 break
         assert last_status == 429
+
+
+# ---------------------------------------------------------------------------
+# 9. SQL LIKE wildcard injection
+# ---------------------------------------------------------------------------
+
+class TestEscapeLikeUnit:
+    """Unit tests for the escape_like helper."""
+
+    def test_percent_escaped(self):
+        assert escape_like("100%") == "100\\%"
+
+    def test_underscore_escaped(self):
+        assert escape_like("a_b") == "a\\_b"
+
+    def test_backslash_escaped(self):
+        assert escape_like("a\\b") == "a\\\\b"
+
+    def test_all_metacharacters(self):
+        assert escape_like("%_\\") == "\\%\\_\\\\"
+
+    def test_plain_text_unchanged(self):
+        assert escape_like("hello world") == "hello world"
+
+    def test_empty_string(self):
+        assert escape_like("") == ""
+
+
+class TestLikeWildcardInjection:
+    """Regression tests: LIKE metacharacters in search must not act as wildcards."""
+
+    @pytest.mark.asyncio
+    async def test_web_percent_no_wildcard(self, client: AsyncClient, sample_service: Service):
+        """Searching for literal '%' should not match 'Test API'."""
+        resp = await client.get("/search?q=%25")  # %25 = URL-encoded '%'
+        assert resp.status_code == 200
+        assert "Test API" not in resp.text
+
+    @pytest.mark.asyncio
+    async def test_web_underscore_no_wildcard(self, client: AsyncClient, sample_service: Service):
+        """Searching for '_est' should not match 'Test API' (_ is not a wildcard)."""
+        resp = await client.get("/search?q=_est")
+        assert resp.status_code == 200
+        assert "Test API" not in resp.text
+
+    @pytest.mark.asyncio
+    async def test_web_exact_match_still_works(self, client: AsyncClient, sample_service: Service):
+        """Normal substring search should still find results."""
+        resp = await client.get("/search?q=Test+API")
+        assert resp.status_code == 200
+        assert "Test API" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_api_percent_no_wildcard(self, client: AsyncClient, sample_service: Service):
+        """API: searching for '%' should return no results."""
+        resp = await client.get("/api/v1/search?q=%25")
+        assert resp.status_code == 200
+        assert resp.json()["services"] == []
+
+    @pytest.mark.asyncio
+    async def test_api_underscore_no_wildcard(self, client: AsyncClient, sample_service: Service):
+        """API: searching for '_est' should return no results."""
+        resp = await client.get("/api/v1/search?q=_est")
+        assert resp.status_code == 200
+        assert resp.json()["services"] == []
+
+    @pytest.mark.asyncio
+    async def test_api_exact_match_still_works(self, client: AsyncClient, sample_service: Service):
+        """API: normal search should still find results."""
+        resp = await client.get("/api/v1/search?q=Test+API")
+        assert resp.status_code == 200
+        assert len(resp.json()["services"]) == 1

@@ -19,7 +19,7 @@ from app.database import get_db
 from app.l402 import require_l402
 from app.main import limiter
 from app.models import Service, Category, Rating, service_categories
-from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, overwrite_purged_service
+from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, overwrite_purged_service, escape_like
 
 router = APIRouter(tags=["API"])
 
@@ -550,8 +550,9 @@ async def search_services(
 ):
     query = select(Service).where(Service.status != "purged").order_by(Service.created_at.desc())
     if q.strip():
-        pattern = f"%{q.strip()}%"
-        query = query.where(Service.name.ilike(pattern) | Service.description.ilike(pattern))
+        # SECURITY: escape LIKE wildcards so user input is matched literally
+        pattern = f"%{escape_like(q.strip())}%"
+        query = query.where(Service.name.ilike(pattern, escape="\\") | Service.description.ilike(pattern, escape="\\"))
     return await paginated_services(db, query, page, page_size)
 
 

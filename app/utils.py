@@ -12,6 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Service, Category, Rating
 
 
+def escape_like(s: str, escape: str = "\\") -> str:
+    """SECURITY: Escape SQL LIKE metacharacters (%, _, \\) in user input
+    so they are matched literally instead of acting as wildcards."""
+    s = s.replace(escape, escape + escape)
+    s = s.replace("%", escape + "%")
+    s = s.replace("_", escape + "_")
+    return s
+
+
 def slugify(text: str) -> str:
     slug = text.lower().strip()
     slug = re.sub(r"[^\w\s-]", "", slug)
@@ -65,7 +74,7 @@ async def get_same_domain_services(db: AsyncSession, url: str) -> list[Service]:
         return []
     # Broad LIKE filter, then exact post-filter on parsed hostname
     result = await db.execute(
-        select(Service).where(Service.url.ilike(f"%{domain}%")).where(Service.status != "purged")
+        select(Service).where(Service.url.ilike(f"%{escape_like(domain)}%", escape="\\")).where(Service.status != "purged")
     )
     return [s for s in result.scalars().all() if extract_domain(s.url) == domain]
 
