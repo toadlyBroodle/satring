@@ -19,6 +19,33 @@ from app.models import Category
 limiter = Limiter(key_func=get_remote_address)
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """SECURITY: Add CSP, HSTS, Referrer-Policy, and other hardening headers."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        # Content-Security-Policy: restrict resource origins.
+        # 'unsafe-inline' is required because the app uses inline <script>/<style>
+        # blocks and onclick handlers; still a big win because it blocks unknown origins.
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' https: data:; "
+            "connect-src 'self'; "
+            "font-src 'self'; "
+            "object-src 'none'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'"
+        )
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        return response
+
+
 class OriginCheckMiddleware(BaseHTTPMiddleware):
     """SECURITY: Reject cross-origin POST/PUT/DELETE/PATCH requests.
     Prevents CSRF by verifying the Origin header matches BASE_URL.
@@ -74,6 +101,7 @@ app = FastAPI(title="satring", description="L402 Service Directory", lifespan=li
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(OriginCheckMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 @app.get("/docs", include_in_schema=False)
