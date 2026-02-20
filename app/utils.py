@@ -1,7 +1,9 @@
 import hashlib
 import hmac
+import ipaddress
 import re
 import secrets
+import socket
 from urllib.parse import urlparse
 
 from sqlalchemy import select, func
@@ -39,6 +41,21 @@ def domain_root(url: str) -> str:
     """Return scheme://hostname for a URL (no path, no port)."""
     parsed = urlparse(url)
     return f"{parsed.scheme}://{parsed.hostname}" if parsed.hostname else url
+
+
+def is_public_hostname(hostname: str) -> bool:
+    """SECURITY: Return True only if hostname resolves to a public IP.
+    Used to prevent SSRF by blocking requests to loopback, link-local
+    (e.g. AWS metadata 169.254.x.x), and private network ranges."""
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        # Not a literal IP — resolve via DNS
+        try:
+            ip = ipaddress.ip_address(socket.gethostbyname(hostname))
+        except (socket.gaierror, ValueError):
+            return False
+    return ip.is_global
 
 
 async def get_same_domain_services(db: AsyncSession, url: str) -> list[Service]:

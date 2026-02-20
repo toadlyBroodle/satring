@@ -1,13 +1,38 @@
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
+from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.config import settings
 from app.database import init_db, async_session
 from app.models import Category
+
+
+class OriginCheckMiddleware(BaseHTTPMiddleware):
+    """SECURITY: Reject cross-origin POST/PUT/DELETE/PATCH requests.
+    Prevents CSRF by verifying the Origin header matches BASE_URL.
+    This app has no session cookies so CSRF risk is limited, but this
+    is a low-cost defense-in-depth measure."""
+
+    async def dispatch(self, request: Request, call_next):
+        if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+            origin = request.headers.get("origin")
+            if origin:
+                allowed = urlparse(settings.BASE_URL).netloc
+                actual = urlparse(origin).netloc
+                if actual != allowed:
+                    if request.url.path.startswith("/api/"):
+                        return JSONResponse(
+                            {"detail": "Cross-origin request blocked"},
+                            status_code=403,
+                        )
+                    return HTMLResponse("Cross-origin request blocked", status_code=403)
+        return await call_next(request)
 
 SEED_CATEGORIES = [
     ("AI / ML", "ai-ml", "Machine learning and AI inference APIs"),
@@ -40,6 +65,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="satring", description="L402 Service Directory", lifespan=lifespan, docs_url=None)
+app.add_middleware(OriginCheckMiddleware)
 
 
 @app.get("/docs", include_in_schema=False)
