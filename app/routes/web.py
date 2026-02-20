@@ -1,5 +1,6 @@
 import math
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Request, Depends, Form, Query
@@ -8,12 +9,15 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
+from app.config import (
+    settings, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
+    MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT,
+)
 from app.database import get_db
 from app.l402 import create_invoice, check_payment_status, check_and_consume_payment
 from app.main import templates
 from app.models import Service, Category, Rating, service_categories
-from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, find_purged_service, overwrite_purged_service
+from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, overwrite_purged_service
 
 router = APIRouter(include_in_schema=False)
 
@@ -187,6 +191,46 @@ async def submit_service(
         return templates.TemplateResponse(request, "services/submit.html", {
             "categories": categories,
             "error": "Select 1–2 categories.",
+            "form": {
+                "name": name, "url": url, "description": description,
+                "protocol": protocol, "pricing_sats": pricing_sats,
+                "pricing_model": pricing_model, "owner_name": owner_name,
+                "owner_contact": owner_contact, "logo_url": logo_url,
+                "existing_edit_token": existing_edit_token,
+            },
+            "selected_category_ids": category_ids,
+        }, status_code=422)
+
+    # SECURITY: Server-side length limits prevent DB bloat and memory exhaustion.
+    # HTML maxlength is client-side only and trivially bypassed. Constants in config.py.
+    LENGTH_LIMITS = {"name": MAX_NAME, "url": MAX_URL, "description": MAX_DESCRIPTION, "owner_name": MAX_OWNER_NAME, "owner_contact": MAX_OWNER_CONTACT, "logo_url": MAX_LOGO_URL}
+    for field_name, max_len in LENGTH_LIMITS.items():
+        val = locals()[field_name]
+        if len(val) > max_len:
+            categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
+            return templates.TemplateResponse(request, "services/submit.html", {
+                "categories": categories,
+                "error": f"{field_name} exceeds maximum length of {max_len} characters.",
+                "form": {
+                    "name": name, "url": url, "description": description,
+                    "protocol": protocol, "pricing_sats": pricing_sats,
+                    "pricing_model": pricing_model, "owner_name": owner_name,
+                    "owner_contact": owner_contact, "logo_url": logo_url,
+                    "existing_edit_token": existing_edit_token,
+                },
+                "selected_category_ids": category_ids,
+            }, status_code=422)
+
+    # SECURITY: Reject non-http(s) schemes to prevent stored XSS via javascript:/data: URIs
+    parsed_url = urlparse(url)
+    parsed_logo = urlparse(logo_url) if logo_url else None
+    if parsed_url.scheme not in ("http", "https") or (
+        parsed_logo and parsed_logo.scheme not in ("http", "https")
+    ):
+        categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
+        return templates.TemplateResponse(request, "services/submit.html", {
+            "categories": categories,
+            "error": "URL and logo URL must start with http:// or https://",
             "form": {
                 "name": name, "url": url, "description": description,
                 "protocol": protocol, "pricing_sats": pricing_sats,
@@ -486,6 +530,16 @@ async def recover_service(
                 "verify_path": verify_path,
             })
 
+        # SECURITY: Block SSRF — prevent server from fetching internal/private IPs
+        hostname = extract_domain(service.url)
+        if not hostname or not is_public_hostname(hostname):
+            return templates.TemplateResponse(request, "services/recover.html", {
+                "service": service,
+                "challenge_active": True,
+                "error": "Cannot verify domain: hostname resolves to a private or unreachable address.",
+                "verify_path": verify_path,
+            })
+
         try:
             async with httpx.AsyncClient(timeout=10) as http:
                 resp = await http.get(verify_path)
@@ -548,6 +602,10 @@ async def rate_service(
         score = 1
     if score > 5:
         score = 5
+
+    # SECURITY: Server-side length limits (HTML maxlength is trivially bypassed)
+    if len(reviewer_name) > MAX_REVIEWER_NAME or len(comment) > MAX_COMMENT:
+        return HTMLResponse("Input exceeds maximum length.", status_code=422)
 
     # Payment gate (skipped in test mode)
     if settings.AUTH_ROOT_KEY != "test-mode":

@@ -19,3 +19,15 @@ class Settings:
 
 
 settings = Settings()
+
+# SECURITY: Input length limits shared across API models, web form handlers,
+# and HTML templates. Change values here — not in individual files.
+MAX_NAME = 200
+MAX_URL = 500
+MAX_DESCRIPTION = 5000
+MAX_OWNER_NAME = 200
+MAX_OWNER_CONTACT = 300
+MAX_LOGO_URL = 500
+MAX_REVIEWER_NAME = 200
+MAX_COMMENT = 2000
+MAX_PRICING_SATS = 1_000_000

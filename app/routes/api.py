@@ -1,6 +1,7 @@
 import math
 import secrets
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -9,11 +10,14 @@ from sqlalchemy import case, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
+from app.config import (
+    settings, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
+    MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT, MAX_PRICING_SATS,
+)
 from app.database import get_db
 from app.l402 import require_l402
 from app.models import Service, Category, Rating, service_categories
-from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, find_purged_service, overwrite_purged_service
+from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, overwrite_purged_service
 
 router = APIRouter(tags=["API"])
 
@@ -41,8 +45,9 @@ class RatingOut(BaseModel):
 
 class RatingCreate(BaseModel):
     score: int = Field(ge=1, le=5)
-    comment: str = ""
-    reviewer_name: str = "Anonymous"
+    # SECURITY: max_length limits prevent DB bloat and memory exhaustion (constants in config.py)
+    comment: str = Field(default="", max_length=MAX_COMMENT)
+    reviewer_name: str = Field(default="Anonymous", max_length=MAX_REVIEWER_NAME)
 
 
 class ServiceOut(BaseModel):
@@ -73,17 +78,26 @@ class ServiceListOut(BaseModel):
 
 
 class ServiceCreate(BaseModel):
-    name: str
+    # SECURITY: max_length limits prevent DB bloat and memory exhaustion (constants in config.py)
+    name: str = Field(min_length=1, max_length=MAX_NAME)
     url: HttpUrl
-    description: str = ""
-    pricing_sats: int = 0
-    pricing_model: str = "per-request"
-    protocol: str = "L402"
-    owner_name: str = ""
-    owner_contact: str = ""
-    logo_url: str = ""
+    description: str = Field(default="", max_length=MAX_DESCRIPTION)
+    pricing_sats: int = Field(default=0, ge=0, le=MAX_PRICING_SATS)
+    pricing_model: str = Field(default="per-request", max_length=50)
+    protocol: str = Field(default="L402", max_length=10)
+    owner_name: str = Field(default="", max_length=MAX_OWNER_NAME)
+    owner_contact: str = Field(default="", max_length=MAX_OWNER_CONTACT)
+    logo_url: str = Field(default="", max_length=MAX_LOGO_URL)
     category_ids: list[int] = Field(default_factory=lambda: [], description="1–2 category IDs required")
     existing_edit_token: str | None = None
+
+    # SECURITY: Reject non-http(s) schemes to prevent stored XSS via javascript:/data: URIs
+    @field_validator("logo_url")
+    @classmethod
+    def check_logo_url_scheme(cls, v: str) -> str:
+        if v and urlparse(v).scheme not in ("http", "https"):
+            raise ValueError("logo_url must start with http:// or https://")
+        return v
 
     @field_validator("category_ids")
     @classmethod
@@ -483,6 +497,12 @@ async def api_recover_verify(slug: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="No active challenge or challenge expired")
 
     verify_url = f"{domain_root(service.url)}/.well-known/satring-verify"
+
+    # SECURITY: Block SSRF — prevent server from fetching internal/private IPs
+    hostname = extract_domain(service.url)
+    if not hostname or not is_public_hostname(hostname):
+        raise HTTPException(status_code=400, detail="Cannot verify domain: hostname resolves to a private or unreachable address")
+
     try:
         async with httpx.AsyncClient(timeout=10) as http:
             resp = await http.get(verify_url)
