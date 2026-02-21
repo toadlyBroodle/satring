@@ -61,6 +61,7 @@
           <option value="per-minute" {% if form and form.pricing_model == 'per-minute' %}selected{% endif %}>per-minute</option>
           <option value="per-mb" {% if form and form.pricing_model == 'per-mb' %}selected{% endif %}>per-mb</option>
           <option value="flat" {% if form and form.pricing_model == 'flat' %}selected{% endif %}>flat</option>
+          <option value="token-based" {% if form and form.pricing_model == 'token-based' %}selected{% endif %}>token-based</option>
         </select>
       </div>
     </div>
