@@ -7,7 +7,7 @@
   <span class="border border-green-900 px-3 py-0.5 text-green-900">[&lt; prev]</span>
   {% endif %}
 
-  <span class="text-green-700">page <span class="text-green-400">{{ page }}</span>/{{ total_pages }}</span>
+  <span class="text-green-700">page <span class="text-green-400">{{ page }}</span>/<a href="/?{{ qs_base }}{{ '&' if qs_base else '' }}page={{ total_pages }}" class="hover:text-green-400">{{ total_pages }}</a></span>
 
   {% if page < total_pages %}
   <a href="/?{{ qs_base }}{{ '&' if qs_base else '' }}page={{ page + 1 }}"

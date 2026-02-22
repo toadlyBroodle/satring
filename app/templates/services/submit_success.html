@@ -20,7 +20,7 @@
     <p class="text-sm mb-3">This token lets you edit your listing. It will <span class="text-amber-400">not be shown again</span>.</p>
     <div class="flex items-center gap-2 mb-3">
       <code id="edit-token" class="bg-green-900/30 text-green-400 px-3 py-2 text-sm break-all flex-1 border border-green-800 select-all">{{ edit_token }}</code>
-      <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('edit-token').textContent);this.textContent='[COPIED]';setTimeout(()=>this.textContent='[COPY]',1500)" class="border border-green-400 text-green-400 px-3 py-2 text-sm hover:bg-green-400 hover:text-black transition-colors whitespace-nowrap">[COPY]</button>
+      <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('edit-token').textContent);this.textContent='[COPIED]';setTimeout(()=>this.textContent='[COPY]',1500)" class="btn-action px-3 py-2 text-sm whitespace-nowrap">[COPY]</button>
     </div>
     <p class="text-green-700 text-xs">If you lose this token, you can recover access via domain verification at <a href="/services/{{ service.slug }}/recover" class="hover:text-amber-400">/services/{{ service.slug }}/recover</a></p>
     {% endif %}

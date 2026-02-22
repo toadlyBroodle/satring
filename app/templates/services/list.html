@@ -22,7 +22,7 @@
 
 <!-- Search -->
 <div class="mb-4">
-  <div class="flex items-center border border-green-800 rounded-none max-w-full sm:max-w-md">
+  <div class="flex items-center border rounded-none max-w-full sm:max-w-md search-box">
     <label for="search" class="text-green-700 pl-2 text-sm cursor-pointer">search&gt;</label>
     <input type="text" id="search" name="q" placeholder="_"
       class="bg-black text-green-400 border-none outline-none w-full px-2 py-1.5 text-sm placeholder-green-900"
@@ -34,20 +34,20 @@
 <!-- Category Filters -->
 <div class="mb-2 flex flex-wrap gap-2 text-sm">
   <span class="text-green-700 py-0.5">cat&gt;</span>
-  <a href="/?{{ qs_filter[1:] if qs_filter else '' }}{{ qs_sort }}" class="border border-green-800 px-2 py-0.5 {% if not active_category %}bg-green-400 text-black{% else %}hover:text-amber-400{% endif %}">[all]</a>
+  <a href="/?{{ qs_filter[1:] if qs_filter else '' }}{{ qs_sort }}" class="filter-default border border-green-800 px-2 py-0.5 {% if not active_category %}active{% endif %}">[all]</a>
   {% for cat in categories %}
-  <a href="/?category={{ cat.slug }}{{ qs_filter }}{{ qs_sort }}" data-tip="{{ cat.description }}" class="border border-green-800 px-2 py-0.5 {% if active_category == cat.slug %}bg-amber-400 text-black{% else %}hover:text-amber-400{% endif %}">[{{ cat.name }}]</a>
+  <a href="/?category={{ cat.slug }}{{ qs_filter }}{{ qs_sort }}" data-tip="{{ cat.description }}" class="filter-cat border border-green-800 px-2 py-0.5 {% if active_category == cat.slug %}active{% endif %}">[{{ cat.name }}]</a>
   {% endfor %}
 </div>
 
 <!-- Status Filters -->
 <div class="mb-2 flex flex-wrap gap-2 text-sm">
   <span class="text-green-700 py-0.5">filter&gt;</span>
-  <a href="/?{{ ('category=' ~ active_category) if active_category else '' }}{{ qs_sort }}" class="border border-green-800 px-2 py-0.5 {% if not active_status and active_verified != 'true' %}bg-green-400 text-black{% else %}hover:text-amber-400{% endif %}">[all]</a>
+  <a href="/?{{ ('category=' ~ active_category) if active_category else '' }}{{ qs_sort }}" class="filter-default border border-green-800 px-2 py-0.5 {% if not active_status and active_verified != 'true' %}active{% endif %}">[all]</a>
   <a href="/?verified=true{{ qs_cat }}{{ qs_sort }}" data-tip="Owner proved domain control" class="filter-verified border border-green-800 px-2 py-0.5 {% if active_verified == 'true' %}active{% else %}hover:text-amber-400{% endif %}">[verified]</a>
   {% set status_tips = {'confirmed': 'L402 paywall detected by probe', 'live': 'Endpoint reachable, no L402 paywall found', 'dead': 'Endpoint unreachable', 'unknown': 'Status could not be determined (e.g. .onion)'} %}
   {% for st in ['confirmed', 'live', 'dead', 'unknown'] %}
-  <a href="/?status={{ st }}{{ qs_cat }}{{ qs_sort }}" data-tip="{{ status_tips[st] }}" class="border border-green-800 px-2 py-0.5 {% if active_status == st %}bg-amber-400 text-black{% else %}hover:text-amber-400{% endif %}">[{{ st }}]</a>
+  <a href="/?status={{ st }}{{ qs_cat }}{{ qs_sort }}" data-tip="{{ status_tips[st] }}" class="filter-{{ st }} border border-green-800 px-2 py-0.5 {% if active_status == st %}active{% endif %}">[{{ st }}]</a>
   {% endfor %}
 </div>
 
@@ -55,7 +55,7 @@
 <div class="mb-4 flex flex-wrap gap-2 text-sm">
   <span class="text-green-700 py-0.5">sort&gt;</span>
   {% for sort_key, sort_label in [('newest', 'newest'), ('top-rated', 'top-rated'), ('cheapest', 'cheapest'), ('most-reviewed', 'most-reviewed')] %}
-  <a href="/?{{ qs_cat_filter }}{{ ('&' if qs_cat_filter else '') }}sort={{ sort_key }}" class="border border-green-800 px-2 py-0.5 {% if active_sort == sort_key or (sort_key == 'newest' and not active_sort) %}bg-green-400 text-black{% else %}hover:text-amber-400{% endif %}">[{{ sort_label }}]</a>
+  <a href="/?{{ qs_cat_filter }}{{ ('&' if qs_cat_filter else '') }}sort={{ sort_key }}" class="filter-sort border border-green-800 px-2 py-0.5 {% if active_sort == sort_key or (sort_key == 'newest' and not active_sort) %}active{% endif %}">[{{ sort_label }}]</a>
   {% endfor %}
 </div>
 

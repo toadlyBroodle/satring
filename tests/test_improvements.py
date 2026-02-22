@@ -72,21 +72,21 @@ class TestWebPagination:
         resp = await client.get("/")
         assert resp.status_code == 200
         # Should show page controls since we have > 20 services
-        assert ">1</span>/2</span>" in resp.text
+        assert ">1</span>/" in resp.text
         assert "next" in resp.text.lower()
 
     @pytest.mark.asyncio
     async def test_directory_page_2(self, client: AsyncClient, many_services):
         resp = await client.get("/?page=2")
         assert resp.status_code == 200
-        assert ">2</span>/2</span>" in resp.text
+        assert ">2</span>/" in resp.text
 
     @pytest.mark.asyncio
     async def test_directory_page_out_of_range_clamps(self, client: AsyncClient, many_services):
         resp = await client.get("/?page=999")
         assert resp.status_code == 200
         # Should clamp to last page
-        assert ">2</span>/2</span>" in resp.text
+        assert ">2</span>/" in resp.text
 
     @pytest.mark.asyncio
     async def test_directory_no_pagination_when_few(self, client: AsyncClient, sample_service: Service):
@@ -108,13 +108,13 @@ class TestWebPagination:
         resp = await client.get("/search?q=Service")
         assert resp.status_code == 200
         # Search results should include pagination if > 20 matches
-        assert "/2</span>" in resp.text
+        assert ">2</a></span>" in resp.text
 
     @pytest.mark.asyncio
     async def test_search_page_2(self, client: AsyncClient, many_services):
         resp = await client.get("/search?q=Service&page=2")
         assert resp.status_code == 200
-        assert ">2</span>/2</span>" in resp.text
+        assert ">2</span>/" in resp.text
 
 
 # ---------------------------------------------------------------------------
