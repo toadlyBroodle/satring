@@ -69,15 +69,15 @@ class OriginCheckMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 SEED_CATEGORIES = [
-    ("AI / ML", "ai-ml", "Machine learning and AI inference APIs"),
-    ("Data", "data", "Data feeds, aggregation, and analytics"),
-    ("Finance", "finance", "Financial data, trading, and payment APIs"),
-    ("Identity", "identity", "KYC, authentication, and verification"),
-    ("Media", "media", "Image, video, and audio processing"),
-    ("Search", "search", "Web search, indexing, and discovery"),
-    ("Social", "social", "Social networks, communications, and notification APIs"),
-    ("Storage", "storage", "File storage and content delivery"),
-    ("Tools", "tools", "Developer tools, utilities, and infrastructure"),
+    ("ai/ml", "ai-ml", "Machine learning and AI inference APIs"),
+    ("data", "data", "Data feeds, aggregation, and analytics"),
+    ("finance", "finance", "Financial data, trading, and payment APIs"),
+    ("identity", "identity", "KYC, authentication, and verification"),
+    ("media", "media", "Image, video, and audio processing"),
+    ("search", "search", "Web search, indexing, and discovery"),
+    ("social", "social", "Social networks, communications, and notification APIs"),
+    ("storage", "storage", "File storage and content delivery"),
+    ("tools", "tools", "Developer tools, utilities, and infrastructure"),
 ]
 
 

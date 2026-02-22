@@ -34,9 +34,9 @@ class TestDirectory:
     @pytest.mark.asyncio
     async def test_category_tabs_rendered(self, client: AsyncClient):
         resp = await client.get("/")
-        assert "AI / ML" in resp.text
-        assert "Finance" in resp.text
-        assert "Tools" in resp.text
+        assert "ai/ml" in resp.text
+        assert "finance" in resp.text
+        assert "tools" in resp.text
 
 
 class TestSearch:
@@ -88,8 +88,8 @@ class TestServiceDetail:
     @pytest.mark.asyncio
     async def test_detail_shows_categories(self, client: AsyncClient, sample_service: Service):
         resp = await client.get("/services/test-api")
-        assert "AI / ML" in resp.text
-        assert "Tools" in resp.text
+        assert "ai/ml" in resp.text
+        assert "tools" in resp.text
 
     @pytest.mark.asyncio
     async def test_detail_shows_ratings(self, client: AsyncClient, sample_service_with_ratings: Service):
