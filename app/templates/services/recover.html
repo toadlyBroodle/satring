@@ -57,7 +57,7 @@
 
     <form method="post" action="/services/{{ service.slug }}/recover">
       <input type="hidden" name="action" value="verify" />
-      <button type="submit" class="btn-action px-4 py-1.5 text-sm">[VERIFY DOMAIN]</button>
+      <button type="submit" class="btn-action px-4 py-1.5 text-sm"><span class="font-bold">[</span>VERIFY DOMAIN<span class="font-bold">]</span></button>
     </form>
   </div>
 
@@ -74,7 +74,7 @@
 
     <form method="post" action="/services/{{ service.slug }}/recover">
       <input type="hidden" name="action" value="generate" />
-      <button type="submit" class="btn-action px-4 py-1.5 text-sm">[GENERATE CHALLENGE]</button>
+      <button type="submit" class="btn-action px-4 py-1.5 text-sm"><span class="font-bold">[</span>GENERATE CHALLENGE<span class="font-bold">]</span></button>
     </form>
   </div>
   {% endif %}

@@ -2,18 +2,18 @@
 <div class="flex items-center justify-center gap-4 text-sm mt-4 py-2">
   {% if page > 1 %}
   <a href="/?{{ qs_base }}{{ '&' if qs_base else '' }}page={{ page - 1 }}"
-     class="border border-green-800 px-3 py-0.5 hover:text-amber-400 hover:border-amber-400 transition-colors">[&lt; prev]</a>
+     class="text-green-700 hover:text-green-400 transition-colors"><span class="font-bold">[</span>&lt; prev<span class="font-bold">]</span></a>
   {% else %}
-  <span class="border border-green-900 px-3 py-0.5 text-green-900">[&lt; prev]</span>
+  <span class="text-green-900"><span class="font-bold">[</span>&lt; prev<span class="font-bold">]</span></span>
   {% endif %}
 
   <span class="text-green-700">page <span class="text-green-400">{{ page }}</span>/<a href="/?{{ qs_base }}{{ '&' if qs_base else '' }}page={{ total_pages }}" class="hover:text-green-400">{{ total_pages }}</a></span>
 
   {% if page < total_pages %}
   <a href="/?{{ qs_base }}{{ '&' if qs_base else '' }}page={{ page + 1 }}"
-     class="border border-green-800 px-3 py-0.5 hover:text-amber-400 hover:border-amber-400 transition-colors">[next &gt;]</a>
+     class="text-green-700 hover:text-green-400 transition-colors"><span class="font-bold">[</span>next &gt;<span class="font-bold">]</span></a>
   {% else %}
-  <span class="border border-green-900 px-3 py-0.5 text-green-900">[next &gt;]</span>
+  <span class="text-green-900"><span class="font-bold">[</span>next &gt;<span class="font-bold">]</span></span>
   {% endif %}
 </div>
 {% endif %}

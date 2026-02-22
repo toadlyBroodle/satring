@@ -24,7 +24,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
   <style type="text/tailwindcss">
     body { opacity: 1; }
-    button:active, input[type="submit"]:active, a[class*="border"]:active {
+    button:active, input[type="submit"]:active, a[class*="filter-"]:active, a[class*="btn-"]:active {
       opacity: 0.6;
       transform: scale(0.97);
     }
@@ -52,11 +52,11 @@
       <div class="text-amber-400 flex items-center gap-1 mb-2"><img src="/static/img/satring-logo-trans-bg.png" alt="" class="h-5 w-5"> L402</div></a>
       <nav class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <span class="text-amber-400">₿</span>
-        <a href="/" class="hover:text-amber-400 transition-colors">&gt; [directory]</a>
-        <a href="/submit" class="hover:text-amber-400 transition-colors">&gt; [submit]</a>
-        <a href="/docs" target="_blank" hx-boost="false" class="hover:text-amber-400 transition-colors">&gt; [api]</a>
-        <a href="https://github.com/toadlyBroodle/satring" target="_blank" hx-boost="false" class="hover:text-amber-400 transition-colors">&gt; [source]</a>
-        <a href="https://botlab.dev/#contact" target="_blank" hx-boost="false" class="hover:text-amber-400 transition-colors">&gt; [contact]</a>
+        <a href="/" class="nav-link hover:text-amber-400 transition-colors {% if request and request.url.path == '/' %}text-amber-400{% endif %}">&gt; <span class="font-bold">[</span>directory<span class="font-bold">]</span></a>
+        <a href="/submit" class="nav-link hover:text-amber-400 transition-colors {% if request and request.url.path == '/submit' %}text-amber-400{% endif %}">&gt; <span class="font-bold">[</span>submit<span class="font-bold">]</span></a>
+        <a href="/docs" target="_blank" hx-boost="false" class="nav-link hover:text-amber-400 transition-colors">&gt; <span class="font-bold">[</span>api<span class="font-bold">]</span></a>
+        <a href="https://github.com/toadlyBroodle/satring" target="_blank" hx-boost="false" class="nav-link hover:text-amber-400 transition-colors">&gt; <span class="font-bold">[</span>source<span class="font-bold">]</span></a>
+        <a href="https://botlab.dev/#contact" target="_blank" hx-boost="false" class="nav-link hover:text-amber-400 transition-colors">&gt; <span class="font-bold">[</span>contact<span class="font-bold">]</span></a>
       </nav>
     </div>
   </header>

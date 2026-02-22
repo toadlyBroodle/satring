@@ -294,8 +294,8 @@ class TestLlmsTxt:
     async def test_llms_txt_lists_categories(self, client: AsyncClient):
         resp = await client.get("/llms.txt")
         assert "## Categories" in resp.text
-        assert "AI / ML" in resp.text
-        assert "Finance" in resp.text
+        assert "ai/ml" in resp.text
+        assert "finance" in resp.text
 
     @pytest.mark.asyncio
     async def test_llms_txt_has_api_section(self, client: AsyncClient):
