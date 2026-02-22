@@ -13,6 +13,10 @@
   --select-bg:    #22c55e;
   --verified:     #22d3ee;
   --verified-dim: #155e75;
+  --confirmed:     #ffd700;
+  --live:          #5fd787;
+  --dead:          #ff5f5f;
+  --unknown:       #a8a8a8;
   --danger:       #991b1b;
   --danger-text:  #f87171;
 }
@@ -32,10 +36,56 @@ body { opacity: 0; margin: 0; }
 ::-webkit-scrollbar-thumb:hover { background: var(--select-bg); }
 input, select, textarea { caret-color: var(--text); }
 
-/* ── Verified filter button ── */
-.filter-verified       { color: var(--verified); border-color: var(--verified-dim); }
-.filter-verified:hover { background: var(--verified); color: var(--bg); }
-.filter-verified.active { background: var(--verified); color: var(--bg); }
+/* ── Search box ── */
+.search-box                    { border-color: color-mix(in srgb, var(--text) 40%, transparent); transition: border-color 0.15s; }
+.search-box:hover              { border-color: var(--text); }
+.search-box:focus-within       { border-color: var(--text); }
+
+/* ── Filter buttons ── */
+.filter-default           { color: var(--text); border-color: color-mix(in srgb, var(--text) 40%, transparent); }
+.filter-default:hover     { border-color: var(--text); }
+.filter-default.active    { border-color: var(--text); }
+
+.filter-cat               { color: var(--text); border-color: color-mix(in srgb, var(--text) 40%, transparent); }
+.filter-cat:hover         { border-color: var(--text); }
+.filter-cat.active        { border-color: var(--text); }
+
+.filter-sort              { color: var(--text); border-color: color-mix(in srgb, var(--text) 40%, transparent); }
+.filter-sort:hover        { border-color: var(--text); }
+.filter-sort.active       { border-color: var(--text); }
+
+.filter-verified          { color: var(--verified); border-color: color-mix(in srgb, var(--verified) 40%, transparent); }
+.filter-verified:hover    { border-color: var(--verified); }
+.filter-verified.active   { border-color: var(--verified); }
+
+.filter-confirmed         { color: var(--confirmed); border-color: color-mix(in srgb, var(--confirmed) 40%, transparent); }
+.filter-confirmed:hover   { border-color: var(--confirmed); }
+.filter-confirmed.active  { border-color: var(--confirmed); }
+
+.filter-live              { color: var(--live); border-color: color-mix(in srgb, var(--live) 40%, transparent); }
+.filter-live:hover        { border-color: var(--live); }
+.filter-live.active       { border-color: var(--live); }
+
+.filter-dead              { color: var(--dead); border-color: color-mix(in srgb, var(--dead) 40%, transparent); }
+.filter-dead:hover        { border-color: var(--dead); }
+.filter-dead.active       { border-color: var(--dead); }
+
+.filter-unknown           { color: var(--unknown); border-color: color-mix(in srgb, var(--unknown) 40%, transparent); }
+.filter-unknown:hover     { border-color: var(--unknown); }
+.filter-unknown.active    { border-color: var(--unknown); }
+
+/* ── Action buttons ── */
+.btn-action               { color: var(--text); border: 1px solid color-mix(in srgb, var(--text) 40%, transparent); transition: border-color 0.15s; }
+.btn-action:hover         { border-color: var(--text); }
+
+.btn-edit                 { color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); transition: border-color 0.15s; }
+.btn-edit:hover           { border-color: var(--accent); }
+
+.btn-verify               { color: var(--verified); border: 1px solid color-mix(in srgb, var(--verified) 40%, transparent); transition: border-color 0.15s; }
+.btn-verify:hover         { border-color: var(--verified); }
+
+.btn-danger               { color: var(--danger-text); border: 1px solid color-mix(in srgb, var(--danger-text) 40%, transparent); transition: border-color 0.15s; }
+.btn-danger:hover         { border-color: var(--danger-text); }
 
 /* ── Tooltips ── */
 [data-tip] {
