@@ -45,8 +45,8 @@
   <span class="text-green-700 py-0.5">filter&gt;</span>
   <a href="/?{{ ('category=' ~ active_category) if active_category else '' }}{{ qs_sort }}" class="border border-green-800 px-2 py-0.5 {% if not active_status and active_verified != 'true' %}bg-green-400 text-black{% else %}hover:text-amber-400{% endif %}">[all]</a>
   <a href="/?verified=true{{ qs_cat }}{{ qs_sort }}" data-tip="Owner proved domain control" class="filter-verified border border-green-800 px-2 py-0.5 {% if active_verified == 'true' %}active{% else %}hover:text-amber-400{% endif %}">[verified]</a>
-  {% set status_tips = {'confirmed': 'L402 paywall detected by probe', 'live': 'Endpoint reachable, no L402 paywall found', 'dead': 'Endpoint unreachable'} %}
-  {% for st in ['confirmed', 'live', 'dead'] %}
+  {% set status_tips = {'confirmed': 'L402 paywall detected by probe', 'live': 'Endpoint reachable, no L402 paywall found', 'dead': 'Endpoint unreachable', 'unknown': 'Status could not be determined (e.g. .onion)'} %}
+  {% for st in ['confirmed', 'live', 'dead', 'unknown'] %}
   <a href="/?status={{ st }}{{ qs_cat }}{{ qs_sort }}" data-tip="{{ status_tips[st] }}" class="border border-green-800 px-2 py-0.5 {% if active_status == st %}bg-amber-400 text-black{% else %}hover:text-amber-400{% endif %}">[{{ st }}]</a>
   {% endfor %}
 </div>
