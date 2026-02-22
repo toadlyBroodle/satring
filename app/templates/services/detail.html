@@ -58,7 +58,7 @@
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5 w-32">endpoint</td><td class="px-3 py-1.5"><a href="{{ service.url }}" class="text-amber-400 hover:underline break-all" target="_blank">{{ service.url }}</a></td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">pricing</td><td class="px-3 py-1.5">{{ service.pricing_sats }} sats / {{ service.pricing_model }}</td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">protocol</td><td class="px-3 py-1.5">{{ service.protocol }}</td></tr>
-      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">status</td><td class="px-3 py-1.5">{% if service.domain_verified %}<span class="text-cyan-400">[domain verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% else %}text-green-700{% endif %}">{{ service.status }}</span>{% endif %}</td></tr>
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">status</td><td class="px-3 py-1.5">{% if service.domain_verified %}<span class="text-cyan-400">[domain verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% elif service.status == 'unknown' %}text-gray-400{% else %}text-green-700{% endif %}">{{ service.status }}</span>{% endif %}</td></tr>
       {% if service.owner_name %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">provider</td><td class="px-3 py-1.5">{{ service.owner_name }}</td></tr>{% endif %}
       {% if service.owner_contact %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">contact</td><td class="px-3 py-1.5">{{ service.owner_contact }}</td></tr>{% endif %}
       <tr><td class="text-green-700 px-3 py-1.5">listed</td><td class="px-3 py-1.5">{{ service.created_at.strftime('%Y-%m-%d') }}</td></tr>
@@ -76,7 +76,7 @@
     <div><span class="text-green-700">rating:</span> <span class="text-amber-400">{{ r_val }}</span>  {{ r_count }}</div>
     <div><span class="text-green-700">price:</span>  <span class="text-amber-400">{{ service.pricing_sats }} sats</span> / {{ service.pricing_model }}</div>
     <div><span class="text-green-700">proto:</span>  {{ service.protocol }}</div>
-    <div><span class="text-green-700">status:</span> {% if service.domain_verified %}<span class="text-cyan-400">[verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% else %}text-green-700{% endif %}">{{ s_val }}</span>{% endif %}</div>
+    <div><span class="text-green-700">status:</span> {% if service.domain_verified %}<span class="text-cyan-400">[verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% elif service.status == 'unknown' %}text-gray-400{% else %}text-green-700{% endif %}">{{ s_val }}</span>{% endif %}</div>
   </div>
 </div>
 

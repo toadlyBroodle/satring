@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.config import (
     settings, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT, MAX_PRICING_SATS,
-    RATE_SUBMIT, RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_REVIEW, RATE_SEARCH,
+    RATE_SUBMIT, RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_REVIEW, RATE_SEARCH_API,
 )
 from app.database import get_db
 from app.l402 import require_l402
@@ -540,7 +540,7 @@ async def api_recover_verify(request: Request, slug: str, db: AsyncSession = Dep
 
 
 @router.get("/search", response_model=ServiceListOut)
-@limiter.limit(RATE_SEARCH)
+@limiter.limit(RATE_SEARCH_API)
 async def search_services(
     request: Request,
     q: str = "",
