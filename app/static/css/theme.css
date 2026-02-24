@@ -143,7 +143,20 @@ button[disabled], input[type="submit"][disabled] {
 input:checked ~ .category-check::before { content: '[x]'; }
 
 /* ── Swagger UI dark overrides ── */
-.swagger-ui { background: var(--bg); }
+
+/* Nuke all white/light backgrounds from Swagger UI utility classes */
+.swagger-ui .bg-white,
+.swagger-ui .bg-near-white,
+.swagger-ui .bg-light-gray { background-color: var(--bg) !important; }
+
+/* Container backgrounds */
+.swagger-ui,
+.swagger-ui .wrapper,
+.swagger-ui .opblock-tag-section,
+.swagger-ui .information-container,
+.swagger-ui .no-margin,
+.swagger-ui .main,
+.swagger-ui [class*="Standalone"] { background: var(--bg) !important; }
 .swagger-ui .topbar { display: none; }
 
 /* ── Headings & titles ── */
@@ -161,18 +174,32 @@ input:checked ~ .category-check::before { content: '[x]'; }
 /* ── Operation blocks ── */
 .swagger-ui .opblock {
   border-color: var(--border) !important;
-  background: rgba(0,0,0,0.5) !important;
+  background: var(--bg) !important;
 }
-.swagger-ui .opblock.opblock-get { border-color: var(--text-muted) !important; background: rgba(22,101,52,0.1) !important; }
+
+/* Kill white bg on summary buttons, expand arrows, and chrome controls */
+.swagger-ui .opblock .opblock-summary-control,
+.swagger-ui .opblock .opblock-summary,
+.swagger-ui .expand-operation,
+.swagger-ui .expand-operation button,
+.swagger-ui .opblock .no-margin,
+.swagger-ui .arrow,
+.swagger-ui .opblock-tag button,
+.swagger-ui .operation-tag-content button:not(.btn):not(.try-out__btn):not(.cancel) { background: transparent !important; border: none; }
+
+.swagger-ui .opblock.opblock-get { border-color: var(--text-muted) !important; background: #0a1f0f !important; }
 .swagger-ui .opblock.opblock-get .opblock-summary-method { background: var(--select-bg) !important; color: var(--bg) !important; }
 .swagger-ui .opblock.opblock-get .opblock-summary { border-color: var(--text-muted) !important; }
-.swagger-ui .opblock.opblock-post { border-color: var(--border-dim) !important; background: rgba(22,101,52,0.05) !important; }
+.swagger-ui .opblock.opblock-post { border-color: var(--border-dim) !important; background: #0a170f !important; }
 .swagger-ui .opblock.opblock-post .opblock-summary-method { background: var(--text-muted) !important; color: var(--text-light) !important; }
 .swagger-ui .opblock.opblock-post .opblock-summary { border-color: var(--border-dim) !important; }
-.swagger-ui .opblock.opblock-put { border-color: rgba(251,191,36,0.3) !important; background: rgba(251,191,36,0.05) !important; }
+.swagger-ui .opblock.opblock-patch { border-color: var(--verified-dim) !important; background: #0a1517 !important; }
+.swagger-ui .opblock.opblock-patch .opblock-summary-method { background: var(--verified) !important; color: var(--bg) !important; }
+.swagger-ui .opblock.opblock-patch .opblock-summary { border-color: var(--verified-dim) !important; }
+.swagger-ui .opblock.opblock-put { border-color: rgba(251,191,36,0.3) !important; background: #1a1500 !important; }
 .swagger-ui .opblock.opblock-put .opblock-summary-method { background: var(--accent) !important; color: var(--bg) !important; }
 .swagger-ui .opblock.opblock-put .opblock-summary { border-color: rgba(251,191,36,0.3) !important; }
-.swagger-ui .opblock.opblock-delete { border-color: var(--danger) !important; background: rgba(153,27,27,0.1) !important; }
+.swagger-ui .opblock.opblock-delete { border-color: var(--danger) !important; background: #1a0505 !important; }
 .swagger-ui .opblock.opblock-delete .opblock-summary-method { background: var(--danger) !important; color: var(--danger-text) !important; }
 .swagger-ui .opblock.opblock-delete .opblock-summary { border-color: var(--danger) !important; }
 .swagger-ui .opblock .opblock-summary { border-color: var(--border) !important; }
@@ -294,8 +321,21 @@ input:checked ~ .category-check::before { content: '[x]'; }
 .swagger-ui .renderedMarkdown p { color: var(--text) !important; }
 
 /* ── Tabs ── */
+.swagger-ui .tab li { color: var(--text-dim) !important; }
+.swagger-ui .tab li:first-of-type::after { background: var(--border) !important; }
+.swagger-ui .tab li.active { color: var(--text-light) !important; }
+.swagger-ui .tab li button.tablinks { color: inherit !important; }
 .swagger-ui .tab-header .tab-item.active h4 span::after { background-color: var(--accent) !important; }
+
+/* ── Dialog / Modal ── */
+.swagger-ui .dialog-ux .modal-ux { background: var(--bg-surface) !important; border-color: var(--border) !important; }
+.swagger-ui .dialog-ux .modal-ux-content p { color: var(--text) !important; }
+.swagger-ui .dialog-ux .modal-ux-header h3 { color: var(--text-light) !important; }
 
 /* ── Misc ── */
 .swagger-ui .loading-container .loading::after { color: var(--text) !important; }
 .swagger-ui svg.arrow { fill: var(--text-dim) !important; }
+
+/* ── SVG icons in opblocks ── */
+.swagger-ui .opblock svg { fill: var(--text-dim) !important; }
+.swagger-ui .opblock-tag svg { fill: var(--text-dim) !important; }
