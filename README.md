@@ -96,10 +96,10 @@ curl -X PATCH https://satring.com/api/v1/services/my-api \
   -H "Content-Type: application/json" \
   -d '{"description": "Updated description"}'
 
-# Bulk export, analytics, reputation
-curl https://satring.com/api/v1/services/bulk
-curl https://satring.com/api/v1/analytics
-curl https://satring.com/api/v1/services/my-service/reputation
+# Bulk export, analytics, reputation (L402-gated — use -i to see invoice in headers)
+curl -i https://satring.com/api/v1/services/bulk
+curl -i https://satring.com/api/v1/analytics
+curl -i https://satring.com/api/v1/services/my-service/reputation
 ```
 
 ### Token recovery
