@@ -12,7 +12,9 @@ class Settings:
     AUTH_PRICE_SATS: int = int(os.getenv("AUTH_PRICE_SATS", "100"))
     AUTH_SUBMIT_PRICE_SATS: int = int(os.getenv("AUTH_SUBMIT_PRICE_SATS", "1000"))
     AUTH_REVIEW_PRICE_SATS: int = int(os.getenv("AUTH_REVIEW_PRICE_SATS", "10"))
-    AUTH_BULK_PRICE_SATS: int = int(os.getenv("AUTH_BULK_PRICE_SATS", "1000"))
+    AUTH_BULK_PRICE_SATS: int = int(os.getenv("AUTH_BULK_PRICE_SATS", "5000"))
+    AUTH_ANALYTICS_PRICE_SATS: int = int(os.getenv("AUTH_ANALYTICS_PRICE_SATS", "500"))
+    AUTH_REPUTATION_PRICE_SATS: int = int(os.getenv("AUTH_REPUTATION_PRICE_SATS", "100"))
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     APP_PORT: int = int(os.getenv("APP_PORT", "8000"))
     BASE_URL: str = os.getenv("BASE_URL", "https://satring.com")
@@ -45,5 +47,5 @@ RATE_DELETE = "10/hour"
 RATE_RECOVER = "20/hour"
 RATE_REVIEW = "20/hour"
 RATE_SEARCH = "2/second"
-RATE_SEARCH_API = "2/minute"
+RATE_SEARCH_API = "6/minute"
 RATE_PAYMENT_STATUS = "30/minute"
