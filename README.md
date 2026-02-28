@@ -128,7 +128,9 @@ Environment variables (see `.env`):
 | `AUTH_ROOT_KEY` | `test-mode` | Set to wallet key for production; `test-mode` bypasses payments |
 | `AUTH_SUBMIT_PRICE_SATS` | `1000` | Cost to submit a service |
 | `AUTH_REVIEW_PRICE_SATS` | `10` | Cost to submit a review |
-| `AUTH_BULK_PRICE_SATS` | `1000` | Cost for bulk export |
+| `AUTH_BULK_PRICE_SATS` | `5000` | Cost for bulk export |
+| `AUTH_ANALYTICS_PRICE_SATS` | `500` | Cost for analytics access |
+| `AUTH_REPUTATION_PRICE_SATS` | `100` | Cost for reputation lookup |
 | `AUTH_PRICE_SATS` | `100` | Default price for premium endpoints |
 
 ## Tech Stack

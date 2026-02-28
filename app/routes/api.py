@@ -601,7 +601,7 @@ async def create_rating(request: Request, slug: str, body: RatingCreate, db: Asy
 
 @router.get("/analytics")
 async def analytics(request: Request, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request, memo="satring.com analytics access")
+    await require_l402(request=request, amount_sats=settings.AUTH_ANALYTICS_PRICE_SATS, memo="satring.com analytics access")
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -763,7 +763,7 @@ async def analytics(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.get("/services/{slug}/reputation")
 async def reputation(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request, memo="satring.com reputation lookup")
+    await require_l402(request=request, amount_sats=settings.AUTH_REPUTATION_PRICE_SATS, memo="satring.com reputation lookup")
 
     service = await get_service_or_404(db, slug)
     now = datetime.now(timezone.utc).replace(tzinfo=None)

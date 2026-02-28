@@ -554,20 +554,20 @@ class TestL402PriceAmounts:
             mock_inv.assert_called_once_with(settings.AUTH_BULK_PRICE_SATS, "satring.com bulk export")
 
     @pytest.mark.asyncio
-    async def test_analytics_uses_default_price(self, client: AsyncClient):
+    async def test_analytics_uses_analytics_price(self, client: AsyncClient):
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
              patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.get("/api/v1/analytics")
-            mock_inv.assert_called_once_with(settings.AUTH_PRICE_SATS, "satring.com analytics access")
+            mock_inv.assert_called_once_with(settings.AUTH_ANALYTICS_PRICE_SATS, "satring.com analytics access")
 
     @pytest.mark.asyncio
-    async def test_reputation_uses_default_price(self, client: AsyncClient, sample_service: Service):
+    async def test_reputation_uses_reputation_price(self, client: AsyncClient, sample_service: Service):
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
              patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.get("/api/v1/services/test-api/reputation")
-            mock_inv.assert_called_once_with(settings.AUTH_PRICE_SATS, "satring.com reputation lookup")
+            mock_inv.assert_called_once_with(settings.AUTH_REPUTATION_PRICE_SATS, "satring.com reputation lookup")
 
     @pytest.mark.asyncio
     async def test_create_service_uses_submit_price(self, client: AsyncClient):

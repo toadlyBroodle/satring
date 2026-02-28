@@ -4,10 +4,10 @@
 {% block og_title %}{{ service.name }} — satring{% endblock %}
 {% block og_description %}{{ service.description[:200] if service.description else 'L402 service listed on satring' }}{% endblock %}
 {% block og_type %}article{% endblock %}
-{% block og_image %}{{ service.logo_url if service.logo_url else '/static/img/satring-logo-trans-bg.png' }}{% endblock %}
+{% block og_image %}{{ service.logo_url if service.logo_url else '/static/img/satring-logo.jpg' }}{% endblock %}
 {% block twitter_title %}{{ service.name }} — satring{% endblock %}
 {% block twitter_description %}{{ service.description[:200] if service.description else 'L402 service listed on satring' }}{% endblock %}
-{% block twitter_image %}{{ service.logo_url if service.logo_url else '/static/img/satring-logo-trans-bg.png' }}{% endblock %}
+{% block twitter_image %}{{ service.logo_url if service.logo_url else '/static/img/satring-logo.jpg' }}{% endblock %}
 {% block extra_head %}
 <script type="application/ld+json">
 {
