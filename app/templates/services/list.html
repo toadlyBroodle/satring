@@ -33,7 +33,7 @@
 
 <!-- Category Filters -->
 <div class="mb-2 flex flex-wrap gap-1 text-sm">
-  <span class="text-green-700">cat&gt;</span>
+  <span style="color: var(--accent)">cat&gt;</span>
   <a href="/?{{ qs_filter[1:] if qs_filter else '' }}{{ qs_sort }}" class="filter-default {% if not active_category %}active{% endif %}"><span class="bracket">[</span>all<span class="bracket">]</span></a>
   {% for cat in categories %}
   <a href="/?category={{ cat.slug }}{{ qs_filter }}{{ qs_sort }}" data-tip="{{ cat.description }}" class="filter-cat {% if active_category == cat.slug %}active{% endif %}"><span class="bracket">[</span>{{ cat.name }}<span class="bracket">]</span></a>
@@ -42,7 +42,7 @@
 
 <!-- Status Filters -->
 <div class="mb-2 flex flex-wrap gap-1 text-sm">
-  <span class="text-green-700">filter&gt;</span>
+  <span style="color: var(--accent)">filter&gt;</span>
   <a href="/?{{ ('category=' ~ active_category) if active_category else '' }}{{ qs_sort }}" class="filter-default {% if not active_status and active_verified != 'true' %}active{% endif %}"><span class="bracket">[</span>all<span class="bracket">]</span></a>
   <a href="/?verified=true{{ qs_cat }}{{ qs_sort }}" data-tip="Owner proved domain control" class="filter-verified {% if active_verified == 'true' %}active{% endif %}"><span class="bracket">[</span>verified<span class="bracket">]</span></a>
   {% set status_tips = {'confirmed': 'L402 paywall detected by probe', 'live': 'Endpoint reachable, no L402 paywall found', 'dead': 'Endpoint unreachable', 'unknown': 'Status could not be determined (e.g. .onion)'} %}
@@ -53,7 +53,7 @@
 
 <!-- Sort Options -->
 <div class="mb-4 flex flex-wrap gap-1 text-sm">
-  <span class="text-green-700">sort&gt;</span>
+  <span style="color: var(--accent)">sort&gt;</span>
   {% for sort_key, sort_label in [('newest', 'newest'), ('top-rated', 'top-rated'), ('cheapest', 'cheapest'), ('most-reviewed', 'most-reviewed')] %}
   <a href="/?{{ qs_cat_filter }}{{ ('&' if qs_cat_filter else '') }}sort={{ sort_key }}" class="filter-sort {% if active_sort == sort_key or (sort_key == 'newest' and not active_sort) %}active{% endif %}"><span class="bracket">[</span>{{ sort_label }}<span class="bracket">]</span></a>
   {% endfor %}
