@@ -1,0 +1,122 @@
+<div class="border border-green-800 p-4 mt-4">
+  <div class="text-amber-400 text-sm mb-3">₿ satring analytics --report</div>
+  <div class="text-green-700 text-xs mb-4">generated {{ data.generated_at }}</div>
+
+  <!-- Totals -->
+  <div class="border border-green-800 mb-4 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ totals ─</div>
+    <div class="px-3 py-2 space-y-1">
+      <div><span class="text-green-700">services:</span> <span class="text-amber-400">{{ data.total_services }}</span></div>
+      <div><span class="text-green-700">ratings:</span> <span class="text-amber-400">{{ data.total_ratings }}</span></div>
+      <div><span class="text-green-700">categories:</span> <span class="text-amber-400">{{ data.total_categories }}</span></div>
+    </div>
+  </div>
+
+  <!-- Health & Status -->
+  <div class="border border-green-800 mb-4 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ health / status ─</div>
+    <div class="px-3 py-2 space-y-1">
+      {% for status, count in data.health.by_status.items() %}
+      <div><span class="text-green-700">{{ status }}:</span> <span class="{% if status == 'live' %}text-green-400{% elif status == 'confirmed' %}text-amber-400{% elif status == 'dead' %}text-red-500{% else %}text-gray-400{% endif %}">{{ count }}</span></div>
+      {% endfor %}
+      <div><span class="text-green-700">live %:</span> <span class="text-amber-400">{{ data.health.live_percentage }}%</span></div>
+      <div><span class="text-green-700">domain verified:</span> <span class="text-cyan-400">{{ data.health.domain_verified_count }}</span> ({{ data.health.domain_verified_percentage }}%)</div>
+    </div>
+  </div>
+
+  <!-- Pricing Stats -->
+  <div class="border border-green-800 mb-4 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ pricing ─</div>
+    <div class="px-3 py-2 space-y-1">
+      <div><span class="text-green-700">avg:</span> <span class="text-amber-400">{{ "%.0f" | format(data.pricing.avg_sats) }} sats</span></div>
+      <div><span class="text-green-700">median:</span> <span class="text-amber-400">{{ "%.0f" | format(data.pricing.median_sats) }} sats</span></div>
+      <div><span class="text-green-700">range:</span> {{ data.pricing.min_sats }} – {{ data.pricing.max_sats }} sats</div>
+      <div><span class="text-green-700">free:</span> {{ data.pricing.free_count }}</div>
+      <div class="pt-1"><span class="text-green-700">by model:</span></div>
+      {% for model, count in data.pricing.by_model.items() %}
+      <div class="pl-4"><span class="text-green-400">{{ model }}:</span> {{ count }}</div>
+      {% endfor %}
+      <div class="pt-1"><span class="text-green-700">by protocol:</span></div>
+      {% for proto, count in data.pricing.by_protocol.items() %}
+      <div class="pl-4"><span class="text-green-400">{{ proto }}:</span> {{ count }}</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Category Stats -->
+  <div class="border border-green-800 mb-4 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ categories ─</div>
+    <div class="px-3 py-2 overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="text-green-700">
+            <th class="text-left px-2 py-1">category</th>
+            <th class="text-right px-2 py-1">services</th>
+            <th class="text-right px-2 py-1">live</th>
+            <th class="text-right px-2 py-1">avg rating</th>
+            <th class="text-right px-2 py-1">avg price</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in data.categories %}
+          <tr class="border-t border-green-900">
+            <td class="px-2 py-1"><a href="/?category={{ c.slug }}" class="text-amber-400 hover:underline">{{ c.name }}</a></td>
+            <td class="text-right px-2 py-1">{{ c.service_count }}</td>
+            <td class="text-right px-2 py-1 text-green-400">{{ c.live_count }}</td>
+            <td class="text-right px-2 py-1">{{ "%.1f" | format(c.avg_rating) }}</td>
+            <td class="text-right px-2 py-1">{{ "%.0f" | format(c.avg_price_sats) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Growth -->
+  <div class="border border-green-800 mb-4 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ growth ─</div>
+    <div class="px-3 py-2 space-y-1">
+      <div><span class="text-green-700">services (7d):</span> <span class="text-amber-400">+{{ data.growth.services_added_last_7d }}</span></div>
+      <div><span class="text-green-700">services (30d):</span> <span class="text-amber-400">+{{ data.growth.services_added_last_30d }}</span></div>
+      <div><span class="text-green-700">ratings (7d):</span> <span class="text-amber-400">+{{ data.growth.ratings_added_last_7d }}</span></div>
+      <div><span class="text-green-700">ratings (30d):</span> <span class="text-amber-400">+{{ data.growth.ratings_added_last_30d }}</span></div>
+      {% if data.growth.newest_service %}
+      <div><span class="text-green-700">newest:</span> <a href="/services/{{ data.growth.newest_service.slug }}" class="text-amber-400 hover:underline">{{ data.growth.newest_service.name }}</a></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Leaderboards -->
+  {% if data.top_rated %}
+  <div class="border border-green-800 mb-4 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ top rated ─</div>
+    <div class="px-3 py-2">
+      {% for s in data.top_rated %}
+      <div><span class="text-green-700">{{ loop.index }}.</span> <a href="/services/{{ s.slug }}" class="text-amber-400 hover:underline">{{ s.name }}</a> <span class="text-green-700">({{ "%.1f" | format(s.avg_rating) }}/5, {{ s.rating_count }} reviews, {{ s.pricing_sats }} sats)</span></div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if data.most_reviewed %}
+  <div class="border border-green-800 mb-4 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ most reviewed ─</div>
+    <div class="px-3 py-2">
+      {% for s in data.most_reviewed %}
+      <div><span class="text-green-700">{{ loop.index }}.</span> <a href="/services/{{ s.slug }}" class="text-amber-400 hover:underline">{{ s.name }}</a> <span class="text-green-700">({{ s.rating_count }} reviews, {{ "%.1f" | format(s.avg_rating) }}/5)</span></div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if data.recently_added %}
+  <div class="border border-green-800 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ recently added ─</div>
+    <div class="px-3 py-2">
+      {% for s in data.recently_added %}
+      <div><span class="text-green-700">{{ loop.index }}.</span> <a href="/services/{{ s.slug }}" class="text-amber-400 hover:underline">{{ s.name }}</a> <span class="text-green-700">({{ s.pricing_sats }} sats)</span></div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>

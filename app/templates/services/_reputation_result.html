@@ -1,0 +1,98 @@
+<div class="border border-green-800 p-4 mt-4">
+  <div class="text-amber-400 text-sm mb-3">₿ satring reputation --report {{ data.service.slug }}</div>
+  <div class="text-green-700 text-xs mb-4">generated {{ data.generated_at }}</div>
+
+  <!-- Rating Summary -->
+  <div class="border border-green-800 mb-4 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ rating summary ─</div>
+    <div class="px-3 py-2 space-y-1">
+      <div><span class="text-green-700">avg rating:</span> <span class="text-amber-400">{{ "%.1f" | format(data.rating_summary.avg_rating) }}/5</span> ({{ data.rating_summary.rating_count }} reviews)</div>
+      <div><span class="text-green-700">sentiment:</span> <span class="text-green-400">{{ data.rating_summary.sentiment_label }}</span></div>
+      <div><span class="text-green-700">std dev:</span> {{ data.rating_summary.std_deviation }}</div>
+      <div class="pt-1">
+        {% for star in ['5','4','3','2','1'] %}
+        <div class="flex items-center gap-2">
+          <span class="text-green-700 w-8">{{ star }}★</span>
+          <span class="text-green-800">│</span>
+          {% set pct = data.rating_summary.distribution_pct[star] %}
+          {% set bars = (pct / 5) | int %}
+          <span class="text-amber-400">{{ '█' * bars }}{{ '░' * (20 - bars) }}</span>
+          <span class="text-green-700 text-xs">{{ data.rating_summary.distribution[star] }} ({{ pct }}%)</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Peer Comparison -->
+  {% if data.peer_comparison %}
+  <div class="border border-green-800 mb-4 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ peer comparison ({{ data.peer_comparison.category_total_services }} in category) ─</div>
+    <div class="px-3 py-2 space-y-1">
+      <div><span class="text-green-700">rating rank:</span> <span class="text-amber-400">#{{ data.peer_comparison.rating_rank }}</span> (top {{ data.peer_comparison.rating_percentile }}%)</div>
+      <div><span class="text-green-700">price rank:</span> <span class="text-amber-400">#{{ data.peer_comparison.price_rank }}</span></div>
+      <div><span class="text-green-700">review volume:</span> <span class="text-amber-400">#{{ data.peer_comparison.review_volume_rank }}</span></div>
+      <div><span class="text-green-700">cat avg rating:</span> {{ "%.1f" | format(data.peer_comparison.category_avg_rating) }}/5</div>
+      <div><span class="text-green-700">cat avg price:</span> {{ "%.0f" | format(data.peer_comparison.category_avg_price_sats) }} sats</div>
+      {% if data.peer_comparison.peers_rated_higher %}
+      <div class="pt-1"><span class="text-green-700">rated higher:</span></div>
+      {% for p in data.peer_comparison.peers_rated_higher %}
+      <div class="pl-4"><a href="/services/{{ p.slug }}" class="text-amber-400 hover:underline">{{ p.name }}</a> <span class="text-green-700">({{ "%.1f" | format(p.avg_rating) }}/5, {{ p.rating_count }} reviews)</span></div>
+      {% endfor %}
+      {% endif %}
+      {% if data.peer_comparison.peers_rated_lower %}
+      <div class="pt-1"><span class="text-green-700">rated lower:</span></div>
+      {% for p in data.peer_comparison.peers_rated_lower %}
+      <div class="pl-4"><a href="/services/{{ p.slug }}" class="text-amber-400 hover:underline">{{ p.name }}</a> <span class="text-green-700">({{ "%.1f" | format(p.avg_rating) }}/5, {{ p.rating_count }} reviews)</span></div>
+      {% endfor %}
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Review Activity -->
+  <div class="border border-green-800 mb-4 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ review activity ─</div>
+    <div class="px-3 py-2 space-y-1">
+      <div><span class="text-green-700">unique reviewers:</span> <span class="text-amber-400">{{ data.review_activity.unique_reviewers }}</span></div>
+      <div><span class="text-green-700">anonymous:</span> {{ data.review_activity.anonymous_count }}</div>
+      <div><span class="text-green-700">with comments:</span> {{ data.review_activity.reviews_with_comments }} / {{ data.review_activity.reviews_with_comments + data.review_activity.reviews_without_comments }}</div>
+      <div><span class="text-green-700">avg comment len:</span> {{ "%.0f" | format(data.review_activity.avg_comment_length) }} chars</div>
+      {% if data.review_activity.first_review_at %}
+      <div><span class="text-green-700">first review:</span> {{ data.review_activity.first_review_at.strftime('%Y-%m-%d') if data.review_activity.first_review_at else '—' }}</div>
+      {% endif %}
+      {% if data.review_activity.latest_review_at %}
+      <div><span class="text-green-700">latest review:</span> {{ data.review_activity.latest_review_at.strftime('%Y-%m-%d') if data.review_activity.latest_review_at else '—' }}{% if data.review_activity.days_since_last_review is not none %} ({{ data.review_activity.days_since_last_review }}d ago){% endif %}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Monthly Trend -->
+  {% if data.rating_trend %}
+  <div class="border border-green-800 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ monthly trend ─</div>
+    <div class="px-3 py-2">
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-green-700">
+              <th class="text-left px-2 py-1">month</th>
+              <th class="text-right px-2 py-1">reviews</th>
+              <th class="text-right px-2 py-1">avg score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in data.rating_trend %}
+            <tr class="border-t border-green-900">
+              <td class="px-2 py-1 text-green-400">{{ t.month }}</td>
+              <td class="text-right px-2 py-1">{{ t.count }}</td>
+              <td class="text-right px-2 py-1 text-amber-400">{{ "%.1f" | format(t.avg_score) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>

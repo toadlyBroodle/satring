@@ -59,6 +59,21 @@
   {% endfor %}
 </div>
 
+<!-- Analytics Report -->
+<div id="analytics-area" class="mb-4">
+  <button onclick="loadReport('/analytics-invoice', 'analytics-area')" class="btn-action px-4 py-1 text-sm"><span class="font-bold">[</span>VIEW DIRECTORY ANALYTICS ({{ analytics_price_sats }} sats)<span class="font-bold">]</span></button>
+</div>
+<script>
+function loadReport(url, targetId) {
+  var el = document.getElementById(targetId);
+  el.innerHTML = '<span class="text-amber-400 text-sm">loading<span class="blink">_</span></span>';
+  fetch(url)
+    .then(function(r) { return r.text(); })
+    .then(function(html) { el.innerHTML = html; })
+    .catch(function() { el.innerHTML = '<span class="text-red-400 text-sm">error loading report.</span>'; });
+}
+</script>
+
 <!-- Service List -->
 <div id="service-results">
   <div id="service-grid" class="flex flex-col gap-2">

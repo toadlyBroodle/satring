@@ -1,0 +1,76 @@
+<div class="border border-amber-400 p-4 mt-4">
+  <div class="text-amber-400 text-sm mb-3">₿ lightning-pay --invoice</div>
+  <p class="text-green-400 text-sm mb-3">Pay <span class="text-amber-400">{{ amount_sats }} sats</span> for {{ label }}</p>
+
+  <!-- QR Code -->
+  <div class="flex justify-center mb-3">
+    <canvas id="rep-qr-{{ target_id }}" class="border border-green-800"></canvas>
+  </div>
+
+  <!-- BOLT11 string -->
+  <div class="mb-3">
+    <label class="text-green-700 text-xs block mb-1">BOLT11 invoice&gt;</label>
+    <div class="flex gap-2 items-start">
+      <code id="rep-bolt11-{{ target_id }}" class="bg-black text-green-400 border border-green-800 px-2 py-1 text-xs break-all block flex-1 max-h-20 overflow-y-auto">{{ payment_request }}</code>
+      <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('rep-bolt11-{{ target_id }}').textContent);this.textContent='[COPIED]';setTimeout(()=>this.textContent='[COPY]',1500)" class="btn-action px-2 py-1 text-xs whitespace-nowrap">[COPY]</button>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="text-sm">
+    <span class="text-green-700">status&gt;</span>
+    <span id="rep-status-{{ target_id }}" class="text-amber-400">waiting for payment<span class="blink">_</span></span>
+  </div>
+
+  <script>
+    (function() {
+      var targetId = {{ target_id | tojson }};
+      var paymentHash = {{ payment_hash | tojson }};
+      var resultUrl = {{ result_url | tojson }};
+      var paymentRequest = {{ payment_request | tojson }};
+
+      if (typeof QRious !== 'undefined') {
+        new QRious({
+          element: document.getElementById('rep-qr-' + targetId),
+          value: paymentRequest,
+          size: 200,
+          foreground: '#4ade80',
+          background: '#000000',
+          level: 'L',
+        });
+      }
+
+      var pollErrors = 0;
+      var pollInterval = setInterval(function() {
+        if (pollErrors > 120) {
+          clearInterval(pollInterval);
+          var el = document.getElementById('rep-status-' + targetId);
+          el.textContent = 'invoice expired. please refresh and try again.';
+          el.className = 'text-red-400';
+          return;
+        }
+        fetch('/payment-status/' + paymentHash)
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.paid) {
+              clearInterval(pollInterval);
+              var el = document.getElementById('rep-status-' + targetId);
+              el.textContent = 'paid! loading report...';
+              el.className = 'text-green-400';
+              fetch(resultUrl + '?payment_hash=' + paymentHash)
+                .then(function(r) { return r.text(); })
+                .then(function(html) {
+                  document.getElementById(targetId).innerHTML = html;
+                })
+                .catch(function() {
+                  el.textContent = 'error loading report.';
+                  el.className = 'text-red-400';
+                });
+            }
+          })
+          .catch(function() { pollErrors += 10; });
+        pollErrors++;
+      }, 5000);
+    })();
+  </script>
+</div>
