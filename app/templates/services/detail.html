@@ -80,6 +80,21 @@
   </div>
 </div>
 
+<!-- Reputation Report -->
+<div id="reputation-area" class="mb-6">
+  <button onclick="loadReport('/services/{{ service.slug }}/reputation-invoice', 'reputation-area')" class="btn-action px-4 py-1 text-sm"><span class="font-bold">[</span>VIEW REPUTATION REPORT ({{ reputation_price_sats }} sats)<span class="font-bold">]</span></button>
+</div>
+<script>
+function loadReport(url, targetId) {
+  var el = document.getElementById(targetId);
+  el.innerHTML = '<span class="text-amber-400 text-sm">loading<span class="blink">_</span></span>';
+  fetch(url)
+    .then(function(r) { return r.text(); })
+    .then(function(html) { el.innerHTML = html; })
+    .catch(function() { el.innerHTML = '<span class="text-red-400 text-sm">error loading report.</span>'; });
+}
+</script>
+
 <!-- Reviews -->
 <div class="mb-6">
   <div class="text-amber-400 text-sm mb-2">## reviews ({{ service.rating_count }})</div>
