@@ -50,10 +50,10 @@ Full interactive docs at [satring.com/docs](https://satring.com/docs).
 
 ```bash
 # List services (paginated, filterable by category)
-curl https://satring.com/api/v1/services?category=search&page=1&page_size=20
+curl "https://satring.com/api/v1/services?category=search&page=1&page_size=20"
 
 # Search
-curl https://satring.com/api/v1/search?q=satring
+curl "https://satring.com/api/v1/search?q=satring"
 
 # Service details
 curl https://satring.com/api/v1/services/my-service
