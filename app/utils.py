@@ -23,6 +23,9 @@ def escape_like(s: str, escape: str = "\\") -> str:
 
 def slugify(text: str) -> str:
     slug = text.lower().strip()
+    # Turn punctuation that separates words (dots, slashes, colons) into spaces
+    # so they become dashes rather than being silently removed
+    slug = re.sub(r"[./:]+", " ", slug)
     slug = re.sub(r"[^\w\s-]", "", slug)
     slug = re.sub(r"[\s_]+", "-", slug)
     slug = re.sub(r"-+", "-", slug).strip("-")
