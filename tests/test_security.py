@@ -492,7 +492,101 @@ class TestLikeWildcardInjection:
 
 
 # ---------------------------------------------------------------------------
-# 10. Default test-mode — empty AUTH_ROOT_KEY must prevent startup
+# 10. Directory search q param — LIKE injection, XSS, query preservation
+# ---------------------------------------------------------------------------
+
+class TestDirectorySearchSecurity:
+    """Security tests for the /?q= search parameter on the directory route."""
+
+    @pytest.mark.asyncio
+    async def test_percent_no_wildcard(self, client: AsyncClient, sample_service: Service):
+        """Literal '%' in q must not act as a LIKE wildcard."""
+        resp = await client.get("/?q=%25")
+        assert resp.status_code == 200
+        assert "Test API" not in resp.text
+
+    @pytest.mark.asyncio
+    async def test_underscore_no_wildcard(self, client: AsyncClient, sample_service: Service):
+        """Literal '_' in q must not match single-char wildcard."""
+        resp = await client.get("/?q=_est")
+        assert resp.status_code == 200
+        assert "Test API" not in resp.text
+
+    @pytest.mark.asyncio
+    async def test_backslash_no_escape_bypass(self, client: AsyncClient, sample_service: Service):
+        """Backslash followed by wildcard must not re-enable wildcard matching."""
+        resp = await client.get("/?q=%5C%25")  # \%
+        assert resp.status_code == 200
+        assert "Test API" not in resp.text
+
+    @pytest.mark.asyncio
+    async def test_exact_match_works(self, client: AsyncClient, sample_service: Service):
+        """Normal substring search via /?q= should find matching services."""
+        resp = await client.get("/?q=Test+API")
+        assert resp.status_code == 200
+        assert "Test API" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_partial_match_works(self, client: AsyncClient, sample_service: Service):
+        """Partial substring via /?q= should find matching services."""
+        resp = await client.get("/?q=test")
+        assert resp.status_code == 200
+        assert "Test API" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_empty_q_returns_all(self, client: AsyncClient, sample_service: Service):
+        """Empty q param should return full directory (no filter applied)."""
+        resp = await client.get("/?q=")
+        assert resp.status_code == 200
+        assert "Test API" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_whitespace_only_q_returns_all(self, client: AsyncClient, sample_service: Service):
+        """Whitespace-only q should be treated as empty (no filter)."""
+        resp = await client.get("/?q=+++")
+        assert resp.status_code == 200
+        assert "Test API" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_xss_in_q_escaped(self, client: AsyncClient, sample_service: Service):
+        """Script tags in q must be HTML-escaped in the rendered page."""
+        resp = await client.get("/?q=%3Cscript%3Ealert(1)%3C/script%3E")
+        assert resp.status_code == 200
+        assert "<script>alert(1)</script>" not in resp.text
+
+    @pytest.mark.asyncio
+    async def test_q_preserved_in_filter_links(self, client: AsyncClient, sample_service: Service):
+        """Category/status filter links should preserve the q param."""
+        resp = await client.get("/?q=test")
+        assert resp.status_code == 200
+        # Filter links should contain q=test so search persists across clicks
+        assert "q=test" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_q_prefilled_in_search_input(self, client: AsyncClient, sample_service: Service):
+        """Search input should have the q value pre-filled."""
+        resp = await client.get("/?q=lightning")
+        assert resp.status_code == 200
+        assert 'value="lightning"' in resp.text
+
+    @pytest.mark.asyncio
+    async def test_q_with_filters_combined(self, client: AsyncClient, sample_service: Service):
+        """q param should work alongside category/sort filters."""
+        resp = await client.get("/?q=test&category=ai-ml&sort=top-rated")
+        assert resp.status_code == 200
+        assert "Test API" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_no_match_returns_empty(self, client: AsyncClient, sample_service: Service):
+        """A q value matching nothing should return the empty state."""
+        resp = await client.get("/?q=zzz_nonexistent_zzz")
+        assert resp.status_code == 200
+        assert "Test API" not in resp.text
+        assert "No services found" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# 11. Default test-mode — empty AUTH_ROOT_KEY must prevent startup
 # ---------------------------------------------------------------------------
 
 class TestEmptyAuthRootKey:
