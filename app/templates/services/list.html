@@ -69,7 +69,14 @@ function loadReport(url, targetId) {
   el.innerHTML = '<span class="text-amber-400 text-sm">loading<span class="blink">_</span></span>';
   fetch(url)
     .then(function(r) { return r.text(); })
-    .then(function(html) { el.innerHTML = html; })
+    .then(function(html) {
+      el.innerHTML = html;
+      el.querySelectorAll('script').forEach(function(old) {
+        var s = document.createElement('script');
+        s.textContent = old.textContent;
+        old.replaceWith(s);
+      });
+    })
     .catch(function() { el.innerHTML = '<span class="text-red-400 text-sm">error loading report.</span>'; });
 }
 </script>
