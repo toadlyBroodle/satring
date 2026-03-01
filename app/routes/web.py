@@ -30,6 +30,7 @@ PAGE_SIZE = 20
 @router.get("/", response_class=HTMLResponse)
 async def directory(
     request: Request,
+    q: str = "",
     category: str | None = None,
     status: str | None = None,
     sort: str | None = None,
@@ -40,6 +41,10 @@ async def directory(
     categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
 
     query = select(Service).options(selectinload(Service.categories)).where(Service.status != "purged")
+    if q.strip():
+        # SECURITY: escape LIKE wildcards so user input is matched literally
+        pattern = f"%{escape_like(q.strip())}%"
+        query = query.where(Service.name.ilike(pattern, escape="\\") | Service.description.ilike(pattern, escape="\\"))
     if category:
         query = query.join(service_categories).join(Category).where(Category.slug == category)
     if status:
@@ -64,6 +69,8 @@ async def directory(
 
     # Build qs_base for pagination links (preserving existing filters)
     qs_parts = []
+    if q.strip():
+        qs_parts.append(f"q={q.strip()}")
     if category:
         qs_parts.append(f"category={category}")
     if verified == "true":
@@ -81,6 +88,7 @@ async def directory(
         "active_status": status,
         "active_sort": sort,
         "active_verified": verified,
+        "active_q": q.strip(),
         "page": page,
         "total_pages": total_pages,
         "qs_base": qs_base,
