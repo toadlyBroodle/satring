@@ -29,16 +29,7 @@
       var resultUrl = {{ result_url | tojson }};
       var paymentRequest = {{ payment_request | tojson }};
 
-      if (typeof QRious !== 'undefined') {
-        new QRious({
-          element: document.getElementById('rep-qr-' + targetId),
-          value: paymentRequest,
-          size: 200,
-          foreground: '#4ade80',
-          background: '#000000',
-          level: 'L',
-        });
-      }
+      renderLightningQR('rep-qr-' + targetId, paymentRequest);
 
       var pollErrors = 0;
       var pollInterval = setInterval(function() {

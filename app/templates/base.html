@@ -22,6 +22,21 @@
   <script type="module" src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <script src="https://unpkg.com/htmx.org@2.0.8"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+  <script>
+    function renderLightningQR(canvasId, bolt11) {
+      if (typeof QRious !== 'undefined') {
+        var styles = getComputedStyle(document.documentElement);
+        new QRious({
+          element: document.getElementById(canvasId),
+          value: 'lightning:' + bolt11.toUpperCase(),
+          size: 200,
+          foreground: styles.getPropertyValue('--text').trim(),
+          background: styles.getPropertyValue('--bg').trim(),
+          level: 'L',
+        });
+      }
+    }
+  </script>
   <style type="text/tailwindcss">
     body { opacity: 1; }
     button:active, input[type="submit"]:active, a[class*="filter-"]:active, a[class*="btn-"]:active {
