@@ -30,16 +30,7 @@
   <script>
     (function() {
       // Render QR code
-      if (typeof QRious !== 'undefined') {
-        new QRious({
-          element: document.getElementById('qr-canvas'),
-          value: {{ payment_request | tojson }},
-          size: 200,
-          foreground: '#4ade80',
-          background: '#000000',
-          level: 'L',
-        });
-      }
+      renderLightningQR('qr-canvas', {{ payment_request | tojson }});
 
       var paymentHash = {{ payment_hash | tojson }};
       var formAction = {{ form_action | tojson }};
