@@ -121,6 +121,8 @@ async def overwrite_purged_service(
     edit_token_hash: str | None = None,
     status: str = "unverified",
     category_ids: list[int] | None = None,
+    domain_verified: bool = False,
+    domain_challenge: str | None = None,
 ) -> None:
     """Overwrite a purged service's fields for re-submission. Preserves ratings."""
     service.name = name
@@ -135,8 +137,8 @@ async def overwrite_purged_service(
     service.status = status
     service.dead_since = None
     service.last_probed_at = None
-    service.domain_verified = False
-    service.domain_challenge = None
+    service.domain_verified = domain_verified
+    service.domain_challenge = domain_challenge
     service.domain_challenge_expires_at = None
     if edit_token_hash is not None:
         service.edit_token_hash = edit_token_hash
