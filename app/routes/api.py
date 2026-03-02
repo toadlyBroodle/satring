@@ -698,10 +698,12 @@ async def create_service(request: Request, body: ServiceCreate, db: AsyncSession
     slug = await unique_slug(db, body.name)
     url_str = str(body.url)
 
+    # Fetch same-domain services (used for token reuse + auto-verify)
+    domain_services = await get_same_domain_services(db, url_str)
+
     # Check if existing token matches a same-domain service
     token_reused = False
     if body.existing_edit_token:
-        domain_services = await get_same_domain_services(db, url_str)
         for ds in domain_services:
             if ds.edit_token_hash and verify_edit_token(body.existing_edit_token, ds.edit_token_hash):
                 token_reused = True
@@ -714,6 +716,15 @@ async def create_service(request: Request, body: ServiceCreate, db: AsyncSession
         edit_token = generate_edit_token()
         edit_token_hash = hash_token(edit_token)
 
+    # Auto-verify if any same-domain service is already verified
+    auto_verified = False
+    inherited_challenge = None
+    for ds in domain_services:
+        if ds.domain_verified:
+            auto_verified = True
+            inherited_challenge = ds.domain_challenge
+            break
+
     # Check for purged service with the same URL — overwrite instead of creating new
     purged = await find_purged_service(db, url_str)
     if purged:
@@ -725,6 +736,8 @@ async def create_service(request: Request, body: ServiceCreate, db: AsyncSession
             owner_contact=body.owner_contact, logo_url=body.logo_url,
             edit_token_hash=edit_token_hash,
             category_ids=body.category_ids,
+            domain_verified=auto_verified,
+            domain_challenge=inherited_challenge,
         )
         service = purged
     else:
@@ -734,6 +747,8 @@ async def create_service(request: Request, body: ServiceCreate, db: AsyncSession
             protocol=body.protocol, owner_name=body.owner_name,
             owner_contact=body.owner_contact, logo_url=body.logo_url,
             edit_token_hash=edit_token_hash,
+            domain_verified=auto_verified,
+            domain_challenge=inherited_challenge,
         )
         if body.category_ids:
             cats = (await db.execute(
@@ -850,10 +865,9 @@ async def api_recover_verify(request: Request, slug: str, db: AsyncSession = Dep
     for ds in domain_services:
         ds.edit_token_hash = new_hash
         ds.domain_verified = True
+        ds.domain_challenge = service.domain_challenge
     service.edit_token_hash = new_hash
     service.domain_verified = True
-    service.domain_challenge = None
-    service.domain_challenge_expires_at = None
     await db.commit()
     return {
         "edit_token": new_token,

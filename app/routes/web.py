@@ -294,10 +294,12 @@ async def submit_service(
 
     slug = await unique_slug(db, name)
 
+    # Fetch same-domain services (used for token reuse + auto-verify)
+    domain_services = await get_same_domain_services(db, url)
+
     # Check if existing token matches a same-domain service
     token_reused = False
     if existing_edit_token:
-        domain_services = await get_same_domain_services(db, url)
         for ds in domain_services:
             if ds.edit_token_hash and verify_edit_token(existing_edit_token, ds.edit_token_hash):
                 token_reused = True
@@ -310,6 +312,15 @@ async def submit_service(
         edit_token = generate_edit_token()
         edit_token_hash = hash_token(edit_token)
 
+    # Auto-verify if any same-domain service is already verified
+    auto_verified = False
+    inherited_challenge = None
+    for ds in domain_services:
+        if ds.domain_verified:
+            auto_verified = True
+            inherited_challenge = ds.domain_challenge
+            break
+
     # Check for purged service with the same URL — overwrite instead of creating new
     purged = await find_purged_service(db, url)
     if purged:
@@ -320,6 +331,8 @@ async def submit_service(
             protocol=protocol, owner_name=owner_name, owner_contact=owner_contact,
             logo_url=logo_url, edit_token_hash=edit_token_hash,
             category_ids=category_ids,
+            domain_verified=auto_verified,
+            domain_challenge=inherited_challenge,
         )
         service = purged
     else:
@@ -328,6 +341,8 @@ async def submit_service(
             protocol=protocol, pricing_sats=pricing_sats, pricing_model=pricing_model,
             owner_name=owner_name, owner_contact=owner_contact, logo_url=logo_url,
             edit_token_hash=edit_token_hash,
+            domain_verified=auto_verified,
+            domain_challenge=inherited_challenge,
         )
         if category_ids:
             cats = (await db.execute(select(Category).where(Category.id.in_(category_ids)))).scalars().all()
@@ -586,10 +601,9 @@ async def recover_service(
         for ds in domain_services:
             ds.edit_token_hash = new_hash
             ds.domain_verified = True
+            ds.domain_challenge = service.domain_challenge
         service.edit_token_hash = new_hash
         service.domain_verified = True
-        service.domain_challenge = None
-        service.domain_challenge_expires_at = None
         await db.commit()
         return templates.TemplateResponse(request, "services/recover.html", {
             "service": service,
