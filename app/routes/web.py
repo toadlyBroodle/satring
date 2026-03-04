@@ -806,7 +806,7 @@ async def payment_status(request: Request, payment_hash: str):
 
 
 @router.get("/sitemap.xml")
-async def sitemap():
+async def sitemap(db: AsyncSession = Depends(get_db)):
     from fastapi.responses import Response
     base = settings.BASE_URL.rstrip("/")
 
@@ -817,6 +817,10 @@ async def sitemap():
         f'  <url><loc>{base}/robots.txt</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>',
         f'  <url><loc>{base}/llms.txt</loc><changefreq>weekly</changefreq><priority>0.4</priority></url>',
     ]
+
+    result = await db.execute(select(Service.slug).where(Service.status != "purged"))
+    for (slug,) in result.all():
+        urls.append(f'  <url><loc>{base}/services/{slug}</loc><changefreq>daily</changefreq><priority>0.7</priority></url>')
 
     xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
