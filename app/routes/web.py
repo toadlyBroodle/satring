@@ -20,7 +20,7 @@ from app.l402 import create_invoice, check_payment_status, check_and_consume_pay
 from app.main import templates, limiter
 from app.models import Service, Category, Rating, service_categories
 from app.routes.api import build_reputation_data, build_analytics_data
-from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, overwrite_purged_service, escape_like
+from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like
 
 router = APIRouter(include_in_schema=False)
 
@@ -256,6 +256,26 @@ async def submit_service(
             },
             "selected_category_ids": category_ids,
         }, status_code=422)
+
+    url = normalize_url(url)
+
+    # Reject duplicate URLs before payment gate so users don't pay for a rejected submission
+    existing = await find_existing_service(db, url)
+    if existing:
+        categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
+        return templates.TemplateResponse(request, "services/submit.html", {
+            "categories": categories,
+            "error": f"A service with this URL already exists: {existing.name}",
+            "form": {
+                "name": name, "url": url, "description": description,
+                "protocol": protocol, "pricing_sats": pricing_sats,
+                "pricing_model": pricing_model, "owner_name": owner_name,
+                "owner_contact": owner_contact, "logo_url": logo_url,
+                "existing_edit_token": existing_edit_token,
+            },
+            "selected_category_ids": category_ids,
+            "existing_slug": existing.slug,
+        }, status_code=409)
 
     # Payment gate (skipped in test mode)
     if payments_enabled():

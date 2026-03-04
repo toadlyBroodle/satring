@@ -97,6 +97,31 @@ async def unique_slug(db: AsyncSession, text: str) -> str:
         counter += 1
 
 
+def normalize_url(url: str) -> str:
+    """Strip query params, fragments, and trailing slashes for dedup."""
+    try:
+        parsed = urlparse(url)
+        return f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/")
+    except ValueError:
+        return url.rstrip("/")
+
+
+async def find_existing_service(db: AsyncSession, url: str) -> Service | None:
+    """Find a non-purged service with the same normalized URL, if any."""
+    norm = normalize_url(url)
+    result = await db.execute(
+        select(Service).where(Service.url == norm, Service.status != "purged")
+    )
+    svc = result.scalars().first()
+    if svc:
+        return svc
+    # Also check un-normalized form (trailing slash variants)
+    result = await db.execute(
+        select(Service).where(Service.url == url, Service.status != "purged")
+    )
+    return result.scalars().first()
+
+
 async def find_purged_service(db: AsyncSession, url: str) -> Service | None:
     """Find a purged service with the given URL, if any."""
     result = await db.execute(

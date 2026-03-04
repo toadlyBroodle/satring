@@ -19,7 +19,7 @@ from app.database import get_db
 from app.l402 import require_l402
 from app.main import limiter
 from app.models import Service, Category, Rating, service_categories
-from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, overwrite_purged_service, escape_like
+from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like
 
 router = APIRouter(tags=["API"])
 
@@ -694,9 +694,19 @@ async def get_service(slug: str, db: AsyncSession = Depends(get_db)):
 @limiter.limit(RATE_SUBMIT)
 async def create_service(request: Request, body: ServiceCreate, db: AsyncSession = Depends(get_db)):
     await require_l402(request=request, amount_sats=settings.AUTH_SUBMIT_PRICE_SATS, memo="satring.com service submission")
+
+    url_str = normalize_url(str(body.url))
+
+    # Reject duplicate URLs (non-purged)
+    existing = await find_existing_service(db, url_str)
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A service with this URL already exists: /services/{existing.slug}",
+        )
+
     from app.utils import unique_slug
     slug = await unique_slug(db, body.name)
-    url_str = str(body.url)
 
     # Fetch same-domain services (used for token reuse + auto-verify)
     domain_services = await get_same_domain_services(db, url_str)
