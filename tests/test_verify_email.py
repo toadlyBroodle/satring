@@ -8,6 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.utils import extract_email, send_verify_email
 
+# All send_verify_email calls need payments_enabled=True since email is
+# skipped in test mode. This decorator stacks with the SMTP mock.
+_enable_payments = patch("app.config.payments_enabled", return_value=True)
+
 
 # ---------------------------------------------------------------------------
 # Unit: extract_email
@@ -44,8 +48,9 @@ class TestExtractEmail:
 # ---------------------------------------------------------------------------
 
 class TestSendVerifyEmail:
+    @_enable_payments
     @patch("app.utils.smtplib.SMTP")
-    def test_sends_with_correct_fields(self, mock_smtp_cls):
+    def test_sends_with_correct_fields(self, mock_smtp_cls, _):
         mock_srv = MagicMock()
         mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_srv)
         mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
@@ -59,8 +64,9 @@ class TestSendVerifyEmail:
         assert "my-service" in msg.get_payload()
         assert "example.com/.well-known/satring-verify" in msg.get_payload()
 
+    @_enable_payments
     @patch("app.utils.smtplib.SMTP")
-    def test_substitutes_placeholders(self, mock_smtp_cls):
+    def test_substitutes_placeholders(self, mock_smtp_cls, _):
         mock_srv = MagicMock()
         mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_srv)
         mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
@@ -74,10 +80,17 @@ class TestSendVerifyEmail:
         assert "SERVICE_SLUG" not in body
         assert "YOUR_DOMAIN" not in body
 
+    @_enable_payments
     @patch("app.utils.smtplib.SMTP", side_effect=ConnectionRefusedError)
-    def test_smtp_failure_does_not_raise(self, mock_smtp_cls):
+    def test_smtp_failure_does_not_raise(self, mock_smtp_cls, _):
         # Should log error but not propagate
         send_verify_email("alice@example.com", "my-service", "example.com")
+
+    @patch("app.utils.smtplib.SMTP")
+    def test_skipped_in_test_mode(self, mock_smtp_cls):
+        """Email should not be sent when payments are disabled (test mode)."""
+        send_verify_email("alice@example.com", "my-service", "example.com")
+        mock_smtp_cls.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -86,8 +99,9 @@ class TestSendVerifyEmail:
 
 class TestAPICreateServiceEmail:
     @pytest.mark.asyncio
+    @_enable_payments
     @patch("app.utils.smtplib.SMTP")
-    async def test_email_sent_when_contact_has_email(self, mock_smtp_cls, client: AsyncClient):
+    async def test_email_sent_when_contact_has_email(self, mock_smtp_cls, _, client: AsyncClient):
         mock_srv = MagicMock()
         mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_srv)
         mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
@@ -105,8 +119,9 @@ class TestAPICreateServiceEmail:
         assert "emailtest.example.com" in msg.get_payload()
 
     @pytest.mark.asyncio
+    @_enable_payments
     @patch("app.utils.smtplib.SMTP")
-    async def test_email_sent_when_contact_contains_email(self, mock_smtp_cls, client: AsyncClient):
+    async def test_email_sent_when_contact_contains_email(self, mock_smtp_cls, _, client: AsyncClient):
         mock_srv = MagicMock()
         mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_srv)
         mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
@@ -158,8 +173,9 @@ class TestAPICreateServiceEmail:
 
 class TestWebSubmitServiceEmail:
     @pytest.mark.asyncio
+    @_enable_payments
     @patch("app.utils.smtplib.SMTP")
-    async def test_web_submit_sends_email(self, mock_smtp_cls, client: AsyncClient):
+    async def test_web_submit_sends_email(self, mock_smtp_cls, _, client: AsyncClient):
         mock_srv = MagicMock()
         mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_srv)
         mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
