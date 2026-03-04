@@ -209,7 +209,12 @@ def send_verify_email(email: str, slug: str, domain: str) -> None:
     Loads template from docs/coms/email-new-registration-verify.txt and
     substitutes SERVICE_SLUG and YOUR_DOMAIN placeholders.
     Designed to run in a BackgroundTask so it never blocks the response.
+    Skipped in test mode.
     """
+    from app.config import payments_enabled
+    if not payments_enabled():
+        return
+
     try:
         template = _VERIFY_EMAIL_TEMPLATE.read_text(encoding="utf-8")
     except FileNotFoundError:
