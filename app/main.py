@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="satring", description="L402 Service Directory", lifespan=lifespan, docs_url=None)
+app = FastAPI(title="satring", description="The largest live L402 directory", lifespan=lifespan, docs_url=None)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(OriginCheckMiddleware)

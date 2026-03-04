@@ -814,6 +814,8 @@ async def sitemap():
         f'  <url><loc>{base}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>',
         f'  <url><loc>{base}/submit</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>',
         f'  <url><loc>{base}/docs</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>',
+        f'  <url><loc>{base}/robots.txt</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>',
+        f'  <url><loc>{base}/llms.txt</loc><changefreq>weekly</changefreq><priority>0.4</priority></url>',
     ]
 
     xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -840,9 +842,9 @@ async def llms_txt():
     lines = [
         "# satring",
         "",
-        "> L402 service directory — discover Lightning-paywalled APIs for AI agents and developers.",
+        "> The largest live L402 directory. Discover Lightning-paywalled APIs for AI agents and developers.",
         "",
-        "Satring indexes L402 services: APIs that accept Bitcoin Lightning micropayments.",
+        "Satring is the largest live directory of L402 services: APIs that accept Bitcoin Lightning micropayments.",
         "AI agents use satring to find and connect to paid APIs autonomously.",
         "Humans use it to discover, rate, and submit services.",
         "",
