@@ -1,9 +1,14 @@
 import hashlib
 import hmac
 import ipaddress
+import logging
+import os
+from pathlib import Path
 import re
 import secrets
+import smtplib
 import socket
+from email.mime.text import MIMEText
 from urllib.parse import urlparse
 
 from sqlalchemy import select, func
@@ -183,3 +188,44 @@ async def overwrite_purged_service(
     row = avg_result.one()
     service.avg_rating = round(float(row[0]), 1) if row[0] else 0.0
     service.rating_count = row[1] or 0
+
+
+_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+_log = logging.getLogger(__name__)
+
+
+def extract_email(s: str) -> str | None:
+    """Extract the first valid email address from a string, or None."""
+    match = _EMAIL_RE.search(s)
+    return match.group(0) if match else None
+
+
+_VERIFY_EMAIL_TEMPLATE = Path(__file__).resolve().parent.parent / "docs" / "coms" / "email-new-registration-verify.txt"
+
+
+def send_verify_email(email: str, slug: str, domain: str) -> None:
+    """Send domain verification instructions via local postfix.
+
+    Loads template from docs/coms/email-new-registration-verify.txt and
+    substitutes SERVICE_SLUG and YOUR_DOMAIN placeholders.
+    Designed to run in a BackgroundTask so it never blocks the response.
+    """
+    try:
+        template = _VERIFY_EMAIL_TEMPLATE.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        _log.error(f"Verification email template not found: {_VERIFY_EMAIL_TEMPLATE}")
+        return
+
+    body = template.replace("SERVICE_SLUG", slug).replace("YOUR_DOMAIN", domain)
+
+    msg = MIMEText(body)
+    msg["Subject"] = "Verify your service on satring.com"
+    msg["From"] = os.getenv("MAIL_FROM", "noreply@satring.com")
+    msg["To"] = email
+
+    try:
+        with smtplib.SMTP("localhost") as srv:
+            srv.send_message(msg)
+        _log.info(f"Sent verification email to {email} for {slug}")
+    except Exception:
+        _log.exception(f"Failed to send verification email to {email}")

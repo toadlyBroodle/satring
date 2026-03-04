@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, Request, Depends, Form, Query
+from fastapi import APIRouter, BackgroundTasks, Request, Depends, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,7 @@ from app.l402 import create_invoice, check_payment_status, check_and_consume_pay
 from app.main import templates, limiter
 from app.models import Service, Category, Rating, service_categories
 from app.routes.api import build_reputation_data, build_analytics_data
-from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like
+from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like
 
 router = APIRouter(include_in_schema=False)
 
@@ -186,6 +186,7 @@ async def submit_form(request: Request, db: AsyncSession = Depends(get_db)):
 @limiter.limit(RATE_SUBMIT)
 async def submit_service(
     request: Request,
+    background_tasks: BackgroundTasks,
     name: str = Form(...),
     url: str = Form(...),
     description: str = Form(""),
@@ -370,6 +371,13 @@ async def submit_service(
         db.add(service)
 
     await db.commit()
+
+    # Send verification instructions if owner_contact contains an email
+    email = extract_email(owner_contact or "")
+    if email and not auto_verified:
+        domain = extract_domain(url)
+        background_tasks.add_task(send_verify_email, email, service.slug, domain)
+
     return templates.TemplateResponse(request, "services/submit_success.html", {
         "service": service,
         "edit_token": edit_token,

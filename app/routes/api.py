@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 from sqlalchemy import case, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +19,7 @@ from app.database import get_db
 from app.l402 import require_l402
 from app.main import limiter
 from app.models import Service, Category, Rating, service_categories
-from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like
+from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like
 
 router = APIRouter(tags=["API"])
 
@@ -692,7 +692,7 @@ async def get_service(slug: str, db: AsyncSession = Depends(get_db)):
 
 @router.post("/services", response_model=ServiceCreateOut, status_code=201)
 @limiter.limit(RATE_SUBMIT)
-async def create_service(request: Request, body: ServiceCreate, db: AsyncSession = Depends(get_db)):
+async def create_service(request: Request, body: ServiceCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     await require_l402(request=request, amount_sats=settings.AUTH_SUBMIT_PRICE_SATS, memo="satring.com service submission")
 
     url_str = normalize_url(str(body.url))
@@ -775,6 +775,13 @@ async def create_service(request: Request, body: ServiceCreate, db: AsyncSession
     out = ServiceCreateOut.model_validate(result.scalars().first())
     out.edit_token = edit_token
     out.token_reused = token_reused
+
+    # Send verification instructions if owner_contact contains an email
+    email = extract_email(body.owner_contact or "")
+    if email and not auto_verified:
+        domain = extract_domain(url_str)
+        background_tasks.add_task(send_verify_email, email, service.slug, domain)
+
     return out
 
 
