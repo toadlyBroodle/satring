@@ -693,17 +693,17 @@ async def get_service(slug: str, db: AsyncSession = Depends(get_db)):
 @router.post("/services", response_model=ServiceCreateOut, status_code=201)
 @limiter.limit(RATE_SUBMIT)
 async def create_service(request: Request, body: ServiceCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request, amount_sats=settings.AUTH_SUBMIT_PRICE_SATS, memo="satring.com service submission")
-
     url_str = normalize_url(str(body.url))
 
-    # Reject duplicate URLs (non-purged)
+    # Reject duplicate URLs BEFORE payment gate so clients don't pay for a rejected submission
     existing = await find_existing_service(db, url_str)
     if existing:
         raise HTTPException(
             status_code=409,
             detail=f"A service with this URL already exists: /services/{existing.slug}",
         )
+
+    await require_l402(request=request, amount_sats=settings.AUTH_SUBMIT_PRICE_SATS, memo="satring.com service submission")
 
     from app.utils import unique_slug
     slug = await unique_slug(db, body.name)

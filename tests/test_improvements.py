@@ -247,10 +247,10 @@ class TestSitemap:
         assert "/docs</loc>" in resp.text
 
     @pytest.mark.asyncio
-    async def test_sitemap_only_own_pages(self, client: AsyncClient, sample_service: Service):
-        """Sitemap lists satring's own pages, not user-submitted service listings."""
+    async def test_sitemap_includes_service_pages(self, client: AsyncClient, sample_service: Service):
+        """Sitemap includes individual service listing pages."""
         resp = await client.get("/sitemap.xml")
-        assert "/services/" not in resp.text
+        assert f"/services/{sample_service.slug}" in resp.text
         assert "/api/" not in resp.text
 
 

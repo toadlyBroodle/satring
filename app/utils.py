@@ -103,10 +103,14 @@ async def unique_slug(db: AsyncSession, text: str) -> str:
 
 
 def normalize_url(url: str) -> str:
-    """Strip query params, fragments, and trailing slashes for dedup."""
+    """Normalize URL for dedup: sort query params, strip fragments and trailing slashes."""
     try:
         parsed = urlparse(url)
-        return f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/")
+        # Preserve query params but sort them for consistent comparison
+        from urllib.parse import parse_qsl, urlencode
+        sorted_query = urlencode(sorted(parse_qsl(parsed.query)))
+        base = f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip("/")
+        return f"{base}?{sorted_query}" if sorted_query else base
     except ValueError:
         return url.rstrip("/")
 
