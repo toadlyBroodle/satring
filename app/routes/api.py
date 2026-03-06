@@ -14,6 +14,7 @@ from app.config import (
     settings, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT, MAX_PRICING_SATS,
     RATE_SUBMIT, RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_REVIEW, RATE_SEARCH_API,
+    RATE_LIST_API, RATE_DETAIL_API,
 )
 from app.database import get_db
 from app.l402 import require_l402
@@ -673,10 +674,12 @@ async def bulk_export(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/services", response_model=ServiceListOut)
+@limiter.limit(RATE_LIST_API)
 async def list_services(
+    request: Request,
     category: str | None = None,
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=20),
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Service).where(Service.status != "purged").order_by(Service.created_at.desc())
@@ -686,7 +689,8 @@ async def list_services(
 
 
 @router.get("/services/{slug}", response_model=ServiceOut)
-async def get_service(slug: str, db: AsyncSession = Depends(get_db)):
+@limiter.limit(RATE_DETAIL_API)
+async def get_service(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     return ServiceOut.model_validate(await get_service_or_404(db, slug))
 
 
@@ -910,7 +914,9 @@ async def search_services(
 
 
 @router.get("/services/{slug}/ratings", response_model=list[RatingOut])
+@limiter.limit(RATE_DETAIL_API)
 async def list_ratings(
+    request: Request,
     slug: str,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),

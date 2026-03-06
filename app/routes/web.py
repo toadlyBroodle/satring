@@ -13,7 +13,7 @@ from app.config import (
     settings, payments_enabled, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT,
     RATE_SUBMIT, RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_REVIEW,
-    RATE_SEARCH, RATE_PAYMENT_STATUS,
+    RATE_SEARCH, RATE_PAYMENT_STATUS, RATE_SITEMAP,
 )
 from app.database import get_db
 from app.l402 import create_invoice, check_payment_status, check_and_consume_payment
@@ -806,7 +806,8 @@ async def payment_status(request: Request, payment_hash: str):
 
 
 @router.get("/sitemap.xml")
-async def sitemap(db: AsyncSession = Depends(get_db)):
+@limiter.limit(RATE_SITEMAP)
+async def sitemap(request: Request, db: AsyncSession = Depends(get_db)):
     from fastapi.responses import Response
     base = settings.BASE_URL.rstrip("/")
 
@@ -832,7 +833,20 @@ async def sitemap(db: AsyncSession = Depends(get_db)):
 @router.get("/robots.txt")
 async def robots_txt():
     base = settings.BASE_URL.rstrip("/")
-    content = f"User-agent: *\nAllow: /\n\nSitemap: {base}/sitemap.xml\nLlms-txt: {base}/llms.txt\n"
+    content = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /api/\n"
+        "\n"
+        "User-agent: AhrefsBot\n"
+        "Disallow: /\n"
+        "\n"
+        "User-agent: SemrushBot\n"
+        "Disallow: /\n"
+        "\n"
+        f"Sitemap: {base}/sitemap.xml\n"
+        f"Llms-txt: {base}/llms.txt\n"
+    )
     from fastapi.responses import PlainTextResponse
     return PlainTextResponse(content)
 
