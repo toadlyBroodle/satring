@@ -99,6 +99,26 @@ async def sample_service(db: AsyncSession) -> Service:
 
 
 @pytest_asyncio.fixture
+async def sample_x402_service(db: AsyncSession) -> Service:
+    cats = (await db.execute(select(Category).where(Category.slug.in_(["finance"])))).scalars().all()
+    svc = Service(
+        name="X402 Pay API", slug="x402-pay-api", url="https://x402.test.com",
+        description="An x402 USDC payment API", pricing_sats=0,
+        pricing_model="per-request", protocol="X402",
+        owner_name="X402 Tester", owner_contact="x402@test.com",
+        x402_network="eip155:8453",
+        x402_asset="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        x402_pay_to="0xTestWallet123",
+        pricing_usd="0.05",
+    )
+    svc.categories = list(cats)
+    db.add(svc)
+    await db.commit()
+    await db.refresh(svc)
+    return svc
+
+
+@pytest_asyncio.fixture
 async def sample_service_with_ratings(db: AsyncSession, sample_service: Service) -> Service:
     for score, comment, name in [
         (5, "Excellent", "Alice"),

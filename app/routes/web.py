@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.config import (
     settings, payments_enabled, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT,
+    MAX_X402_NETWORK, MAX_X402_ASSET, MAX_X402_PAY_TO, MAX_PRICING_USD,
     RATE_SUBMIT, RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_REVIEW,
     RATE_SEARCH, RATE_PAYMENT_STATUS, RATE_SITEMAP,
 )
@@ -35,6 +36,7 @@ async def directory(
     status: str | None = None,
     sort: str | None = None,
     verified: str | None = None,
+    protocol: str | None = None,
     page: int = Query(1, ge=1),
     db: AsyncSession = Depends(get_db),
 ):
@@ -51,6 +53,8 @@ async def directory(
         query = query.where(Service.status == status)
     if verified == "true":
         query = query.where(Service.domain_verified == True)
+    if protocol and protocol in ("L402", "X402"):
+        query = query.where(Service.protocol == protocol)
 
     sort_map = {
         "top-rated": Service.avg_rating.desc(),
@@ -77,6 +81,8 @@ async def directory(
         qs_parts.append("verified=true")
     elif status:
         qs_parts.append(f"status={status}")
+    if protocol and protocol in ("L402", "X402"):
+        qs_parts.append(f"protocol={protocol}")
     if sort and sort != "newest":
         qs_parts.append(f"sort={sort}")
     qs_base = "&".join(qs_parts)
@@ -88,6 +94,7 @@ async def directory(
         "active_status": status,
         "active_sort": sort,
         "active_verified": verified,
+        "active_protocol": protocol,
         "active_q": q.strip(),
         "page": page,
         "total_pages": total_pages,
@@ -197,6 +204,10 @@ async def submit_service(
     owner_contact: str = Form(""),
     logo_url: str = Form(""),
     existing_edit_token: str = Form(""),
+    x402_network: str = Form(""),
+    x402_asset: str = Form(""),
+    x402_pay_to: str = Form(""),
+    pricing_usd: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     form_data = await request.form()
@@ -214,13 +225,21 @@ async def submit_service(
                 "pricing_model": pricing_model, "owner_name": owner_name,
                 "owner_contact": owner_contact, "logo_url": logo_url,
                 "existing_edit_token": existing_edit_token,
+                "x402_network": x402_network, "x402_asset": x402_asset,
+                "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
             },
             "selected_category_ids": category_ids,
         }, status_code=422)
 
     # SECURITY: Server-side length limits prevent DB bloat and memory exhaustion.
     # HTML maxlength is client-side only and trivially bypassed. Constants in config.py.
-    LENGTH_LIMITS = {"name": MAX_NAME, "url": MAX_URL, "description": MAX_DESCRIPTION, "owner_name": MAX_OWNER_NAME, "owner_contact": MAX_OWNER_CONTACT, "logo_url": MAX_LOGO_URL}
+    LENGTH_LIMITS = {
+        "name": MAX_NAME, "url": MAX_URL, "description": MAX_DESCRIPTION,
+        "owner_name": MAX_OWNER_NAME, "owner_contact": MAX_OWNER_CONTACT,
+        "logo_url": MAX_LOGO_URL, "x402_network": MAX_X402_NETWORK,
+        "x402_asset": MAX_X402_ASSET, "x402_pay_to": MAX_X402_PAY_TO,
+        "pricing_usd": MAX_PRICING_USD,
+    }
     for field_name, max_len in LENGTH_LIMITS.items():
         val = locals()[field_name]
         if len(val) > max_len:
@@ -234,6 +253,8 @@ async def submit_service(
                     "pricing_model": pricing_model, "owner_name": owner_name,
                     "owner_contact": owner_contact, "logo_url": logo_url,
                     "existing_edit_token": existing_edit_token,
+                    "x402_network": x402_network, "x402_asset": x402_asset,
+                    "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
                 },
                 "selected_category_ids": category_ids,
             }, status_code=422)
@@ -254,6 +275,8 @@ async def submit_service(
                 "pricing_model": pricing_model, "owner_name": owner_name,
                 "owner_contact": owner_contact, "logo_url": logo_url,
                 "existing_edit_token": existing_edit_token,
+                "x402_network": x402_network, "x402_asset": x402_asset,
+                "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
             },
             "selected_category_ids": category_ids,
         }, status_code=422)
@@ -273,6 +296,8 @@ async def submit_service(
                 "pricing_model": pricing_model, "owner_name": owner_name,
                 "owner_contact": owner_contact, "logo_url": logo_url,
                 "existing_edit_token": existing_edit_token,
+                "x402_network": x402_network, "x402_asset": x402_asset,
+                "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
             },
             "selected_category_ids": category_ids,
             "existing_slug": existing.slug,
@@ -293,6 +318,8 @@ async def submit_service(
                 "pricing_model": pricing_model, "owner_name": owner_name,
                 "owner_contact": owner_contact, "logo_url": logo_url,
                 "existing_edit_token": existing_edit_token,
+                "x402_network": x402_network, "x402_asset": x402_asset,
+                "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
             }
             for cid in category_ids:
                 form_fields[f"categories_{cid}"] = str(cid)
@@ -361,6 +388,8 @@ async def submit_service(
             name=name, slug=slug, url=url, description=description,
             protocol=protocol, pricing_sats=pricing_sats, pricing_model=pricing_model,
             owner_name=owner_name, owner_contact=owner_contact, logo_url=logo_url,
+            x402_network=x402_network or None, x402_asset=x402_asset or None,
+            x402_pay_to=x402_pay_to or None, pricing_usd=pricing_usd or None,
             edit_token_hash=edit_token_hash,
             domain_verified=auto_verified,
             domain_challenge=inherited_challenge,
@@ -437,6 +466,10 @@ async def edit_service(
     owner_name: str = Form(""),
     owner_contact: str = Form(""),
     logo_url: str = Form(""),
+    x402_network: str = Form(""),
+    x402_asset: str = Form(""),
+    x402_pay_to: str = Form(""),
+    pricing_usd: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -495,6 +528,10 @@ async def edit_service(
     service.owner_name = owner_name
     service.owner_contact = owner_contact
     service.logo_url = logo_url
+    service.x402_network = x402_network or None
+    service.x402_asset = x402_asset or None
+    service.x402_pay_to = x402_pay_to or None
+    service.pricing_usd = pricing_usd or None
 
     cats = (await db.execute(select(Category).where(Category.id.in_(category_ids)))).scalars().all()
     service.categories = list(cats)
@@ -860,10 +897,10 @@ async def llms_txt():
     lines = [
         "# satring",
         "",
-        "> The largest live L402 directory. Discover Lightning-paywalled APIs for AI agents and developers.",
+        "> L402 + x402 paid API directory. Discover Lightning and USDC paywalled APIs for AI agents and developers.",
         "",
-        "Satring is the largest live directory of L402 services: APIs that accept Bitcoin Lightning micropayments.",
-        "AI agents use satring to find and connect to paid APIs autonomously.",
+        "Satring is a curated directory of L402 and x402 services: APIs that accept Bitcoin Lightning or USDC micropayments.",
+        "AI agents use satring to find and connect to paid APIs autonomously via MCP.",
         "Humans use it to discover, rate, and submit services.",
         "",
         f"- [Browse directory]({base}/): Search and filter services by category, status, rating",

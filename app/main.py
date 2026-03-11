@@ -15,6 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.config import settings
 from app.database import init_db, async_session
 from app.models import Category
+from app.health import start_health_task, stop_health_task
 from app.usage import record_hit, record_details, start_flush_task, stop_flush_task
 
 # SECURITY: Rate limiter to prevent abuse and DoS. Applied per-endpoint in route files.
@@ -123,11 +124,13 @@ async def lifespan(app: FastAPI):
     await init_db()
     await seed_categories()
     start_flush_task()
+    start_health_task()
     yield
+    await stop_health_task()
     await stop_flush_task()
 
 
-app = FastAPI(title="satring", description="The largest live L402 directory", lifespan=lifespan, docs_url=None)
+app = FastAPI(title="satring", description="L402 + x402 paid API directory", lifespan=lifespan, docs_url=None)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(OriginCheckMiddleware)

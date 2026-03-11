@@ -91,12 +91,19 @@ class TestCreateService:
             "owner_name": "Builder",
             "owner_contact": "builder@test.com",
             "logo_url": "https://img.test.com/logo.png",
+            "x402_network": "eip155:8453",
+            "x402_pay_to": "0xTestWallet",
+            "x402_asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            "pricing_usd": "0.50",
             "category_ids": [1, 2],
         })
         assert resp.status_code == 201
         data = resp.json()
         assert data["pricing_sats"] == 500
         assert data["protocol"] == "X402"
+        assert data["x402_pay_to"] == "0xTestWallet"
+        assert data["x402_network"] == "eip155:8453"
+        assert data["pricing_usd"] == "0.50"
         assert len(data["categories"]) == 2
 
     @pytest.mark.asyncio

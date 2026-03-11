@@ -45,6 +45,10 @@ class Service(Base):
     domain_challenge = Column(String(64), nullable=True)
     domain_challenge_expires_at = Column(DateTime, nullable=True)
     domain_verified = Column(Boolean, default=False)
+    x402_network = Column(String(50), nullable=True)     # "eip155:8453"
+    x402_asset = Column(String(100), nullable=True)       # USDC contract address
+    x402_pay_to = Column(String(100), nullable=True)      # wallet address
+    pricing_usd = Column(String(20), nullable=True)       # "0.01"
     avg_rating = Column(Float, default=0.0)
     rating_count = Column(Integer, default=0)
     status = Column(String(20), default="unverified")  # unverified | confirmed | live | dead | purged

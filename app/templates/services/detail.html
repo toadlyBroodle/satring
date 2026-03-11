@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ service.name }}{% endblock %}
-{% block meta_description %}{{ service.name }} — {{ service.description[:160] if service.description else 'An L402 service on satring' }}{% endblock %}
+{% block meta_description %}{{ service.name }} — {{ service.description[:160] if service.description else 'A paid API service on satring' }}{% endblock %}
 {% block og_title %}{{ service.name }} — satring{% endblock %}
-{% block og_description %}{{ service.description[:200] if service.description else 'L402 service listed on satring' }}{% endblock %}
+{% block og_description %}{{ service.description[:200] if service.description else 'Paid API service listed on satring' }}{% endblock %}
 {% block og_type %}article{% endblock %}
 {% block og_image %}{{ service.logo_url if service.logo_url else '/static/img/satring-logo.jpg' }}{% endblock %}
 {% block twitter_title %}{{ service.name }} — satring{% endblock %}
-{% block twitter_description %}{{ service.description[:200] if service.description else 'L402 service listed on satring' }}{% endblock %}
+{% block twitter_description %}{{ service.description[:200] if service.description else 'Paid API service listed on satring' }}{% endblock %}
 {% block twitter_image %}{{ service.logo_url if service.logo_url else '/static/img/satring-logo.jpg' }}{% endblock %}
 {% block extra_head %}
 <script type="application/ld+json">
@@ -56,8 +56,13 @@
   <table class="w-full">
     <tbody>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5 w-32">endpoint</td><td class="px-3 py-1.5"><a href="{{ service.url }}" class="text-amber-400 hover:underline break-all" target="_blank">{{ service.url }}</a></td></tr>
-      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">pricing</td><td class="px-3 py-1.5">{{ service.pricing_sats }} sats / {{ service.pricing_model }}</td></tr>
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">pricing</td><td class="px-3 py-1.5">{% if service.pricing_usd %}${{ service.pricing_usd }} USD{% if service.pricing_sats %} / {{ service.pricing_sats }} sats{% endif %}{% else %}{{ service.pricing_sats }} sats{% endif %} / {{ service.pricing_model }}</td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">protocol</td><td class="px-3 py-1.5">{{ service.protocol }}</td></tr>
+      {% if service.protocol == 'X402' and service.x402_pay_to %}
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">wallet</td><td class="px-3 py-1.5 break-all text-xs">{{ service.x402_pay_to }}</td></tr>
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">network</td><td class="px-3 py-1.5">{{ service.x402_network or 'eip155:8453' }}</td></tr>
+      {% if service.x402_asset %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">asset</td><td class="px-3 py-1.5 break-all text-xs">{{ service.x402_asset }}</td></tr>{% endif %}
+      {% endif %}
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">status</td><td class="px-3 py-1.5">{% if service.domain_verified %}<span class="text-cyan-400">[domain verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% elif service.status == 'unknown' %}text-gray-400{% else %}text-green-700{% endif %}">{{ service.status }}</span>{% endif %}</td></tr>
       {% if service.owner_name %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">provider</td><td class="px-3 py-1.5">{{ service.owner_name }}</td></tr>{% endif %}
       {% if service.owner_contact %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">contact</td><td class="px-3 py-1.5">{{ service.owner_contact }}</td></tr>{% endif %}

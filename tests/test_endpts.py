@@ -52,6 +52,7 @@ class TestListServicesResponse:
         expected_fields = {
             "id", "name", "slug", "url", "description", "pricing_sats",
             "pricing_model", "protocol", "owner_name", "logo_url",
+            "x402_network", "x402_asset", "x402_pay_to", "pricing_usd",
             "avg_rating", "rating_count", "domain_verified", "categories", "created_at",
         }
         assert set(svc.keys()) == expected_fields
@@ -450,7 +451,7 @@ class TestL402ChallengeFormat:
     @pytest.mark.asyncio
     async def test_bulk_export_402_has_invoice(self, client: AsyncClient):
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {
                 "payment_hash": "bulkhash",
                 "payment_request": "lnbc10000n1bulk",
@@ -467,7 +468,7 @@ class TestL402ChallengeFormat:
     @pytest.mark.asyncio
     async def test_analytics_402_has_invoice(self, client: AsyncClient):
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {
                 "payment_hash": "analyticshash",
                 "payment_request": "lnbc1000n1analytics",
@@ -481,7 +482,7 @@ class TestL402ChallengeFormat:
     @pytest.mark.asyncio
     async def test_reputation_402_has_invoice(self, client: AsyncClient, sample_service: Service):
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {
                 "payment_hash": "rephash",
                 "payment_request": "lnbc1000n1rep",
@@ -495,7 +496,7 @@ class TestL402ChallengeFormat:
     @pytest.mark.asyncio
     async def test_create_service_402_has_invoice(self, client: AsyncClient):
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {
                 "payment_hash": "createhash",
                 "payment_request": "lnbc100000n1create",
@@ -511,7 +512,7 @@ class TestL402ChallengeFormat:
     @pytest.mark.asyncio
     async def test_create_rating_402_has_invoice(self, client: AsyncClient, sample_service: Service):
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {
                 "payment_hash": "ratehash",
                 "payment_request": "lnbc100n1rate",
@@ -528,7 +529,7 @@ class TestL402ChallengeFormat:
     async def test_402_body_is_json(self, client: AsyncClient):
         """The JSON body should say Payment Required even though the real data is in headers."""
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {
                 "payment_hash": "bodyhash",
                 "payment_request": "lnbc1000n1body",
@@ -548,7 +549,7 @@ class TestL402PriceAmounts:
     @pytest.mark.asyncio
     async def test_bulk_uses_bulk_price(self, client: AsyncClient):
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.get("/api/v1/services/bulk")
             mock_inv.assert_called_once_with(settings.AUTH_BULK_PRICE_SATS, "satring.com bulk export")
@@ -556,7 +557,7 @@ class TestL402PriceAmounts:
     @pytest.mark.asyncio
     async def test_analytics_uses_analytics_price(self, client: AsyncClient):
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.get("/api/v1/analytics")
             mock_inv.assert_called_once_with(settings.AUTH_ANALYTICS_PRICE_SATS, "satring.com analytics access")
@@ -564,7 +565,7 @@ class TestL402PriceAmounts:
     @pytest.mark.asyncio
     async def test_reputation_uses_reputation_price(self, client: AsyncClient, sample_service: Service):
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.get("/api/v1/services/test-api/reputation")
             mock_inv.assert_called_once_with(settings.AUTH_REPUTATION_PRICE_SATS, "satring.com reputation lookup")
@@ -572,7 +573,7 @@ class TestL402PriceAmounts:
     @pytest.mark.asyncio
     async def test_create_service_uses_submit_price(self, client: AsyncClient):
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.post("/api/v1/services", json={
                 "name": "X", "url": "https://x.com",
@@ -582,7 +583,7 @@ class TestL402PriceAmounts:
     @pytest.mark.asyncio
     async def test_create_rating_uses_review_price(self, client: AsyncClient, sample_service: Service):
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_inv:
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {"payment_hash": "h", "payment_request": "lnbc1"}
             await client.post("/api/v1/services/test-api/ratings", json={"score": 3})
             mock_inv.assert_called_once_with(settings.AUTH_REVIEW_PRICE_SATS, "satring.com review submission")

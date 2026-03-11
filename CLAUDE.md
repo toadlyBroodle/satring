@@ -17,22 +17,36 @@ python -m pytest tests/test_api.py
 # Run single test by name
 python -m pytest -k "test_create_service"
 
+
 ```
 
 ## Architecture
 
-FastAPI application serving an L402 (Lightning-paywalled) service directory. Server-rendered HTML via Jinja2 + HTMX, with a parallel JSON API.
+FastAPI application serving an L402 + x402 dual-protocol paid API directory. Server-rendered HTML via Jinja2 + HTMX, with a parallel JSON API.
 
 **Route split:**
-- `app/routes/api.py` (prefix `/api/v1`): JSON API with L402 payment gates via `require_l402()` dependency
+- `app/routes/api.py` (prefix `/api/v1`): JSON API with dual-protocol payment gates via `require_payment()` dependency
 - `app/routes/web.py`: HTML pages with form handling. Payment flows use invoice widgets polled via JS
 - Shared data builders (`build_analytics_data`, `build_reputation_data`) live in `api.py` and are imported by `web.py`
+
+**Dual-protocol payment flow (API):**
+- `app/payment.py` routes requests based on headers:
+  1. `Authorization: L402/LSAT ...` header -> L402 path via `app/l402.py`
+  2. `PAYMENT-SIGNATURE` header -> x402 path via `app/x402.py`
+  3. No auth headers -> 402 with BOTH `WWW-Authenticate` (L402) and `PAYMENT-REQUIRED` (x402) headers
+  4. If only L402 is configured (no X402_PAY_TO), falls back to L402-only challenge.
 
 **L402 payment flow (API):**
 1. Client hits gated endpoint without auth -> 402 with `WWW-Authenticate: L402 macaroon="...", invoice="..."`
 2. Client pays Lightning invoice, gets preimage
 3. Client retries with `Authorization: L402 <macaroon>:<preimage>`
 4. Server verifies: SHA256(preimage) == payment_hash in macaroon caveat, then checks macaroon signature
+
+**x402 payment flow (API):**
+1. Client hits gated endpoint without auth -> 402 with `PAYMENT-REQUIRED` header (base64 JSON per x402 v2 spec)
+2. Client pays via USDC on Base, gets payment signature
+3. Client retries with `PAYMENT-SIGNATURE` header (base64 JSON)
+4. Server verifies and settles via facilitator (xpay.sh): POST /verify, then POST /settle
 
 **L402 payment flow (Web):**
 1. Form POST or JS fetch triggers invoice creation -> payment widget HTML returned
@@ -42,13 +56,35 @@ FastAPI application serving an L402 (Lightning-paywalled) service directory. Ser
 
 **Test mode:** `AUTH_ROOT_KEY=test-mode` in `.env` bypasses all payment gates. The `payments_enabled()` function in `config.py` controls this.
 
+**Health monitoring:** `app/health.py` runs a background task that probes all services on an interval (default 6h). Detects L402 and x402 protocols via response headers. Updates service status to `live`, `confirmed`, or `dead`.
+
+
 ## Key Files
 
-- `app/config.py`: All settings, rate limits, input length constants. Change limits here, not in handlers.
+- `app/config.py`: All settings, rate limits, input length constants, x402/health probe config. Change limits here, not in handlers.
+- `app/payment.py`: Unified dual-protocol payment gate (require_payment)
 - `app/l402.py`: Macaroon minting/verification, invoice creation via LNbits API
-- `app/models.py`: SQLAlchemy async models (Service, Category, Rating, ConsumedPayment)
+- `app/x402.py`: x402 protocol: build challenges, parse signatures, facilitator calls
+- `app/health.py`: Background service liveness probing
+- `app/models.py`: SQLAlchemy async models (Service with x402 columns, Category, Rating, ConsumedPayment)
 - `app/utils.py`: Slugification, edit tokens, domain extraction, SSRF protection (`is_public_hostname`)
-- `app/main.py`: App factory, security middleware (CSP, CSRF origin check), category seeding
+- `app/main.py`: App factory, security middleware (CSP, CSRF origin check), category seeding, health monitor lifecycle
+
+## Config Variables
+
+x402 settings (env vars):
+- `X402_FACILITATOR_URL`: facilitator endpoint (default: `https://facilitator.xpay.sh`)
+- `X402_PAY_TO`: USDC wallet address (empty = x402 disabled)
+- `X402_NETWORK`: chain ID (default: `eip155:8453` for Base mainnet)
+- `X402_ASSET`: USDC contract address on Base
+
+USD prices (parallel to sat prices):
+- `AUTH_SUBMIT_PRICE_USD`, `AUTH_REVIEW_PRICE_USD`, `AUTH_BULK_PRICE_USD`, `AUTH_ANALYTICS_PRICE_USD`, `AUTH_REPUTATION_PRICE_USD`
+
+Health probe settings:
+- `HEALTH_PROBE_INTERVAL`: seconds between probe cycles (default: 21600 = 6h)
+- `HEALTH_PROBE_TIMEOUT`: per-service timeout in seconds (default: 15)
+- `HEALTH_PROBE_CONCURRENCY`: max concurrent probes (default: 10)
 
 ## Database
 
@@ -56,15 +92,20 @@ SQLite via aiosqlite async driver. Default path: `db/sr.db`. Models use SQLAlche
 
 Service ratings are denormalized: `avg_rating` and `rating_count` on the Service model are updated on each new Rating insert.
 
+x402 columns (`x402_network`, `x402_asset`, `x402_pay_to`, `pricing_usd`) are nullable on the Service model. Migration in `init_db()` adds them via `ALTER TABLE` if missing.
+
 ## Testing
 
 Tests use async fixtures from `tests/conftest.py`:
 - `client`: AsyncClient with fresh in-memory SQLite DB (function-scoped)
-- `sample_service`: Pre-created service with categories
+- `sample_service`: Pre-created L402 service with categories
+- `sample_x402_service`: Pre-created x402 service with full metadata
 - `sample_service_with_ratings`: Service with 3 ratings
 - `class_client`/`class_db`: Class-scoped variants for shared state across test methods
 
 All tests run with `AUTH_ROOT_KEY=test-mode` (payment gates disabled).
+
+When testing L402 challenge flow with payments enabled, patch `app.payment.create_invoice` for API endpoint tests, or `app.l402.create_invoice` for direct `require_l402()` unit tests.
 
 ## Security Patterns
 
