@@ -1,3 +1,4 @@
+import json
 import math
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -5,7 +6,7 @@ from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 from sqlalchemy import case, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -13,11 +14,12 @@ from sqlalchemy.orm import selectinload
 from app.config import (
     settings, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT, MAX_PRICING_SATS,
+    MAX_X402_NETWORK, MAX_X402_ASSET, MAX_X402_PAY_TO, MAX_PRICING_USD,
     RATE_SUBMIT, RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_REVIEW, RATE_SEARCH_API,
     RATE_LIST_API, RATE_DETAIL_API,
 )
 from app.database import get_db
-from app.l402 import require_l402
+from app.payment import require_payment
 from app.main import limiter
 from app.models import Service, Category, Rating, RouteUsage, service_categories
 from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like
@@ -64,6 +66,10 @@ class ServiceOut(BaseModel):
     protocol: str
     owner_name: str
     logo_url: str
+    x402_network: str | None = None
+    x402_asset: str | None = None
+    x402_pay_to: str | None = None
+    pricing_usd: str | None = None
     avg_rating: float
     rating_count: int
     domain_verified: bool
@@ -91,6 +97,10 @@ class ServiceCreate(BaseModel):
     owner_name: str = Field(default="", max_length=MAX_OWNER_NAME)
     owner_contact: str = Field(default="", max_length=MAX_OWNER_CONTACT)
     logo_url: str = Field(default="", max_length=MAX_LOGO_URL)
+    x402_network: str | None = Field(default=None, max_length=MAX_X402_NETWORK)
+    x402_asset: str | None = Field(default=None, max_length=MAX_X402_ASSET)
+    x402_pay_to: str | None = Field(default=None, max_length=MAX_X402_PAY_TO)
+    pricing_usd: str | None = Field(default=None, max_length=MAX_PRICING_USD)
     category_ids: list[int] = Field(default_factory=lambda: [], description="1–2 category IDs required")
     existing_edit_token: str | None = None
 
@@ -109,6 +119,15 @@ class ServiceCreate(BaseModel):
             raise ValueError("Select 1–2 categories")
         return v
 
+    @model_validator(mode="after")
+    def check_x402_requires_fields(self):
+        if self.protocol == "X402":
+            if not self.x402_pay_to:
+                raise ValueError("x402_pay_to is required when protocol is X402")
+            if not self.x402_network:
+                raise ValueError("x402_network is required when protocol is X402")
+        return self
+
 
 class ServiceCreateOut(ServiceOut):
     edit_token: str | None = None
@@ -124,6 +143,10 @@ class ServiceUpdate(BaseModel):
     owner_name: str | None = None
     owner_contact: str | None = None
     logo_url: str | None = None
+    x402_network: str | None = None
+    x402_asset: str | None = None
+    x402_pay_to: str | None = None
+    pricing_usd: str | None = None
     category_ids: list[int] | None = None
 
     @field_validator("category_ids")
@@ -238,6 +261,10 @@ class ServiceDetail(BaseModel):
     protocol: str
     owner_name: str
     logo_url: str
+    x402_network: str | None = None
+    x402_asset: str | None = None
+    x402_pay_to: str | None = None
+    pricing_usd: str | None = None
     domain_verified: bool
     status: str
     last_probed_at: datetime | None
@@ -625,6 +652,8 @@ async def build_reputation_data(db: AsyncSession, slug: str) -> ReputationRespon
         description=service.description, pricing_sats=service.pricing_sats,
         pricing_model=service.pricing_model, protocol=service.protocol,
         owner_name=service.owner_name, logo_url=service.logo_url,
+        x402_network=service.x402_network, x402_asset=service.x402_asset,
+        x402_pay_to=service.x402_pay_to, pricing_usd=service.pricing_usd,
         domain_verified=service.domain_verified, status=service.status,
         last_probed_at=service.last_probed_at, dead_since=service.dead_since,
         categories=[CategoryOut.model_validate(c) for c in service.categories],
@@ -779,13 +808,27 @@ async def build_reputation_data(db: AsyncSession, slug: str) -> ReputationRespon
 # IMPORTANT: /services/bulk BEFORE /services/{slug}
 @router.get("/services/bulk", response_model=list[ServiceOut])
 async def bulk_export(request: Request, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request, amount_sats=settings.AUTH_BULK_PRICE_SATS, memo="satring.com bulk export")
+    settlement = await require_payment(
+        request=request,
+        amount_sats=settings.AUTH_BULK_PRICE_SATS,
+        price_usd=settings.AUTH_BULK_PRICE_USD,
+        memo="satring.com bulk export",
+        resource_url=f"{settings.BASE_URL}/api/v1/services/bulk",
+        db=db,
+    )
     result = await db.execute(
         select(Service).options(selectinload(Service.categories))
         .where(Service.status != "purged")
         .order_by(Service.id)
     )
-    return [ServiceOut.model_validate(s) for s in result.scalars().all()]
+    data = [ServiceOut.model_validate(s) for s in result.scalars().all()]
+    if settlement:
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            content=[d.model_dump(mode="json") for d in data],
+            headers={"PAYMENT-RESPONSE": json.dumps(settlement)},
+        )
+    return data
 
 
 @router.get("/services", response_model=ServiceListOut)
@@ -822,7 +865,14 @@ async def create_service(request: Request, body: ServiceCreate, background_tasks
             detail=f"A service with this URL already exists: /services/{existing.slug}",
         )
 
-    await require_l402(request=request, amount_sats=settings.AUTH_SUBMIT_PRICE_SATS, memo="satring.com service submission")
+    await require_payment(
+        request=request,
+        amount_sats=settings.AUTH_SUBMIT_PRICE_SATS,
+        price_usd=settings.AUTH_SUBMIT_PRICE_USD,
+        memo="satring.com service submission",
+        resource_url=f"{settings.BASE_URL}/api/v1/services",
+        db=db,
+    )
 
     from app.utils import unique_slug
     slug = await unique_slug(db, body.name)
@@ -875,6 +925,8 @@ async def create_service(request: Request, body: ServiceCreate, background_tasks
             pricing_sats=body.pricing_sats, pricing_model=body.pricing_model,
             protocol=body.protocol, owner_name=body.owner_name,
             owner_contact=body.owner_contact, logo_url=body.logo_url,
+            x402_network=body.x402_network, x402_asset=body.x402_asset,
+            x402_pay_to=body.x402_pay_to, pricing_usd=body.pricing_usd,
             edit_token_hash=edit_token_hash,
             domain_verified=auto_verified,
             domain_challenge=inherited_challenge,
@@ -917,7 +969,7 @@ async def update_service(
     if not service.edit_token_hash or not verify_edit_token(x_edit_token, service.edit_token_hash):
         raise HTTPException(status_code=403, detail="Invalid edit token")
 
-    for field in ("name", "description", "pricing_sats", "pricing_model", "protocol", "owner_name", "owner_contact", "logo_url"):
+    for field in ("name", "description", "pricing_sats", "pricing_model", "protocol", "owner_name", "owner_contact", "logo_url", "x402_network", "x402_asset", "x402_pay_to", "pricing_usd"):
         value = getattr(body, field)
         if value is not None:
             setattr(service, field, value)
@@ -1049,7 +1101,14 @@ async def list_ratings(
 @router.post("/services/{slug}/ratings", response_model=RatingOut, status_code=201)
 @limiter.limit(RATE_REVIEW)
 async def create_rating(request: Request, slug: str, body: RatingCreate, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request, amount_sats=settings.AUTH_REVIEW_PRICE_SATS, memo="satring.com review submission")
+    await require_payment(
+        request=request,
+        amount_sats=settings.AUTH_REVIEW_PRICE_SATS,
+        price_usd=settings.AUTH_REVIEW_PRICE_USD,
+        memo="satring.com review submission",
+        resource_url=f"{settings.BASE_URL}/api/v1/services/{slug}/ratings",
+        db=db,
+    )
     service = await get_service_or_404(db, slug)
     rating = Rating(
         service_id=service.id,
@@ -1075,11 +1134,25 @@ async def create_rating(request: Request, slug: str, body: RatingCreate, db: Asy
 
 @router.get("/analytics")
 async def analytics(request: Request, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request, amount_sats=settings.AUTH_ANALYTICS_PRICE_SATS, memo="satring.com analytics access")
+    await require_payment(
+        request=request,
+        amount_sats=settings.AUTH_ANALYTICS_PRICE_SATS,
+        price_usd=settings.AUTH_ANALYTICS_PRICE_USD,
+        memo="satring.com analytics access",
+        resource_url=f"{settings.BASE_URL}/api/v1/analytics",
+        db=db,
+    )
     return await build_analytics_data(db)
 
 
 @router.get("/services/{slug}/reputation")
 async def reputation(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
-    await require_l402(request=request, amount_sats=settings.AUTH_REPUTATION_PRICE_SATS, memo="satring.com reputation lookup")
+    await require_payment(
+        request=request,
+        amount_sats=settings.AUTH_REPUTATION_PRICE_SATS,
+        price_usd=settings.AUTH_REPUTATION_PRICE_USD,
+        memo="satring.com reputation lookup",
+        resource_url=f"{settings.BASE_URL}/api/v1/services/{slug}/reputation",
+        db=db,
+    )
     return await build_reputation_data(db, slug)

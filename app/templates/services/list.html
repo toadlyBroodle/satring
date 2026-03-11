@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Directory{% endblock %}
-{% block meta_description %}The largest live L402 directory. Browse {{ services|length }}+ Lightning-paywalled services. Filter by category, status, and ratings.{% endblock %}
-{% block og_title %}satring — the largest live L402 directory{% endblock %}
-{% block og_description %}The largest live L402 directory. Browse Lightning-paywalled services, filter by category, status, and ratings.{% endblock %}
-{% block twitter_title %}satring — the largest live L402 directory{% endblock %}
-{% block twitter_description %}The largest live L402 directory. Browse Lightning-paywalled services, filter by category, status, and ratings.{% endblock %}
+{% block meta_description %}L402 + x402 paid API directory. Browse {{ services|length }}+ Lightning and USDC paywalled services. Filter by category, protocol, status, and ratings.{% endblock %}
+{% block og_title %}satring — L402 + x402 paid API directory{% endblock %}
+{% block og_description %}L402 + x402 paid API directory. Browse Lightning and USDC paywalled services, filter by category, protocol, status, and ratings.{% endblock %}
+{% block twitter_title %}satring — L402 + x402 paid API directory{% endblock %}
+{% block twitter_description %}L402 + x402 paid API directory. Browse Lightning and USDC paywalled services, filter by category, protocol, status, and ratings.{% endblock %}
 {% block content %}
 
 <div class="mb-4">
   <div class="text-amber-400 text-sm mb-1">₿ satring --list</div>
-  <h1 class="text-xl">The Largest Live L402 Directory</h1>
-  <p class="text-green-700 text-sm">Discover Lightning-paywalled APIs for your AI agents</p>
+  <h1 class="text-xl">L402 + x402 Paid API Directory</h1>
+  <p class="text-green-700 text-sm">Discover Lightning and USDC paywalled APIs for your AI agents</p>
 </div>
 
 <!-- Query string helpers -->
@@ -51,6 +51,15 @@
   {% set status_tips = {'confirmed': 'L402 paywall detected by probe', 'live': 'Endpoint reachable, no L402 paywall found', 'dead': 'Endpoint unreachable', 'unknown': 'Status could not be determined (e.g. .onion)'} %}
   {% for st in ['confirmed', 'live', 'dead', 'unknown'] %}
   <a href="/?{{ qs_q_amp }}status={{ st }}{{ qs_cat }}{{ qs_sort }}" data-tip="{{ status_tips[st] }}" class="filter-{{ st }} {% if active_status == st %}active{% endif %}"><span class="bracket">[</span>{{ st }}<span class="bracket">]</span></a>
+  {% endfor %}
+</div>
+
+<!-- Protocol Filter -->
+<div class="mb-2 flex flex-wrap gap-1 text-sm">
+  <span style="color: var(--accent)">proto&gt;</span>
+  <a href="/?{{ qs_q_amp }}{{ qs_cat_filter }}{{ qs_sort }}" class="filter-default {% if not active_protocol %}active{% endif %}"><span class="bracket">[</span>all<span class="bracket">]</span></a>
+  {% for p in ['L402', 'X402'] %}
+  <a href="/?{{ qs_q_amp }}{{ ('category=' ~ active_category ~ '&') if active_category else '' }}{{ qs_filter[1:] ~ '&' if qs_filter else '' }}protocol={{ p }}{{ qs_sort }}" class="filter-default {% if active_protocol == p %}active{% endif %}"><span class="bracket">[</span>{{ p }}<span class="bracket">]</span></a>
   {% endfor %}
 </div>
 

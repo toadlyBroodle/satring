@@ -19,6 +19,24 @@ class Settings:
     APP_PORT: int = int(os.getenv("APP_PORT", "8000"))
     BASE_URL: str = os.getenv("BASE_URL", "https://satring.com")
 
+    # x402 settings
+    X402_FACILITATOR_URL: str = os.getenv("X402_FACILITATOR_URL", "https://facilitator.xpay.sh")
+    X402_PAY_TO: str = os.getenv("X402_PAY_TO", "")           # USDC wallet address
+    X402_NETWORK: str = os.getenv("X402_NETWORK", "eip155:8453")  # Base mainnet
+    X402_ASSET: str = os.getenv("X402_ASSET", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")  # USDC on Base
+
+    # USD prices (parallel to sat prices)
+    AUTH_SUBMIT_PRICE_USD: str = os.getenv("AUTH_SUBMIT_PRICE_USD", "0.50")
+    AUTH_REVIEW_PRICE_USD: str = os.getenv("AUTH_REVIEW_PRICE_USD", "0.01")
+    AUTH_BULK_PRICE_USD: str = os.getenv("AUTH_BULK_PRICE_USD", "2.50")
+    AUTH_ANALYTICS_PRICE_USD: str = os.getenv("AUTH_ANALYTICS_PRICE_USD", "0.25")
+    AUTH_REPUTATION_PRICE_USD: str = os.getenv("AUTH_REPUTATION_PRICE_USD", "0.05")
+
+    # Health probe settings
+    HEALTH_PROBE_INTERVAL: int = int(os.getenv("HEALTH_PROBE_INTERVAL", "21600"))  # 6 hours
+    HEALTH_PROBE_TIMEOUT: int = int(os.getenv("HEALTH_PROBE_TIMEOUT", "15"))       # seconds
+    HEALTH_PROBE_CONCURRENCY: int = int(os.getenv("HEALTH_PROBE_CONCURRENCY", "10"))
+
 
 settings = Settings()
 
@@ -27,6 +45,11 @@ def payments_enabled() -> bool:
     """SECURITY: Return True only if AUTH_ROOT_KEY is set to a real key.
     'test-mode' is the only value that explicitly disables payment gates."""
     return bool(settings.AUTH_ROOT_KEY) and settings.AUTH_ROOT_KEY != "test-mode"
+
+
+def x402_enabled() -> bool:
+    """Return True if x402 payments are configured (wallet address set)."""
+    return bool(settings.X402_PAY_TO)
 
 # SECURITY: Input length limits shared across API models, web form handlers,
 # and HTML templates. Change values here — not in individual files.
@@ -39,6 +62,10 @@ MAX_LOGO_URL = 500
 MAX_REVIEWER_NAME = 200
 MAX_COMMENT = 2000
 MAX_PRICING_SATS = 1_000_000
+MAX_X402_NETWORK = 50
+MAX_X402_ASSET = 100
+MAX_X402_PAY_TO = 100
+MAX_PRICING_USD = 20
 
 # SECURITY: Rate limits per IP. Change values here — not in individual files.
 RATE_SUBMIT = "20/hour"
