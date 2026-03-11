@@ -52,3 +52,7 @@ RATE_LIST_API = "6/minute"
 RATE_DETAIL_API = "15/minute"
 RATE_SITEMAP = "3/hour"
 RATE_PAYMENT_STATUS = "30/minute"
+
+# Endpoint usage tracking
+USAGE_FLUSH_INTERVAL = 60       # seconds between DB flushes
+USAGE_RETENTION_DAYS = 90       # auto-purge older data

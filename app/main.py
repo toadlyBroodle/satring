@@ -15,6 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.config import settings
 from app.database import init_db, async_session
 from app.models import Category
+from app.usage import record_hit, start_flush_task, stop_flush_task
 
 # SECURITY: Rate limiter to prevent abuse and DoS. Applied per-endpoint in route files.
 limiter = Limiter(key_func=get_remote_address)
@@ -44,6 +45,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
+        return response
+
+
+class UsageTrackingMiddleware(BaseHTTPMiddleware):
+    """Record endpoint hits for usage analytics. Skips 404 and 5xx responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        if response.status_code == 404 or response.status_code >= 500:
+            return response
+        source = "api" if request.url.path.startswith("/api/") else "web"
+        client_ip = request.client.host if request.client else "unknown"
+        record_hit(request.url.path, request.method, source, client_ip)
         return response
 
 
@@ -107,7 +121,9 @@ async def lifespan(app: FastAPI):
         logger.warning("AUTH_ROOT_KEY is 'test-mode' — payment gates are bypassed.")
     await init_db()
     await seed_categories()
+    start_flush_task()
     yield
+    await stop_flush_task()
 
 
 app = FastAPI(title="satring", description="The largest live L402 directory", lifespan=lifespan, docs_url=None)
@@ -115,6 +131,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(OriginCheckMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(UsageTrackingMiddleware)
 
 
 @app.get("/docs", include_in_schema=False)
