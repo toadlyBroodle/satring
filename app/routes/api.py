@@ -19,7 +19,7 @@ from app.config import (
 from app.database import get_db
 from app.l402 import require_l402
 from app.main import limiter
-from app.models import Service, Category, Rating, service_categories
+from app.models import Service, Category, Rating, EndpointUsage, service_categories
 from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like
 
 router = APIRouter(tags=["API"])
@@ -181,6 +181,35 @@ class GrowthStats(BaseModel):
     newest_service: dict | None
 
 
+class EndpointHitStats(BaseModel):
+    endpoint: str
+    method: str
+    total_hits: int
+    unique_ips: int
+
+
+class UsageTimeBucket(BaseModel):
+    period: str       # ISO hour or date string
+    total_hits: int
+
+
+class SourceHits(BaseModel):
+    total_24h: int
+    total_7d: int
+    total_30d: int
+    unique_ips_24h: int
+    unique_ips_7d: int
+    unique_ips_30d: int
+    top_endpoints_30d: list[EndpointHitStats]
+    hourly_24h: list[UsageTimeBucket]
+    daily_30d: list[UsageTimeBucket]
+
+
+class UsageStats(BaseModel):
+    api: SourceHits
+    web: SourceHits
+
+
 class AnalyticsResponse(BaseModel):
     generated_at: str
     total_services: int
@@ -193,6 +222,7 @@ class AnalyticsResponse(BaseModel):
     top_rated: list[LeaderboardEntry]
     most_reviewed: list[LeaderboardEntry]
     recently_added: list[LeaderboardEntry]
+    usage: UsageStats | None = None
 
 
 # --- Reputation Schemas ---
@@ -455,6 +485,90 @@ async def build_analytics_data(db: AsyncSession) -> AnalyticsResponse:
             rating_count=s.rating_count, pricing_sats=s.pricing_sats,
         )
 
+    # --- Endpoint Usage ---
+    async def _source_hits(source: str) -> SourceHits:
+        now_24h = now - timedelta(hours=24)
+        now_7d = now - timedelta(days=7)
+
+        # Totals and unique IPs by time window
+        def _totals_query(since):
+            return select(
+                func.coalesce(func.sum(EndpointUsage.hit_count), 0),
+                func.coalesce(func.sum(EndpointUsage.unique_ips), 0),
+            ).where(
+                EndpointUsage.source == source,
+                EndpointUsage.hour >= since,
+            )
+
+        row_24h = (await db.execute(_totals_query(now_24h))).one()
+        row_7d = (await db.execute(_totals_query(now_7d))).one()
+        row_30d = (await db.execute(_totals_query(thirty_ago))).one()
+
+        # Top 10 endpoints (30d)
+        top_rows = (await db.execute(
+            select(
+                EndpointUsage.endpoint,
+                EndpointUsage.method,
+                func.sum(EndpointUsage.hit_count).label("total"),
+                func.sum(EndpointUsage.unique_ips).label("ips"),
+            )
+            .where(EndpointUsage.source == source)
+            .where(EndpointUsage.hour >= thirty_ago)
+            .group_by(EndpointUsage.endpoint, EndpointUsage.method)
+            .order_by(func.sum(EndpointUsage.hit_count).desc())
+            .limit(10)
+        )).all()
+
+        # Hourly hits (24h)
+        hourly_rows = (await db.execute(
+            select(
+                EndpointUsage.hour,
+                func.sum(EndpointUsage.hit_count).label("total"),
+            )
+            .where(EndpointUsage.source == source)
+            .where(EndpointUsage.hour >= now_24h)
+            .group_by(EndpointUsage.hour)
+            .order_by(EndpointUsage.hour)
+        )).all()
+
+        # Daily hits (30d) using SQLite date()
+        daily_rows = (await db.execute(
+            select(
+                func.date(EndpointUsage.hour).label("day"),
+                func.sum(EndpointUsage.hit_count).label("total"),
+            )
+            .where(EndpointUsage.source == source)
+            .where(EndpointUsage.hour >= thirty_ago)
+            .group_by(func.date(EndpointUsage.hour))
+            .order_by(func.date(EndpointUsage.hour))
+        )).all()
+
+        return SourceHits(
+            total_24h=int(row_24h[0]),
+            total_7d=int(row_7d[0]),
+            total_30d=int(row_30d[0]),
+            unique_ips_24h=int(row_24h[1]),
+            unique_ips_7d=int(row_7d[1]),
+            unique_ips_30d=int(row_30d[1]),
+            top_endpoints_30d=[
+                EndpointHitStats(endpoint=r[0], method=r[1], total_hits=int(r[2]), unique_ips=int(r[3]))
+                for r in top_rows
+            ],
+            hourly_24h=[
+                UsageTimeBucket(period=r[0].isoformat() if hasattr(r[0], 'isoformat') else str(r[0]), total_hits=int(r[1]))
+                for r in hourly_rows
+            ],
+            daily_30d=[
+                UsageTimeBucket(period=str(r[0]), total_hits=int(r[1]))
+                for r in daily_rows
+            ],
+        )
+
+    usage_stats = UsageStats(
+        api=await _source_hits("api"),
+        web=await _source_hits("web"),
+    )
+
     return AnalyticsResponse(
         generated_at=now.isoformat(),
         total_services=total_services,
@@ -496,6 +610,7 @@ async def build_analytics_data(db: AsyncSession) -> AnalyticsResponse:
         top_rated=[_lb(s) for s in top_rated_rows],
         most_reviewed=[_lb(s) for s in most_reviewed_rows],
         recently_added=[_lb(s) for s in recently_added_rows],
+        usage=usage_stats,
     )
 
 

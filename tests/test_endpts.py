@@ -235,7 +235,7 @@ class TestAnalyticsResponse:
         assert set(data.keys()) == {
             "generated_at", "total_services", "total_ratings", "total_categories",
             "health", "pricing", "categories", "growth",
-            "top_rated", "most_reviewed", "recently_added",
+            "top_rated", "most_reviewed", "recently_added", "usage",
         }
         # health
         assert set(data["health"].keys()) == {
