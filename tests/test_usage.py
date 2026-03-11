@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from app.config import settings
 from app.database import Base, get_db
 from app.main import app, limiter, SEED_CATEGORIES
-from app.models import EndpointUsage, Category
-from app.usage import record_hit, flush, _buffer, _ip_sets, _normalize_path
+from app.models import RouteUsage, Category, UsageDetail
+from app.usage import record_hit, record_details, flush, _buffer, _ip_sets, _detail_buffer, _detail_ip_sets, _normalize_path
 
 settings.AUTH_ROOT_KEY = "test-mode"
 
@@ -58,12 +58,16 @@ async def usage_client(usage_db):
 
 @pytest_asyncio.fixture(autouse=True)
 async def clear_buffer():
-    """Ensure buffer and IP sets are clean before each test."""
+    """Ensure all buffers and IP sets are clean before each test."""
     _buffer.clear()
     _ip_sets.clear()
+    _detail_buffer.clear()
+    _detail_ip_sets.clear()
     yield
     _buffer.clear()
     _ip_sets.clear()
+    _detail_buffer.clear()
+    _detail_ip_sets.clear()
 
 
 @pytest.mark.anyio
@@ -82,17 +86,17 @@ async def test_record_hit_and_flush(usage_db, monkeypatch):
     await flush()
 
     async with test_session_factory() as check_db:
-        rows = (await check_db.execute(select(EndpointUsage))).scalars().all()
+        rows = (await check_db.execute(select(RouteUsage))).scalars().all()
         assert len(rows) == 2
 
         api_row = next(r for r in rows if r.source == "api")
-        assert api_row.endpoint == "/api/v1/services"
+        assert api_row.route == "/api/v1/services"
         assert api_row.method == "GET"
         assert api_row.hit_count == 2
         assert api_row.unique_ips == 1
 
         web_row = next(r for r in rows if r.source == "web")
-        assert web_row.endpoint == "/"
+        assert web_row.route == "/"
         assert web_row.hit_count == 1
         assert web_row.unique_ips == 1
 
@@ -127,7 +131,7 @@ async def test_aggregation(usage_db, monkeypatch):
 
     async with test_session_factory() as check_db:
         rows = (await check_db.execute(
-            select(EndpointUsage).where(EndpointUsage.endpoint == "/api/v1/search")
+            select(RouteUsage).where(RouteUsage.route == "/api/v1/search")
         )).scalars().all()
         assert len(rows) == 1
         assert rows[0].hit_count == 3
@@ -153,7 +157,7 @@ async def test_unique_ips_dedup(usage_db, monkeypatch):
 
     async with test_session_factory() as check_db:
         row = (await check_db.execute(
-            select(EndpointUsage).where(EndpointUsage.endpoint == "/")
+            select(RouteUsage).where(RouteUsage.route == "/")
         )).scalars().first()
         assert row.hit_count == 11
         assert row.unique_ips == 2
@@ -173,7 +177,7 @@ async def test_analytics_includes_usage(usage_client: AsyncClient):
         assert "unique_ips_24h" in data["usage"][src]
         assert "unique_ips_7d" in data["usage"][src]
         assert "unique_ips_30d" in data["usage"][src]
-        assert "top_endpoints_30d" in data["usage"][src]
+        assert "top_routes_30d" in data["usage"][src]
         assert "hourly_24h" in data["usage"][src]
         assert "daily_30d" in data["usage"][src]
 
@@ -245,3 +249,89 @@ async def test_successful_request_tracked(usage_client: AsyncClient):
     """Successful requests should be recorded."""
     await usage_client.get("/")
     assert len(_buffer) > 0
+
+
+@pytest.mark.anyio
+async def test_record_details_search_query():
+    """Search queries are captured in the detail buffer."""
+    record_details("/search", {"q": "Lightning API"}, "1.1.1.1")
+    record_details("/api/v1/search", {"q": "Lightning API"}, "2.2.2.2")
+
+    query_keys = [k for k in _detail_buffer if k[0] == "query"]
+    assert len(query_keys) == 1
+    assert query_keys[0][1] == "lightning api"
+    assert _detail_buffer[query_keys[0]] == 2
+    assert len(_detail_ip_sets[query_keys[0]]) == 2
+
+
+@pytest.mark.anyio
+async def test_record_details_category():
+    """Category filters are captured in the detail buffer."""
+    record_details("/", {"category": "tools"}, "1.1.1.1")
+    record_details("/api/v1/services", {"category": "tools"}, "1.1.1.1")
+
+    cat_keys = [k for k in _detail_buffer if k[0] == "category"]
+    assert len(cat_keys) == 1
+    assert cat_keys[0][1] == "tools"
+    assert _detail_buffer[cat_keys[0]] == 2
+
+
+@pytest.mark.anyio
+async def test_record_details_slug():
+    """Service slug views are captured in the detail buffer."""
+    record_details("/services/satsapi", {}, "1.1.1.1")
+    record_details("/api/v1/services/satsapi", {}, "2.2.2.2")
+    record_details("/services/other-service", {}, "1.1.1.1")
+
+    slug_keys = [k for k in _detail_buffer if k[0] == "slug"]
+    assert len(slug_keys) == 2
+    satsapi_key = next(k for k in slug_keys if k[1] == "satsapi")
+    assert _detail_buffer[satsapi_key] == 2
+
+
+@pytest.mark.anyio
+async def test_record_details_skips_bulk():
+    """The /services/bulk path should not record 'bulk' as a slug."""
+    record_details("/api/v1/services/bulk", {}, "1.1.1.1")
+    slug_keys = [k for k in _detail_buffer if k[0] == "slug"]
+    assert len(slug_keys) == 0
+
+
+@pytest.mark.anyio
+async def test_record_details_empty_params():
+    """No details recorded when query params are absent."""
+    record_details("/", {}, "1.1.1.1")
+    assert len(_detail_buffer) == 0
+
+
+@pytest.mark.anyio
+async def test_detail_flush(usage_db, monkeypatch):
+    """Detail buffer flushes to UsageDetail table."""
+    from app import usage as usage_mod
+
+    engine, session = usage_db
+    test_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    monkeypatch.setattr(usage_mod, "async_session", test_session_factory)
+
+    # Need at least one endpoint hit so flush doesn't short-circuit
+    record_hit("/", "GET", "web", "1.1.1.1")
+    record_details("/search", {"q": "bitcoin"}, "1.1.1.1")
+    record_details("/search", {"q": "bitcoin"}, "2.2.2.2")
+    record_details("/", {"category": "data"}, "1.1.1.1")
+
+    await flush()
+
+    async with test_session_factory() as check_db:
+        rows = (await check_db.execute(
+            select(UsageDetail)
+        )).scalars().all()
+        assert len(rows) == 2
+
+        query_row = next(r for r in rows if r.dimension == "query")
+        assert query_row.value == "bitcoin"
+        assert query_row.hit_count == 2
+        assert query_row.unique_ips == 2
+
+        cat_row = next(r for r in rows if r.dimension == "category")
+        assert cat_row.value == "data"
+        assert cat_row.hit_count == 1

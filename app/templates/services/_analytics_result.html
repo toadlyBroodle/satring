@@ -86,7 +86,7 @@
     </div>
   </div>
 
-  <!-- Endpoint Usage -->
+  <!-- Route Usage -->
   {% if data.usage %}
   {% for label, src in [("api", data.usage.api), ("web", data.usage.web)] %}
   <div class="border border-green-800 mb-4 text-sm">
@@ -95,22 +95,22 @@
       <div><span class="text-green-700">24h:</span> <span class="text-amber-400">{{ src.total_24h }}</span> hits / <span class="text-cyan-400">{{ src.unique_ips_24h }}</span> IPs</div>
       <div><span class="text-green-700">7d:</span> <span class="text-amber-400">{{ src.total_7d }}</span> hits / <span class="text-cyan-400">{{ src.unique_ips_7d }}</span> IPs</div>
       <div><span class="text-green-700">30d:</span> <span class="text-amber-400">{{ src.total_30d }}</span> hits / <span class="text-cyan-400">{{ src.unique_ips_30d }}</span> IPs</div>
-      {% if src.top_endpoints_30d %}
-      <div class="pt-1"><span class="text-green-700">top endpoints (30d):</span></div>
+      {% if src.top_routes_30d %}
+      <div class="pt-1"><span class="text-green-700">top routes (30d):</span></div>
       <div class="overflow-x-auto">
         <table class="w-full text-xs">
           <thead>
             <tr class="text-green-700">
-              <th class="text-left px-2 py-1">endpoint</th>
+              <th class="text-left px-2 py-1">route</th>
               <th class="text-left px-2 py-1">method</th>
               <th class="text-right px-2 py-1">hits</th>
               <th class="text-right px-2 py-1">IPs</th>
             </tr>
           </thead>
           <tbody>
-            {% for e in src.top_endpoints_30d %}
+            {% for e in src.top_routes_30d %}
             <tr class="border-t border-green-900">
-              <td class="px-2 py-1 text-amber-400">{{ e.endpoint }}</td>
+              <td class="px-2 py-1 text-amber-400">{{ e.route }}</td>
               <td class="px-2 py-1">{{ e.method }}</td>
               <td class="text-right px-2 py-1">{{ e.total_hits }}</td>
               <td class="text-right px-2 py-1 text-cyan-400">{{ e.unique_ips }}</td>

@@ -15,7 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.config import settings
 from app.database import init_db, async_session
 from app.models import Category
-from app.usage import record_hit, start_flush_task, stop_flush_task
+from app.usage import record_hit, record_details, start_flush_task, stop_flush_task
 
 # SECURITY: Rate limiter to prevent abuse and DoS. Applied per-endpoint in route files.
 limiter = Limiter(key_func=get_remote_address)
@@ -58,6 +58,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         source = "api" if request.url.path.startswith("/api/") else "web"
         client_ip = request.client.host if request.client else "unknown"
         record_hit(request.url.path, request.method, source, client_ip)
+        record_details(request.url.path, dict(request.query_params), client_ip)
         return response
 
 

@@ -64,13 +64,24 @@ class ConsumedPayment(Base):
     consumed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
-class EndpointUsage(Base):
-    __tablename__ = "endpoint_usage"
+class RouteUsage(Base):
+    __tablename__ = "route_usage"
 
     id = Column(Integer, primary_key=True)
-    endpoint = Column(String(200), nullable=False, index=True)
+    route = Column(String(200), nullable=False, index=True)
     method = Column(String(10), nullable=False)
     source = Column(String(10), nullable=False, index=True)  # "api" or "web"
+    hour = Column(DateTime, nullable=False, index=True)
+    hit_count = Column(Integer, default=0)
+    unique_ips = Column(Integer, default=0)
+
+
+class UsageDetail(Base):
+    __tablename__ = "usage_detail"
+
+    id = Column(Integer, primary_key=True)
+    dimension = Column(String(20), nullable=False, index=True)  # "query", "category", "slug"
+    value = Column(String(200), nullable=False)
     hour = Column(DateTime, nullable=False, index=True)
     hit_count = Column(Integer, default=0)
     unique_ips = Column(Integer, default=0)
