@@ -54,6 +54,7 @@ async def create_invoice(amount_sats: int, memo: str = "satring.com L402") -> di
 
 
 def mint_macaroon(payment_hash: str) -> str:
+    payment_hash = payment_hash.lower()
     mac = Macaroon(
         location="satring",
         identifier=payment_hash,
@@ -71,7 +72,10 @@ def verify_l402(macaroon_b64: str, preimage_hex: str) -> bool:
         return False
 
     # Verify preimage: SHA256(preimage) must equal the payment_hash in the caveat
-    preimage_bytes = bytes.fromhex(preimage_hex)
+    try:
+        preimage_bytes = bytes.fromhex(preimage_hex)
+    except ValueError:
+        return False
     expected_hash = hashlib.sha256(preimage_bytes).hexdigest()
 
     payment_hash = None
@@ -83,7 +87,7 @@ def verify_l402(macaroon_b64: str, preimage_hex: str) -> bool:
             payment_hash = cid.split("= ", 1)[1]
             break
 
-    if not payment_hash or expected_hash != payment_hash:
+    if not payment_hash or expected_hash != payment_hash.lower():
         return False
 
     # Verify macaroon signature
@@ -117,7 +121,23 @@ async def require_l402(
         macaroon_b64, preimage_hex = token.split(":", 1)
         if verify_l402(macaroon_b64, preimage_hex):
             return
-        raise HTTPException(status_code=401, detail="Invalid L402 credentials")
+        # Return 402 with a fresh challenge instead of a dead-end 401, so the client
+        # can retry without an extra round-trip. This helps L402 clients that
+        # accidentally pair a preimage with the wrong macaroon after multiple attempts.
+        price = amount_sats if amount_sats is not None else settings.AUTH_PRICE_SATS
+        inv_memo = memo or "satring.com premium API access"
+        invoice_data = await create_invoice(price, inv_memo)
+        fresh_mac = mint_macaroon(invoice_data["payment_hash"])
+        raise HTTPException(
+            status_code=402,
+            detail="Invalid L402 credentials. Ensure the macaroon and preimage are from the same invoice.",
+            headers={
+                "WWW-Authenticate": (
+                    f'L402 macaroon="{fresh_mac}", '
+                    f'invoice="{invoice_data["payment_request"]}"'
+                )
+            },
+        )
 
     # No auth header — issue a 402 challenge
     price = amount_sats if amount_sats is not None else settings.AUTH_PRICE_SATS

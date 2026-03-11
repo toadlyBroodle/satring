@@ -42,6 +42,30 @@ class TestMintAndVerify:
         corrupted = mac_b64[:-2] + ("A" if mac_b64[-2] != "A" else "B") + mac_b64[-1]
         assert verify_l402(corrupted, preimage.hex()) is False
 
+    def test_uppercase_payment_hash_roundtrip(self):
+        """LNbits may return payment_hash in uppercase; verification must still pass."""
+        preimage = b"uppercase-hash-preimage"
+        preimage_hex = preimage.hex()
+        payment_hash = hashlib.sha256(preimage).hexdigest().upper()
+
+        mac_b64 = mint_macaroon(payment_hash)
+        assert verify_l402(mac_b64, preimage_hex) is True
+
+    def test_mixed_case_payment_hash_roundtrip(self):
+        preimage = b"mixed-case-preimage"
+        preimage_hex = preimage.hex()
+        payment_hash = hashlib.sha256(preimage).hexdigest()
+        # Alternate upper/lower chars
+        mixed = "".join(c.upper() if i % 2 else c for i, c in enumerate(payment_hash))
+
+        mac_b64 = mint_macaroon(mixed)
+        assert verify_l402(mac_b64, preimage_hex) is True
+
+    def test_invalid_preimage_hex_returns_false(self):
+        """Invalid hex preimage should return False, not raise an exception."""
+        mac_b64 = mint_macaroon("a" * 64)
+        assert verify_l402(mac_b64, "not-valid-hex!") is False
+
 
 # --- require_l402 dependency ---
 
@@ -124,13 +148,19 @@ class TestRequireL402:
             assert result is None
 
     @pytest.mark.asyncio
-    async def test_invalid_l402_token_raises_401(self):
+    async def test_invalid_l402_token_raises_402_with_fresh_challenge(self):
         from fastapi import HTTPException
         from starlette.requests import Request
 
         with patch("app.l402.payments_enabled", return_value=True), \
-             patch("app.l402.settings") as mock_settings:
+             patch("app.l402.settings") as mock_settings, \
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_invoice:
             mock_settings.AUTH_ROOT_KEY = "real-key"
+            mock_settings.AUTH_PRICE_SATS = 100
+            mock_invoice.return_value = {
+                "payment_hash": "abcd1234" * 8,
+                "payment_request": "lnbc100n1fake",
+            }
 
             scope = {
                 "type": "http",
@@ -144,7 +174,9 @@ class TestRequireL402:
 
             with pytest.raises(HTTPException) as exc_info:
                 await require_l402(request=request)
-            assert exc_info.value.status_code == 401
+            assert exc_info.value.status_code == 402
+            assert "Invalid L402 credentials" in exc_info.value.detail
+            assert "WWW-Authenticate" in exc_info.value.headers
 
     @pytest.mark.asyncio
     async def test_missing_colon_in_token_raises_401(self):
