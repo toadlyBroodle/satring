@@ -183,7 +183,6 @@ class GrowthStats(BaseModel):
 
 class RouteHitStats(BaseModel):
     route: str
-    method: str
     total_hits: int
     unique_ips: int
 
@@ -508,13 +507,12 @@ async def build_analytics_data(db: AsyncSession) -> AnalyticsResponse:
         top_rows = (await db.execute(
             select(
                 RouteUsage.route,
-                RouteUsage.method,
                 func.sum(RouteUsage.hit_count).label("total"),
                 func.sum(RouteUsage.unique_ips).label("ips"),
             )
             .where(RouteUsage.source == source)
             .where(RouteUsage.hour >= thirty_ago)
-            .group_by(RouteUsage.route, RouteUsage.method)
+            .group_by(RouteUsage.route)
             .order_by(func.sum(RouteUsage.hit_count).desc())
             .limit(10)
         )).all()
@@ -551,7 +549,7 @@ async def build_analytics_data(db: AsyncSession) -> AnalyticsResponse:
             unique_ips_7d=int(row_7d[1]),
             unique_ips_30d=int(row_30d[1]),
             top_routes_30d=[
-                RouteHitStats(route=r[0], method=r[1], total_hits=int(r[2]), unique_ips=int(r[3]))
+                RouteHitStats(route=r[0], total_hits=int(r[1]), unique_ips=int(r[2]))
                 for r in top_rows
             ],
             hourly_24h=[

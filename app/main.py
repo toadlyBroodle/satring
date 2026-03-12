@@ -57,7 +57,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             return response
         source = "api" if request.url.path.startswith("/api/") else "web"
         client_ip = request.client.host if request.client else "unknown"
-        record_hit(request.url.path, request.method, source, client_ip)
+        record_hit(request.url.path, source, client_ip)
         record_details(request.url.path, dict(request.query_params), client_ip)
         return response
 
