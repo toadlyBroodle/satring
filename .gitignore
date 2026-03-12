@@ -10,3 +10,5 @@ app/.well-known/*
 !app/.well-known/.gitkeep
 logs/*
 !logs/.gitkeep
+
+.playwright-mcp/

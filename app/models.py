@@ -69,7 +69,6 @@ class RouteUsage(Base):
 
     id = Column(Integer, primary_key=True)
     route = Column(String(200), nullable=False, index=True)
-    method = Column(String(10), nullable=False)
     source = Column(String(10), nullable=False, index=True)  # "api" or "web"
     hour = Column(DateTime, nullable=False, index=True)
     hit_count = Column(Integer, default=0)

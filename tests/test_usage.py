@@ -10,7 +10,7 @@ from app.config import settings
 from app.database import Base, get_db
 from app.main import app, limiter, SEED_CATEGORIES
 from app.models import RouteUsage, Category, UsageDetail
-from app.usage import record_hit, record_details, flush, _buffer, _ip_sets, _detail_buffer, _detail_ip_sets, _normalize_path
+from app.usage import record_hit, record_details, flush, _buffer, _ip_sets, _detail_buffer, _detail_ip_sets, _normalize_path  # noqa: E501
 
 settings.AUTH_ROOT_KEY = "test-mode"
 
@@ -79,9 +79,9 @@ async def test_record_hit_and_flush(usage_db, monkeypatch):
     test_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     monkeypatch.setattr(usage_mod, "async_session", test_session_factory)
 
-    record_hit("/api/v1/services", "GET", "api", "1.2.3.4")
-    record_hit("/api/v1/services", "GET", "api", "1.2.3.4")
-    record_hit("/", "GET", "web", "5.6.7.8")
+    record_hit("/api/v1/services", "api", "1.2.3.4")
+    record_hit("/api/v1/services", "api", "1.2.3.4")
+    record_hit("/", "web", "5.6.7.8")
 
     await flush()
 
@@ -91,7 +91,6 @@ async def test_record_hit_and_flush(usage_db, monkeypatch):
 
         api_row = next(r for r in rows if r.source == "api")
         assert api_row.route == "/api/v1/services"
-        assert api_row.method == "GET"
         assert api_row.hit_count == 2
         assert api_row.unique_ips == 1
 
@@ -104,11 +103,11 @@ async def test_record_hit_and_flush(usage_db, monkeypatch):
 @pytest.mark.anyio
 async def test_exclude_static():
     """Static and excluded paths should not be recorded."""
-    record_hit("/static/css/theme.css", "GET", "web", "1.1.1.1")
-    record_hit("/.well-known/satring-verify", "GET", "web", "1.1.1.1")
-    record_hit("/favicon.ico", "GET", "web", "1.1.1.1")
-    record_hit("/openapi.json", "GET", "web", "1.1.1.1")
-    record_hit("/docs", "GET", "web", "1.1.1.1")
+    record_hit("/static/css/theme.css", "web", "1.1.1.1")
+    record_hit("/.well-known/satring-verify", "web", "1.1.1.1")
+    record_hit("/favicon.ico", "web", "1.1.1.1")
+    record_hit("/openapi.json", "web", "1.1.1.1")
+    record_hit("/docs", "web", "1.1.1.1")
 
     assert len(_buffer) == 0
 
@@ -122,11 +121,11 @@ async def test_aggregation(usage_db, monkeypatch):
     test_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     monkeypatch.setattr(usage_mod, "async_session", test_session_factory)
 
-    record_hit("/api/v1/search", "GET", "api", "10.0.0.1")
-    record_hit("/api/v1/search", "GET", "api", "10.0.0.2")
+    record_hit("/api/v1/search", "api", "10.0.0.1")
+    record_hit("/api/v1/search", "api", "10.0.0.2")
     await flush()
 
-    record_hit("/api/v1/search", "GET", "api", "10.0.0.1")
+    record_hit("/api/v1/search", "api", "10.0.0.1")
     await flush()
 
     async with test_session_factory() as check_db:
@@ -150,8 +149,8 @@ async def test_unique_ips_dedup(usage_db, monkeypatch):
     monkeypatch.setattr(usage_mod, "async_session", test_session_factory)
 
     for _ in range(10):
-        record_hit("/", "GET", "web", "9.9.9.9")
-    record_hit("/", "GET", "web", "8.8.8.8")
+        record_hit("/", "web", "9.9.9.9")
+    record_hit("/", "web", "8.8.8.8")
 
     await flush()
 
@@ -209,12 +208,12 @@ async def test_path_normalization():
 @pytest.mark.anyio
 async def test_normalized_hits_aggregate():
     """Hits to different slugs should aggregate under the same normalized key."""
-    record_hit("/services/alpha", "GET", "web", "1.1.1.1")
-    record_hit("/services/beta", "GET", "web", "2.2.2.2")
-    record_hit("/services/gamma", "GET", "web", "1.1.1.1")
+    record_hit("/services/alpha", "web", "1.1.1.1")
+    record_hit("/services/beta", "web", "2.2.2.2")
+    record_hit("/services/gamma", "web", "1.1.1.1")
 
     # All three should map to the same buffer key
-    web_keys = [k for k in _buffer if k[0] == "/services/{slug}" and k[2] == "web"]
+    web_keys = [k for k in _buffer if k[0] == "/services/{slug}" and k[1] == "web"]
     assert len(web_keys) == 1
     assert _buffer[web_keys[0]] == 3
 
@@ -231,7 +230,7 @@ async def test_buffer_cap():
     usage_mod.MAX_BUFFER_KEYS = 5
     try:
         for i in range(20):
-            record_hit(f"/test-path-{i}", "GET", "web", "1.1.1.1")
+            record_hit(f"/test-path-{i}", "web", "1.1.1.1")
         assert len(_buffer) == 5
     finally:
         usage_mod.MAX_BUFFER_KEYS = original_max
@@ -313,8 +312,8 @@ async def test_detail_flush(usage_db, monkeypatch):
     test_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     monkeypatch.setattr(usage_mod, "async_session", test_session_factory)
 
-    # Need at least one endpoint hit so flush doesn't short-circuit
-    record_hit("/", "GET", "web", "1.1.1.1")
+    # Need at least one route hit so flush doesn't short-circuit
+    record_hit("/", "web", "1.1.1.1")
     record_details("/search", {"q": "bitcoin"}, "1.1.1.1")
     record_details("/search", {"q": "bitcoin"}, "2.2.2.2")
     record_details("/", {"category": "data"}, "1.1.1.1")
