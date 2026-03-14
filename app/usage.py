@@ -12,10 +12,10 @@ from app.models import RouteUsage, UsageDetail
 
 logger = logging.getLogger("satring.usage")
 
-# In-memory buffer: {(route, method, source, hour_iso): count}
-_buffer: dict[tuple[str, str, str, str], int] = defaultdict(int)
+# In-memory buffer: {(route, source, hour_iso): count}
+_buffer: dict[tuple[str, str, str], int] = defaultdict(int)
 # IP sets persist across flushes within the same hour for accurate unique counts
-_ip_sets: dict[tuple[str, str, str, str], set[str]] = defaultdict(set)
+_ip_sets: dict[tuple[str, str, str], set[str]] = defaultdict(set)
 
 # Detail buffer: {(dimension, value, hour_iso): count}
 _detail_buffer: dict[tuple[str, str, str], int] = defaultdict(int)
@@ -27,7 +27,7 @@ EXCLUDED_PREFIXES = ("/static/", "/.well-known/", "/favicon", "/openapi.json", "
 
 # Max distinct keys allowed in the buffer between flushes (safety cap)
 MAX_BUFFER_KEYS = 10_000
-# Max unique IPs tracked per (route, method, source, hour) bucket.
+# Max unique IPs tracked per (route, source, hour) bucket.
 # Once reached, hit_count still increments but new IPs are not stored.
 MAX_IPS_PER_BUCKET = 50_000
 
@@ -56,7 +56,7 @@ def _normalize_path(path: str) -> str:
     return path
 
 
-def record_hit(route: str, method: str, source: str, client_ip: str) -> None:
+def record_hit(route: str, source: str, client_ip: str) -> None:
     """Record a single hit. Called from middleware (non-async, sync-safe)."""
     for prefix in EXCLUDED_PREFIXES:
         if route.startswith(prefix):
@@ -67,7 +67,7 @@ def record_hit(route: str, method: str, source: str, client_ip: str) -> None:
     # Safety: cap buffer size to prevent memory exhaustion from novel paths
     hour = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0, tzinfo=None)
     hour_key = hour.isoformat()
-    key = (route, method, source, hour_key)
+    key = (route, source, hour_key)
     if key not in _buffer and len(_buffer) >= MAX_BUFFER_KEYS:
         return
     _buffer[key] += 1
@@ -135,19 +135,18 @@ async def flush() -> None:
         ip_counts = {k: len(v) for k, v in _ip_sets.items()}
         detail_ip_counts = {k: len(v) for k, v in _detail_ip_sets.items()}
         # Evict IP sets for past hours (no longer needed)
-        for sets_dict, hour_idx in [(_ip_sets, 3), (_detail_ip_sets, 2)]:
+        for sets_dict, hour_idx in [(_ip_sets, 2), (_detail_ip_sets, 2)]:
             stale = [k for k in sets_dict if k[hour_idx] != current_hour]
             for k in stale:
                 del sets_dict[k]
 
     async with async_session() as db:
-        for (route, method, source, hour_key), count in snapshot.items():
+        for (route, source, hour_key), count in snapshot.items():
             hour = datetime.fromisoformat(hour_key)
-            unique = ip_counts.get((route, method, source, hour_key), 0)
+            unique = ip_counts.get((route, source, hour_key), 0)
             result = await db.execute(
                 select(RouteUsage).where(
                     RouteUsage.route == route,
-                    RouteUsage.method == method,
                     RouteUsage.source == source,
                     RouteUsage.hour == hour,
                 )
@@ -161,7 +160,7 @@ async def flush() -> None:
                 row.unique_ips = unique
             else:
                 db.add(RouteUsage(
-                    route=route, method=method, source=source,
+                    route=route, source=source,
                     hour=hour, hit_count=count, unique_ips=unique,
                 ))
 
