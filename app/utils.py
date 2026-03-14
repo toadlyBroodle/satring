@@ -157,6 +157,10 @@ async def overwrite_purged_service(
     category_ids: list[int] | None = None,
     domain_verified: bool = False,
     domain_challenge: str | None = None,
+    x402_network: str | None = None,
+    x402_asset: str | None = None,
+    x402_pay_to: str | None = None,
+    pricing_usd: str | None = None,
 ) -> None:
     """Overwrite a purged service's fields for re-submission. Preserves ratings."""
     service.name = name
@@ -168,6 +172,10 @@ async def overwrite_purged_service(
     service.owner_name = owner_name
     service.owner_contact = owner_contact
     service.logo_url = logo_url
+    service.x402_network = x402_network
+    service.x402_asset = x402_asset
+    service.x402_pay_to = x402_pay_to
+    service.pricing_usd = pricing_usd
     service.status = status
     service.dead_since = None
     service.last_probed_at = None

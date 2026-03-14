@@ -20,12 +20,17 @@ class TestBuildPaymentRequired:
     def test_payload_fields(self):
         result = build_payment_required("1.00", "https://example.com/resource", "Premium access")
         decoded = json.loads(base64.b64decode(result))
+        # v2: resource/description at top level, not inside accepts
+        assert decoded["resource"] == "https://example.com/resource"
+        assert decoded["description"] == "Premium access"
+        assert decoded["mimeType"] == "application/json"
         accept = decoded["accepts"][0]
         assert accept["scheme"] == "exact"
-        assert accept["maxAmountRequired"] == "1.00"
-        assert accept["resource"] == "https://example.com/resource"
-        assert accept["description"] == "Premium access"
+        assert accept["amount"] == "1000000"  # $1.00 = 1,000,000 USDC base units
+        assert "resource" not in accept
+        assert "description" not in accept
         assert accept["maxTimeoutSeconds"] == 300
+        assert accept["extra"]["name"] == "USDC"
 
 
 class TestParsePaymentSignature:
