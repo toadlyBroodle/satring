@@ -36,6 +36,34 @@ class TestListServices:
         assert data["total"] == 0
 
     @pytest.mark.asyncio
+    async def test_protocol_filter(self, client: AsyncClient, sample_service: Service, sample_x402_service: Service):
+        resp = await client.get("/api/v1/services?protocol=L402")
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["services"][0]["protocol"] == "L402"
+
+        resp = await client.get("/api/v1/services?protocol=X402")
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["services"][0]["protocol"] == "X402"
+
+    @pytest.mark.asyncio
+    async def test_status_filter(self, client: AsyncClient, sample_service: Service):
+        resp = await client.get("/api/v1/services?status=unverified")
+        data = resp.json()
+        assert data["total"] == 1
+
+        resp = await client.get("/api/v1/services?status=live")
+        data = resp.json()
+        assert data["total"] == 0
+
+    @pytest.mark.asyncio
+    async def test_invalid_filter_ignored(self, client: AsyncClient, sample_service: Service):
+        resp = await client.get("/api/v1/services?protocol=INVALID&status=bogus")
+        data = resp.json()
+        assert data["total"] == 1
+
+    @pytest.mark.asyncio
     async def test_pagination(self, client: AsyncClient, sample_service: Service):
         resp = await client.get("/api/v1/services?page=1&page_size=1")
         data = resp.json()
