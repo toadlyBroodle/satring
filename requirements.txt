@@ -10,3 +10,4 @@ slowapi
 python-multipart
 pytest
 pytest-asyncio
+matplotlib
