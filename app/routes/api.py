@@ -644,7 +644,8 @@ async def build_reputation_data(db: AsyncSession, slug: str) -> ReputationRespon
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # --- Service detail ---
-    age_days = (now - service.created_at).days if service.created_at else 0
+    created = service.created_at.replace(tzinfo=None) if service.created_at else now
+    age_days = (now - created).days
     service_detail = ServiceDetail(
         name=service.name, slug=service.slug, url=service.url,
         description=service.description, pricing_sats=service.pricing_sats,
