@@ -30,7 +30,7 @@ class TestBuildPaymentRequired:
         assert "resource" not in accept
         assert "description" not in accept
         assert accept["maxTimeoutSeconds"] == 300
-        assert accept["extra"]["name"] == "USDC"
+        assert accept["extra"]["name"] == "USD Coin"
 
 
 class TestParsePaymentSignature:

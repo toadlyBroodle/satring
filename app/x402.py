@@ -39,7 +39,7 @@ def _build_requirements_object(price_usd: str) -> dict:
         "payTo": settings.X402_PAY_TO,
         "maxTimeoutSeconds": 300,
         "extra": {
-            "name": "USDC",
+            "name": "USD Coin",
             "version": "2",
         },
     }
