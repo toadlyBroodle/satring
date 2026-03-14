@@ -141,7 +141,7 @@ async def verify_and_settle_x402(
 
         if not settle_data.get("success"):
             reason = settle_data.get("errorReason", "unknown")
-            logger.error(f"x402 settle rejected: {reason}")
+            logger.error(f"x402 settle rejected: {reason} | full response: {settle_data}")
             raise HTTPException(status_code=402, detail=f"x402 settlement rejected: {reason}")
 
         tx_hash = settle_data.get("transaction", "")
