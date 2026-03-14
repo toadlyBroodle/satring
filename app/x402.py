@@ -45,15 +45,16 @@ def _build_requirements_object(price_usd: str) -> dict:
     }
 
 
-def build_payment_required(price_usd: str, resource_url: str, description: str) -> str:
+def build_payment_required(price_usd: str, description: str) -> str:
     """Build base64-encoded PaymentRequired JSON per x402 v2 spec.
 
     Returns the value for the PAYMENT-REQUIRED response header.
     In v2, resource/description live at the top level, not inside accepts entries.
+    Uses a generic resource URL to avoid leaking endpoint paths to the facilitator.
     """
     payload = {
         "x402Version": 2,
-        "resource": resource_url,
+        "resource": "https://satring.com/api",
         "description": description,
         "mimeType": "application/json",
         "accepts": [_build_requirements_object(price_usd)],
@@ -154,7 +155,6 @@ async def verify_and_settle_x402(
 async def require_x402(
     request: Request,
     price_usd: str,
-    resource_url: str,
     description: str,
 ) -> dict | None:
     """Check for PAYMENT-SIGNATURE header. If absent, raise 402 with PAYMENT-REQUIRED.
@@ -165,7 +165,7 @@ async def require_x402(
 
     if not sig_header:
         # No payment: issue x402 challenge
-        payment_required = build_payment_required(price_usd, resource_url, description)
+        payment_required = build_payment_required(price_usd, description)
         raise HTTPException(
             status_code=402,
             detail="Payment Required (x402)",

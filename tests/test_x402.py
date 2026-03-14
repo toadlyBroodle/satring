@@ -12,16 +12,16 @@ from app.x402 import build_payment_required, parse_payment_signature, verify_and
 
 class TestBuildPaymentRequired:
     def test_returns_base64_json(self):
-        result = build_payment_required("0.50", "https://satring.com/api/v1/services", "test")
+        result = build_payment_required("0.50", "test")
         decoded = json.loads(base64.b64decode(result))
         assert decoded["x402Version"] == 2
         assert len(decoded["accepts"]) == 1
 
     def test_payload_fields(self):
-        result = build_payment_required("1.00", "https://example.com/resource", "Premium access")
+        result = build_payment_required("1.00", "Premium access")
         decoded = json.loads(base64.b64decode(result))
-        # v2: resource/description at top level, not inside accepts
-        assert decoded["resource"] == "https://example.com/resource"
+        # v2: generic resource URL to avoid leaking endpoint paths to facilitator
+        assert decoded["resource"] == "https://satring.com/api"
         assert decoded["description"] == "Premium access"
         assert decoded["mimeType"] == "application/json"
         accept = decoded["accepts"][0]
