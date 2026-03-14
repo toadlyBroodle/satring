@@ -12,3 +12,4 @@ logs/*
 !logs/.gitkeep
 
 .playwright-mcp/
+.creds
