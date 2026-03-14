@@ -915,6 +915,8 @@ async def create_service(request: Request, body: ServiceCreate, background_tasks
             category_ids=body.category_ids,
             domain_verified=auto_verified,
             domain_challenge=inherited_challenge,
+            x402_network=body.x402_network, x402_asset=body.x402_asset,
+            x402_pay_to=body.x402_pay_to, pricing_usd=body.pricing_usd,
         )
         service = purged
     else:

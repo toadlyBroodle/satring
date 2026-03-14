@@ -16,17 +16,32 @@ from app.config import settings
 logger = logging.getLogger("satring.x402")
 
 
-def _build_requirements_object(price_usd: str, resource_url: str, description: str) -> dict:
-    """Build a single PaymentRequirements dict (the decoded JSON, not base64)."""
+def _usd_to_usdc_units(price_usd: str) -> str:
+    """Convert a USD price string (e.g. '0.50') to USDC base units (6 decimals).
+
+    '0.50' -> '500000', '0.01' -> '10000', '2.50' -> '2500000'
+    """
+    from decimal import Decimal
+    return str(int(Decimal(price_usd) * 10**6))
+
+
+def _build_requirements_object(price_usd: str) -> dict:
+    """Build a single PaymentRequirements dict per x402 v2 spec.
+
+    In v2, requirements contain only payment parameters (no resource/description).
+    Amount is in USDC base units (6 decimals).
+    """
     return {
         "scheme": "exact",
         "network": settings.X402_NETWORK,
         "asset": settings.X402_ASSET,
-        "maxAmountRequired": price_usd,
-        "resource": resource_url,
-        "description": description,
+        "amount": _usd_to_usdc_units(price_usd),
         "payTo": settings.X402_PAY_TO,
         "maxTimeoutSeconds": 300,
+        "extra": {
+            "name": "USDC",
+            "version": "2",
+        },
     }
 
 
@@ -34,10 +49,14 @@ def build_payment_required(price_usd: str, resource_url: str, description: str) 
     """Build base64-encoded PaymentRequired JSON per x402 v2 spec.
 
     Returns the value for the PAYMENT-REQUIRED response header.
+    In v2, resource/description live at the top level, not inside accepts entries.
     """
     payload = {
         "x402Version": 2,
-        "accepts": [_build_requirements_object(price_usd, resource_url, description)],
+        "resource": resource_url,
+        "description": description,
+        "mimeType": "application/json",
+        "accepts": [_build_requirements_object(price_usd)],
     }
     return base64.b64encode(json.dumps(payload).encode()).decode()
 
@@ -158,6 +177,6 @@ async def require_x402(
     if not payload:
         raise HTTPException(status_code=400, detail="Invalid PAYMENT-SIGNATURE header encoding")
 
-    requirements = _build_requirements_object(price_usd, resource_url, description)
+    requirements = _build_requirements_object(price_usd)
     result = await verify_and_settle_x402(payload, requirements)
     return result
