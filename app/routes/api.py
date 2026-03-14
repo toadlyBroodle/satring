@@ -834,6 +834,8 @@ async def bulk_export(request: Request, db: AsyncSession = Depends(get_db)):
 async def list_services(
     request: Request,
     category: str | None = None,
+    status: str | None = None,
+    protocol: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=20),
     db: AsyncSession = Depends(get_db),
@@ -841,6 +843,10 @@ async def list_services(
     query = select(Service).where(Service.status != "purged").order_by(Service.created_at.desc())
     if category:
         query = query.join(service_categories).join(Category).where(Category.slug == category)
+    if status and status in ("unverified", "confirmed", "live", "dead"):
+        query = query.where(Service.status == status)
+    if protocol and protocol in ("L402", "X402"):
+        query = query.where(Service.protocol == protocol)
     return await paginated_services(db, query, page, page_size)
 
 
@@ -1068,6 +1074,8 @@ async def api_recover_verify(request: Request, slug: str, db: AsyncSession = Dep
 async def search_services(
     request: Request,
     q: str = "",
+    status: str | None = None,
+    protocol: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -1077,6 +1085,10 @@ async def search_services(
         # SECURITY: escape LIKE wildcards so user input is matched literally
         pattern = f"%{escape_like(q.strip())}%"
         query = query.where(Service.name.ilike(pattern, escape="\\") | Service.description.ilike(pattern, escape="\\"))
+    if status and status in ("unverified", "confirmed", "live", "dead"):
+        query = query.where(Service.status == status)
+    if protocol and protocol in ("L402", "X402"):
+        query = query.where(Service.protocol == protocol)
     return await paginated_services(db, query, page, page_size)
 
 
