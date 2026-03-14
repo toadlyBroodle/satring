@@ -812,7 +812,6 @@ async def bulk_export(request: Request, db: AsyncSession = Depends(get_db)):
         amount_sats=settings.AUTH_BULK_PRICE_SATS,
         price_usd=settings.AUTH_BULK_PRICE_USD,
         memo="satring.com bulk export",
-        resource_url=f"{settings.BASE_URL}/api/v1/services/bulk",
         db=db,
     )
     result = await db.execute(
@@ -875,7 +874,6 @@ async def create_service(request: Request, body: ServiceCreate, background_tasks
         amount_sats=settings.AUTH_SUBMIT_PRICE_SATS,
         price_usd=settings.AUTH_SUBMIT_PRICE_USD,
         memo="satring.com service submission",
-        resource_url=f"{settings.BASE_URL}/api/v1/services",
         db=db,
     )
 
@@ -1119,7 +1117,6 @@ async def create_rating(request: Request, slug: str, body: RatingCreate, db: Asy
         amount_sats=settings.AUTH_REVIEW_PRICE_SATS,
         price_usd=settings.AUTH_REVIEW_PRICE_USD,
         memo="satring.com review submission",
-        resource_url=f"{settings.BASE_URL}/api/v1/services/{slug}/ratings",
         db=db,
     )
     service = await get_service_or_404(db, slug)
@@ -1152,7 +1149,6 @@ async def analytics(request: Request, db: AsyncSession = Depends(get_db)):
         amount_sats=settings.AUTH_ANALYTICS_PRICE_SATS,
         price_usd=settings.AUTH_ANALYTICS_PRICE_USD,
         memo="satring.com analytics access",
-        resource_url=f"{settings.BASE_URL}/api/v1/analytics",
         db=db,
     )
     return await build_analytics_data(db)
@@ -1165,7 +1161,6 @@ async def reputation(request: Request, slug: str, db: AsyncSession = Depends(get
         amount_sats=settings.AUTH_REPUTATION_PRICE_SATS,
         price_usd=settings.AUTH_REPUTATION_PRICE_USD,
         memo="satring.com reputation lookup",
-        resource_url=f"{settings.BASE_URL}/api/v1/services/{slug}/reputation",
         db=db,
     )
     return await build_reputation_data(db, slug)

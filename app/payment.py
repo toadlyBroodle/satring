@@ -23,7 +23,6 @@ async def require_payment(
     amount_sats: int,
     price_usd: str,
     memo: str,
-    resource_url: str,
     db: AsyncSession | None = None,
 ) -> dict | None:
     """Unified payment gate supporting both L402 and x402 protocols.
@@ -51,7 +50,6 @@ async def require_payment(
         settlement = await require_x402(
             request=request,
             price_usd=price_usd,
-            resource_url=resource_url,
             description=memo,
         )
 
@@ -86,7 +84,7 @@ async def require_payment(
 
     # Add x402 challenge if configured
     if x402_enabled():
-        x402_challenge = build_payment_required(price_usd, resource_url, memo)
+        x402_challenge = build_payment_required(price_usd, memo)
         headers["PAYMENT-REQUIRED"] = x402_challenge
 
     raise HTTPException(
