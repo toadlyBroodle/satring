@@ -1,0 +1,15 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      satring_api_url:
+        type: string
+        default: "https://satring.com/api/v1"
+        description: "Base URL for the satring API"
+  commandFunction:
+    |-
+    (config) => ({
+      command: "satring-mcp",
+      env: config.satring_api_url ? { SATRING_API_URL: config.satring_api_url } : {}
+    })
