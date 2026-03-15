@@ -66,26 +66,12 @@
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">status</td><td class="px-3 py-1.5">{% if service.domain_verified %}<span class="text-cyan-400">[domain verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% elif service.status == 'unknown' %}text-gray-400{% else %}text-green-700{% endif %}">{{ service.status }}</span>{% endif %}</td></tr>
       {% if service.owner_name %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">provider</td><td class="px-3 py-1.5">{{ service.owner_name }}</td></tr>{% endif %}
       {% if service.owner_contact %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">contact</td><td class="px-3 py-1.5">{{ service.owner_contact }}</td></tr>{% endif %}
+      {% set r_val = ("%.1f/5"|format(service.avg_rating)) if service.avg_rating else "n/a" %}
+      {% set r_count = "(" ~ service.rating_count|string ~ " review" ~ ("s" if service.rating_count != 1 else "") ~ ")" %}
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">rating</td><td class="px-3 py-1.5"><span class="text-amber-400">{{ r_val }}</span> {{ r_count }}</td></tr>
       <tr><td class="text-green-700 px-3 py-1.5">listed</td><td class="px-3 py-1.5">{{ service.created_at.strftime('%Y-%m-%d') }}</td></tr>
     </tbody>
   </table>
-</div>
-
-<!-- Stats Box -->
-{% set r_val = ("%.1f/5"|format(service.avg_rating)) if service.avg_rating else "—" %}
-{% set r_count = "(" ~ service.rating_count|string ~ " review" ~ ("s" if service.rating_count != 1 else "") ~ ")" %}
-{% set s_val = service.status if service.status != 'unverified' else '' %}
-<div class="border border-green-800 mb-6 text-sm">
-  <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ stats ─</div>
-  <div class="px-3 py-2 space-y-0.5">
-    <div><span class="text-green-700">rating:</span> <span class="text-amber-400">{{ r_val }}</span>  {{ r_count }}</div>
-    <div><span class="text-green-700">price:</span>  <span class="text-amber-400">{{ service.pricing_sats }} sats</span> / {{ service.pricing_model }}</div>
-    <div><span class="text-green-700">proto:</span>  {{ service.protocol }}</div>
-    <div><span class="text-green-700">status:</span> {% if service.domain_verified %}<span class="text-cyan-400">[verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% elif service.status == 'unknown' %}text-gray-400{% else %}text-green-700{% endif %}">{{ s_val }}</span>{% endif %}</div>
-    <div><span class="text-green-700">uptime:</span> {% if service.total_checks and service.total_checks > 0 %}{% set uptime = (service.successful_checks / service.total_checks * 100) | round(1) %}<span class="{% if uptime >= 95 %}text-green-400{% elif uptime >= 80 %}text-amber-400{% else %}text-red-500{% endif %}">{{ uptime }}%</span>  <span class="text-green-700">({{ service.successful_checks }}/{{ service.total_checks }} checks)</span>{% else %}<span class="text-green-700">pending</span>{% endif %}</div>
-    <div><span class="text-green-700">latency:</span> {% if service.avg_latency_ms is not none %}<span class="text-amber-400">{{ service.avg_latency_ms | round | int }}ms</span>  <span class="text-green-700">(7d avg)</span>{% else %}<span class="text-green-700">pending</span>{% endif %}</div>
-    <div><span class="text-green-700">last:</span>    {% if service.last_probed_at %}<span class="text-green-400">{{ service.last_probed_at.strftime('%Y-%m-%d %H:%M') }}</span>{% else %}<span class="text-green-700">never</span>{% endif %}</div>
-  </div>
 </div>
 
 <!-- Reputation Report -->
