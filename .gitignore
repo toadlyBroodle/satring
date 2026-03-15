@@ -20,3 +20,6 @@ dist/
 
 # MCP registry auth tokens
 .mcpregistry_*
+
+# Glama local test Dockerfile
+mcp/Dockerfile
