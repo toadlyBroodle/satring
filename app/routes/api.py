@@ -919,7 +919,17 @@ async def get_service(request: Request, slug: str, db: AsyncSession = Depends(ge
 
 @router.post("/services", response_model=ServiceCreateOut, status_code=201)
 @limiter.limit(RATE_SUBMIT)
-async def create_service(request: Request, body: ServiceCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def create_service(request: Request, body: ServiceCreate = None, background_tasks: BackgroundTasks = None, db: AsyncSession = Depends(get_db)):
+    # If no body and no payment headers, return 402 challenge (for x402 discovery probes)
+    if body is None:
+        await require_payment(
+            request=request,
+            amount_sats=settings.AUTH_SUBMIT_PRICE_SATS,
+            price_usd=settings.AUTH_SUBMIT_PRICE_USD,
+            memo="satring.com service submission",
+            db=db,
+        )
+        raise HTTPException(status_code=422, detail="Request body required")
     url_str = normalize_url(str(body.url))
 
     # Reject duplicate URLs BEFORE payment gate so clients don't pay for a rejected submission
@@ -1172,7 +1182,17 @@ async def list_ratings(
 
 @router.post("/services/{slug}/ratings", response_model=RatingOut, status_code=201)
 @limiter.limit(RATE_REVIEW)
-async def create_rating(request: Request, slug: str, body: RatingCreate, db: AsyncSession = Depends(get_db)):
+async def create_rating(request: Request, slug: str, body: RatingCreate = None, db: AsyncSession = Depends(get_db)):
+    # If no body and no payment headers, return 402 challenge (for x402 discovery probes)
+    if body is None:
+        await require_payment(
+            request=request,
+            amount_sats=settings.AUTH_REVIEW_PRICE_SATS,
+            price_usd=settings.AUTH_REVIEW_PRICE_USD,
+            memo="satring.com review submission",
+            db=db,
+        )
+        raise HTTPException(status_code=422, detail="Request body required")
     await require_payment(
         request=request,
         amount_sats=settings.AUTH_REVIEW_PRICE_SATS,
