@@ -1,0 +1,49 @@
+<div class="border border-green-800 p-4 mt-4">
+  <div class="text-amber-400 text-sm mb-3">₿ satring health --report {{ data.service.slug }}</div>
+  <div class="text-green-700 text-xs mb-4">generated {{ data.generated_at }}</div>
+
+  <!-- Health Metrics -->
+  <div class="border border-green-800 mb-4 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ health metrics ─</div>
+    <div class="px-3 py-2 space-y-1">
+      <div><span class="text-green-700">status:</span> <span class="{% if data.service.status == 'live' %}text-green-400{% elif data.service.status == 'confirmed' %}text-amber-400{% elif data.service.status == 'dead' %}text-red-500{% else %}text-green-700{% endif %}">{{ data.service.status }}</span></div>
+      <div><span class="text-green-700">uptime:</span> {% if data.health.uptime_pct is not none %}<span class="{% if data.health.uptime_pct >= 95 %}text-green-400{% elif data.health.uptime_pct >= 80 %}text-amber-400{% else %}text-red-500{% endif %}">{{ data.health.uptime_pct }}%</span>{% else %}<span class="text-green-700">pending</span>{% endif %}</div>
+      <div><span class="text-green-700">latency:</span> {% if data.health.avg_latency_ms is not none %}<span class="text-amber-400">{{ data.health.avg_latency_ms | round | int }}ms</span> <span class="text-green-700">(7d avg)</span>{% else %}<span class="text-green-700">pending</span>{% endif %}</div>
+      <div><span class="text-green-700">checks:</span> <span class="text-amber-400">{{ data.health.successful_checks }}/{{ data.health.total_checks }}</span> successful</div>
+      <div><span class="text-green-700">last probed:</span> {% if data.health.last_probed_at %}<span class="text-green-400">{{ data.health.last_probed_at }}</span>{% else %}<span class="text-green-700">never</span>{% endif %}</div>
+    </div>
+  </div>
+
+  <!-- Probe History -->
+  {% if data.probe_history %}
+  <div class="border border-green-800 text-sm">
+    <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ probe history (last {{ data.probe_history | length }}) ─</div>
+    <div class="px-3 py-2">
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-green-700">
+              <th class="text-left px-2 py-1">time</th>
+              <th class="text-left px-2 py-1">status</th>
+              <th class="text-right px-2 py-1">latency</th>
+              <th class="text-right px-2 py-1">code</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in data.probe_history %}
+            <tr class="border-t border-green-900">
+              <td class="px-2 py-1 text-green-400">{{ p.probed_at or '—' }}</td>
+              <td class="px-2 py-1"><span class="{% if p.status == 'live' %}text-green-400{% elif p.status == 'confirmed' %}text-amber-400{% elif p.status == 'dead' %}text-red-500{% else %}text-green-700{% endif %}">{{ p.status }}</span></td>
+              <td class="text-right px-2 py-1 text-amber-400">{% if p.response_time_ms is not none %}{{ p.response_time_ms | round | int }}ms{% else %}—{% endif %}</td>
+              <td class="text-right px-2 py-1">{{ p.status_code or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="text-green-700 text-sm">No probe history available yet.</div>
+  {% endif %}
+</div>

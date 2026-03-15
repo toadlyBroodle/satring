@@ -82,12 +82,20 @@
     <div><span class="text-green-700">price:</span>  <span class="text-amber-400">{{ service.pricing_sats }} sats</span> / {{ service.pricing_model }}</div>
     <div><span class="text-green-700">proto:</span>  {{ service.protocol }}</div>
     <div><span class="text-green-700">status:</span> {% if service.domain_verified %}<span class="text-cyan-400">[verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% elif service.status == 'unknown' %}text-gray-400{% else %}text-green-700{% endif %}">{{ s_val }}</span>{% endif %}</div>
+    <div><span class="text-green-700">uptime:</span> {% if service.total_checks and service.total_checks > 0 %}{% set uptime = (service.successful_checks / service.total_checks * 100) | round(1) %}<span class="{% if uptime >= 95 %}text-green-400{% elif uptime >= 80 %}text-amber-400{% else %}text-red-500{% endif %}">{{ uptime }}%</span>  <span class="text-green-700">({{ service.successful_checks }}/{{ service.total_checks }} checks)</span>{% else %}<span class="text-green-700">pending</span>{% endif %}</div>
+    <div><span class="text-green-700">latency:</span> {% if service.avg_latency_ms is not none %}<span class="text-amber-400">{{ service.avg_latency_ms | round | int }}ms</span>  <span class="text-green-700">(7d avg)</span>{% else %}<span class="text-green-700">pending</span>{% endif %}</div>
+    <div><span class="text-green-700">last:</span>    {% if service.last_probed_at %}<span class="text-green-400">{{ service.last_probed_at.strftime('%Y-%m-%d %H:%M') }}</span>{% else %}<span class="text-green-700">never</span>{% endif %}</div>
   </div>
 </div>
 
 <!-- Reputation Report -->
 <div id="reputation-area" class="mb-6">
   <button onclick="loadReport('/services/{{ service.slug }}/reputation-invoice', 'reputation-area')" class="btn-action px-4 py-1 text-sm"><span class="font-bold">[</span>VIEW REPUTATION REPORT ({{ reputation_price_sats }} sats)<span class="font-bold">]</span></button>
+</div>
+
+<!-- Health Report -->
+<div id="analytics-area" class="mb-6">
+  <button onclick="loadReport('/services/{{ service.slug }}/analytics-invoice', 'analytics-area')" class="btn-action px-4 py-1 text-sm"><span class="font-bold">[</span>VIEW HEALTH REPORT ({{ analytics_price_sats }} sats)<span class="font-bold">]</span></button>
 </div>
 <script>
 function loadReport(url, targetId) {

@@ -20,7 +20,7 @@ from app.database import get_db
 from app.l402 import create_invoice, check_payment_status, check_and_consume_payment
 from app.main import templates, limiter
 from app.models import Service, Category, Rating, service_categories
-from app.routes.api import build_reputation_data, build_analytics_data
+from app.routes.api import build_reputation_data, build_analytics_data, build_service_analytics
 from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like
 
 router = APIRouter(include_in_schema=False)
@@ -178,6 +178,7 @@ async def service_detail(request: Request, slug: str, db: AsyncSession = Depends
     return templates.TemplateResponse(request, "services/detail.html", {
         "service": service,
         "reputation_price_sats": settings.AUTH_REPUTATION_PRICE_SATS,
+        "analytics_price_sats": settings.AUTH_SERVICE_ANALYTICS_PRICE_SATS,
     })
 
 
@@ -799,6 +800,45 @@ async def reputation_result(request: Request, slug: str, payment_hash: str = "",
 
     data = await build_reputation_data(db, slug)
     return templates.TemplateResponse(request, "services/_reputation_result.html", {"data": data})
+
+
+@router.get("/services/{slug}/analytics-invoice", response_class=HTMLResponse)
+async def service_analytics_invoice(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
+    # Verify service exists
+    result = await db.execute(
+        select(Service).where(Service.slug == slug).where(Service.status != "purged")
+    )
+    if not result.scalars().first():
+        return HTMLResponse("Not Found", status_code=404)
+
+    if not payments_enabled():
+        data = await build_service_analytics(db, slug)
+        return templates.TemplateResponse(request, "services/_service_analytics_result.html", {"data": data})
+
+    invoice = await create_invoice(
+        settings.AUTH_SERVICE_ANALYTICS_PRICE_SATS, "satring.com service health report"
+    )
+    return templates.TemplateResponse(request, "services/_paid_report_widget.html", {
+        "payment_hash": invoice["payment_hash"],
+        "payment_request": invoice["payment_request"],
+        "amount_sats": settings.AUTH_SERVICE_ANALYTICS_PRICE_SATS,
+        "result_url": f"/services/{slug}/analytics-result",
+        "target_id": "analytics-area",
+        "label": "health report",
+    })
+
+
+@router.get("/services/{slug}/analytics-result", response_class=HTMLResponse)
+async def service_analytics_result(request: Request, slug: str, payment_hash: str = "", db: AsyncSession = Depends(get_db)):
+    if payments_enabled():
+        if not payment_hash:
+            return HTMLResponse("Payment required", status_code=402)
+        paid = await check_payment_status(payment_hash)
+        if not paid or not await check_and_consume_payment(payment_hash, db):
+            return HTMLResponse("Payment not verified or already used.", status_code=402)
+
+    data = await build_service_analytics(db, slug)
+    return templates.TemplateResponse(request, "services/_service_analytics_result.html", {"data": data})
 
 
 @router.get("/analytics-invoice", response_class=HTMLResponse)

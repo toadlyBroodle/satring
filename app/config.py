@@ -15,6 +15,7 @@ class Settings:
     AUTH_BULK_PRICE_SATS: int = int(os.getenv("AUTH_BULK_PRICE_SATS", "5000"))
     AUTH_ANALYTICS_PRICE_SATS: int = int(os.getenv("AUTH_ANALYTICS_PRICE_SATS", "500"))
     AUTH_REPUTATION_PRICE_SATS: int = int(os.getenv("AUTH_REPUTATION_PRICE_SATS", "100"))
+    AUTH_SERVICE_ANALYTICS_PRICE_SATS: int = int(os.getenv("AUTH_SERVICE_ANALYTICS_PRICE_SATS", "50"))
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     APP_PORT: int = int(os.getenv("APP_PORT", "8000"))
     BASE_URL: str = os.getenv("BASE_URL", "https://satring.com")
@@ -31,6 +32,7 @@ class Settings:
     AUTH_BULK_PRICE_USD: str = os.getenv("AUTH_BULK_PRICE_USD", "2.50")
     AUTH_ANALYTICS_PRICE_USD: str = os.getenv("AUTH_ANALYTICS_PRICE_USD", "0.25")
     AUTH_REPUTATION_PRICE_USD: str = os.getenv("AUTH_REPUTATION_PRICE_USD", "0.05")
+    AUTH_SERVICE_ANALYTICS_PRICE_USD: str = os.getenv("AUTH_SERVICE_ANALYTICS_PRICE_USD", "0.025")
 
     # Health probe settings
     HEALTH_PROBE_INTERVAL: int = int(os.getenv("HEALTH_PROBE_INTERVAL", "21600"))  # 6 hours

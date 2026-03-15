@@ -21,7 +21,7 @@ from app.config import (
 from app.database import get_db
 from app.payment import require_payment
 from app.main import limiter
-from app.models import Service, Category, Rating, RouteUsage, service_categories
+from app.models import Service, Category, Rating, RouteUsage, ProbeHistory, service_categories
 from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like
 
 router = APIRouter(tags=["API"])
@@ -802,6 +802,67 @@ async def build_reputation_data(db: AsyncSession, slug: str) -> ReputationRespon
     )
 
 
+# --- Service Analytics Schema ---
+
+
+class ServiceAnalyticsResponse(BaseModel):
+    generated_at: str
+    service: dict
+    health: dict
+    probe_history: list
+    pricing: dict
+
+
+async def build_service_analytics(db: AsyncSession, slug: str) -> ServiceAnalyticsResponse:
+    service = await get_service_or_404(db, slug)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    total = service.total_checks or 0
+    successful = service.successful_checks or 0
+    uptime_pct = round((successful / total) * 100, 2) if total > 0 else None
+
+    # Last 20 probe history entries
+    history_result = await db.execute(
+        select(ProbeHistory)
+        .where(ProbeHistory.service_id == service.id)
+        .order_by(ProbeHistory.probed_at.desc())
+        .limit(20)
+    )
+    history_rows = history_result.scalars().all()
+
+    return ServiceAnalyticsResponse(
+        generated_at=now.isoformat(),
+        service={
+            "slug": service.slug,
+            "name": service.name,
+            "url": service.url,
+            "protocol": service.protocol,
+            "status": service.status,
+        },
+        health={
+            "uptime_pct": uptime_pct,
+            "avg_latency_ms": service.avg_latency_ms,
+            "total_checks": total,
+            "successful_checks": successful,
+            "last_probed_at": service.last_probed_at.isoformat() if service.last_probed_at else None,
+        },
+        probe_history=[
+            {
+                "probed_at": h.probed_at.isoformat() if h.probed_at else None,
+                "status": h.status,
+                "response_time_ms": h.response_time_ms,
+                "status_code": h.status_code,
+            }
+            for h in history_rows
+        ],
+        pricing={
+            "pricing_sats": service.pricing_sats,
+            "pricing_usd": service.pricing_usd,
+            "pricing_model": service.pricing_model,
+        },
+    )
+
+
 # --- Free Endpoints ---
 
 # IMPORTANT: /services/bulk BEFORE /services/{slug}
@@ -1164,3 +1225,15 @@ async def reputation(request: Request, slug: str, db: AsyncSession = Depends(get
         db=db,
     )
     return await build_reputation_data(db, slug)
+
+
+@router.get("/services/{slug}/analytics")
+async def service_analytics(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
+    await require_payment(
+        request=request,
+        amount_sats=settings.AUTH_SERVICE_ANALYTICS_PRICE_SATS,
+        price_usd=settings.AUTH_SERVICE_ANALYTICS_PRICE_USD,
+        memo="satring.com service health analytics",
+        db=db,
+    )
+    return await build_service_analytics(db, slug)
