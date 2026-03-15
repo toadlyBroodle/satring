@@ -13,3 +13,7 @@ logs/*
 
 .playwright-mcp/
 .creds
+
+# Python build artifacts
+dist/
+*.egg-info/

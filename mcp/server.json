@@ -1,0 +1,15 @@
+{
+  "$schema": "https://registry.modelcontextprotocol.io/schemas/server.json",
+  "name": "io.github.toadlybroodle/satring-mcp",
+  "description": "Discover L402 and x402 paid API services from the best curated directory at satring.com. Search, compare, and rank services by price, rating, or composite score.",
+  "repository": {
+    "url": "https://github.com/toadlyBroodle/satring",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registry_name": "pypi",
+      "name": "satring-mcp"
+    }
+  ]
+}
