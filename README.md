@@ -180,6 +180,32 @@ Environment variables (see `.env`):
 | `AUTH_SERVICE_ANALYTICS_PRICE_USD` | `0.025` | x402 cost for per-service health analytics |
 | `AUTH_REPUTATION_PRICE_USD` | `0.05` | x402 cost for reputation lookup |
 
+## MCP Server
+
+The `satring-mcp` package lets AI agents discover and compare services from the directory programmatically via the [Model Context Protocol](https://modelcontextprotocol.io/).
+
+```bash
+pipx install satring-mcp
+# or
+pip install satring-mcp
+```
+
+Then add to your Claude Desktop `claude_desktop_config.json` or Claude Code `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "satring": {
+      "command": "satring-mcp"
+    }
+  }
+}
+```
+
+Tools: `discover_services`, `list_services`, `get_service`, `get_ratings`, `list_categories`, `compare_services`, `find_best_service`. See [`mcp/README.md`](mcp/README.md) for full docs.
+
+[![PyPI](https://img.shields.io/pypi/v/satring-mcp)](https://pypi.org/project/satring-mcp/)
+
 ## Tech Stack
 
 - **FastAPI** + **Jinja2** + **HTMX**: server-rendered with progressive enhancement

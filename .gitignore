@@ -17,3 +17,6 @@ logs/*
 # Python build artifacts
 dist/
 *.egg-info/
+
+# MCP registry auth tokens
+.mcpregistry_*
