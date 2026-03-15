@@ -45,6 +45,64 @@ def _build_requirements_object(price_usd: str) -> dict:
     }
 
 
+def _build_bazaar_info(method: str) -> dict:
+    """Build bazaar extension info block. GET uses queryParams, POST uses body."""
+    if method in ("POST", "PUT", "PATCH"):
+        return {
+            "input": {
+                "type": "http",
+                "method": method,
+                "bodyType": "json",
+                "body": {},
+            },
+            "output": {"type": "json"},
+        }
+    return {
+        "input": {
+            "type": "http",
+            "method": method,
+            "queryParams": {},
+        },
+        "output": {"type": "json"},
+    }
+
+
+def _build_bazaar_schema(method: str) -> dict:
+    """Build JSON Schema for bazaar info. Validator requires body or queryParams."""
+    if method in ("POST", "PUT", "PATCH"):
+        input_props = {
+            "type": {"type": "string", "const": "http"},
+            "method": {"type": "string"},
+            "bodyType": {"type": "string"},
+            "body": {"type": "object"},
+        }
+    else:
+        input_props = {
+            "type": {"type": "string", "const": "http"},
+            "method": {"type": "string"},
+            "queryParams": {"type": "object"},
+        }
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "required": ["input", "output"],
+        "properties": {
+            "input": {
+                "type": "object",
+                "required": ["type", "method"],
+                "properties": input_props,
+            },
+            "output": {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                    "type": {"type": "string", "const": "json"},
+                },
+            },
+        },
+    }
+
+
 def build_payment_required(
     price_usd: str,
     description: str,
@@ -67,34 +125,8 @@ def build_payment_required(
         "accepts": [_build_requirements_object(price_usd)],
         "extensions": {
             "bazaar": {
-                "info": {
-                    "input": {
-                        "type": "http",
-                        "method": method,
-                    },
-                    "output": {
-                        "type": "json",
-                    },
-                },
-                "schema": {
-                    "$schema": "https://json-schema.org/draft/2020-12/schema",
-                    "type": "object",
-                    "properties": {
-                        "input": {
-                            "type": "object",
-                            "properties": {
-                                "type": {"type": "string"},
-                                "method": {"type": "string"},
-                            },
-                        },
-                        "output": {
-                            "type": "object",
-                            "properties": {
-                                "type": {"type": "string"},
-                            },
-                        },
-                    },
-                },
+                "info": _build_bazaar_info(method),
+                "schema": _build_bazaar_schema(method),
             },
         },
     }
