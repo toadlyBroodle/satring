@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ service.name }}{% endblock %}
-{% block meta_description %}{{ service.name }} — {{ service.description[:160] if service.description else 'A paid API service on satring' }}{% endblock %}
+{% block meta_description %}{{ service.name }} — {{ service.description[:160] if service.description else 'A paid API listed on satring, the best curated L402 + x402 directory' }}{% endblock %}
 {% block og_title %}{{ service.name }} — satring{% endblock %}
-{% block og_description %}{{ service.description[:200] if service.description else 'Paid API service listed on satring' }}{% endblock %}
+{% block og_description %}{{ service.description[:200] if service.description else 'Paid API listed on satring, the best curated L402 + x402 directory' }}{% endblock %}
 {% block og_type %}article{% endblock %}
 {% block og_image %}{{ service.logo_url if service.logo_url else '/static/img/satring-logo.jpg' }}{% endblock %}
 {% block twitter_title %}{{ service.name }} — satring{% endblock %}
-{% block twitter_description %}{{ service.description[:200] if service.description else 'Paid API service listed on satring' }}{% endblock %}
+{% block twitter_description %}{{ service.description[:200] if service.description else 'Paid API listed on satring, the best curated L402 + x402 directory' }}{% endblock %}
 {% block twitter_image %}{{ service.logo_url if service.logo_url else '/static/img/satring-logo.jpg' }}{% endblock %}
 {% block extra_head %}
 <script type="application/ld+json">

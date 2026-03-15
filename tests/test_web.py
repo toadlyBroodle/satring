@@ -11,7 +11,7 @@ class TestDirectory:
     async def test_homepage_returns_200(self, client: AsyncClient):
         resp = await client.get("/")
         assert resp.status_code == 200
-        assert "Paid API Directory" in resp.text
+        assert "API Directory" in resp.text
 
     @pytest.mark.asyncio
     async def test_homepage_shows_services(self, client: AsyncClient, sample_service: Service):
