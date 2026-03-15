@@ -20,10 +20,10 @@ class TestBuildPaymentRequired:
     def test_payload_fields(self):
         result = build_payment_required("1.00", "Premium access")
         decoded = json.loads(base64.b64decode(result))
-        # v2: generic resource URL to avoid leaking endpoint paths to facilitator
-        assert decoded["resource"] == "https://satring.com/api"
-        assert decoded["description"] == "Premium access"
-        assert decoded["mimeType"] == "application/json"
+        # v2: resource is a ResourceInfo object
+        assert decoded["resource"]["url"] == "https://satring.com/api"
+        assert decoded["resource"]["description"] == "Premium access"
+        assert decoded["resource"]["mimeType"] == "application/json"
         accept = decoded["accepts"][0]
         assert accept["scheme"] == "exact"
         assert accept["amount"] == "1000000"  # $1.00 = 1,000,000 USDC base units
