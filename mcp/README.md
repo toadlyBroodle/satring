@@ -27,6 +27,20 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
+### Cline (VS Code)
+
+Add to your VS Code `settings.json`:
+
+```json
+{
+  "cline.mcpServers": {
+    "satring": {
+      "command": "satring-mcp"
+    }
+  }
+}
+```
+
 ### Claude Code
 
 Add to your `.claude/settings.json`:
