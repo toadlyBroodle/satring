@@ -2,23 +2,29 @@
 
 Probes registered services for liveness and updates their status.
 Detects L402 and x402 protocols via response headers.
+Records probe history for uptime/latency tracking.
 """
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 
 from app.config import settings
 from app.database import async_session
-from app.models import Service
+from app.models import ProbeHistory, Service
 from app.utils import extract_domain, is_public_hostname
 
 logger = logging.getLogger("satring.health")
 
 _probe_task: asyncio.Task | None = None
+
+# Rolling window for uptime/latency calculations
+_ROLLING_WINDOW_DAYS = 7
+# Keep probe history for this many days before cleanup
+_HISTORY_RETENTION_DAYS = 30
 
 
 async def probe_service(service: Service, timeout: int) -> tuple[str, dict]:
@@ -94,11 +100,48 @@ async def probe_all():
 
                 svc.status = new_status
 
+                # Record probe history
+                history = ProbeHistory(
+                    service_id=svc.id,
+                    probed_at=now,
+                    status=new_status,
+                    response_time_ms=metadata.get("response_time_ms"),
+                    detected_protocol=metadata.get("detected_protocol"),
+                    status_code=metadata.get("status_code"),
+                    error=metadata.get("error", "")[:200] if metadata.get("error") else None,
+                )
+                db.add(history)
+
+                # Update rolling stats
+                svc.total_checks = (svc.total_checks or 0) + 1
+                if new_status != "dead":
+                    svc.successful_checks = (svc.successful_checks or 0) + 1
+
+                # Compute rolling 7-day avg latency
+                cutoff = now - timedelta(days=_ROLLING_WINDOW_DAYS)
+                latency_result = await db.execute(
+                    select(func.avg(ProbeHistory.response_time_ms))
+                    .where(ProbeHistory.service_id == svc.id)
+                    .where(ProbeHistory.probed_at >= cutoff)
+                    .where(ProbeHistory.response_time_ms.is_not(None))
+                )
+                avg_latency = latency_result.scalar()
+                svc.avg_latency_ms = round(avg_latency, 1) if avg_latency is not None else None
+
         tasks = [_probe_one(svc) for svc in services]
         await asyncio.gather(*tasks, return_exceptions=True)
         await db.commit()
 
     logger.info(f"Health probe complete: {len(services)} services checked")
+
+
+async def _cleanup_old_history(db) -> int:
+    """Delete probe_history rows older than the retention period. Returns count deleted."""
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=_HISTORY_RETENTION_DAYS)
+    result = await db.execute(
+        delete(ProbeHistory).where(ProbeHistory.probed_at < cutoff)
+    )
+    return result.rowcount
 
 
 async def _health_loop():
@@ -108,6 +151,12 @@ async def _health_loop():
             await asyncio.sleep(settings.HEALTH_PROBE_INTERVAL)
             try:
                 await probe_all()
+                # Cleanup old history once per cycle
+                async with async_session() as db:
+                    deleted = await _cleanup_old_history(db)
+                    await db.commit()
+                    if deleted:
+                        logger.info(f"Cleaned up {deleted} old probe_history rows")
             except Exception:
                 logger.exception("Health probe failed")
     except asyncio.CancelledError:

@@ -30,6 +30,9 @@ async def init_db():
             ("x402_asset", "VARCHAR(100)"),
             ("x402_pay_to", "VARCHAR(100)"),
             ("pricing_usd", "VARCHAR(20)"),
+            ("avg_latency_ms", "FLOAT"),
+            ("total_checks", "INTEGER DEFAULT 0"),
+            ("successful_checks", "INTEGER DEFAULT 0"),
         ]
         for col_name, col_type in migrations:
             if col_name not in existing_cols:

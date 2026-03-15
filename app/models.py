@@ -54,11 +54,29 @@ class Service(Base):
     status = Column(String(20), default="unverified")  # unverified | confirmed | live | dead | purged
     last_probed_at = Column(DateTime, nullable=True)
     dead_since = Column(DateTime, nullable=True)
+    avg_latency_ms = Column(Float, nullable=True)       # rolling 7-day average
+    total_checks = Column(Integer, default=0)
+    successful_checks = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     categories = relationship("Category", secondary=service_categories, back_populates="services")
     ratings = relationship("Rating", back_populates="service", cascade="all, delete-orphan")
+
+
+class ProbeHistory(Base):
+    __tablename__ = "probe_history"
+
+    id = Column(Integer, primary_key=True)
+    service_id = Column(Integer, ForeignKey("services.id", ondelete="CASCADE"), nullable=False, index=True)
+    probed_at = Column(DateTime, nullable=False)
+    status = Column(String(20), nullable=False)        # live | confirmed | dead
+    response_time_ms = Column(Float, nullable=True)
+    detected_protocol = Column(String(20), nullable=True)
+    status_code = Column(Integer, nullable=True)
+    error = Column(String(200), nullable=True)
+
+    service = relationship("Service", backref="probe_history")
 
 
 class ConsumedPayment(Base):
