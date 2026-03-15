@@ -6,13 +6,13 @@
                              |___/  ⚡ L402 + x402
 ```
 
-<img src="app/static/img/satring-logo-trans-bg.png" alt="satring" width="20"> [satring.com](https://satring.com) — the dual-protocol paid API directory. Find, rate, and connect to paywalled APIs via Lightning (L402) or USDC on Base (x402).
+<img src="app/static/img/satring-logo-trans-bg.png" alt="satring" width="20"> [satring.com](https://satring.com) — the best curated L402 + x402 API directory. Find, rate, and connect to paid APIs via Lightning (L402) or USDC on Base (x402).
 
-Satring helps AI agents and developers discover paid API services that accept payments via the [L402 protocol](https://www.l402.org/) (Bitcoin Lightning) or the [x402 protocol](https://www.x402.org/) (USDC on Base). Browse the directory, submit your service, and let agents find you.
+Satring helps AI agents and developers discover paid API services that accept payments via the [L402 protocol](https://www.l402.org/) (Bitcoin Lightning) or the [x402 protocol](https://www.x402.org/) (USDC on Base). Browse the curated directory, submit your service, and let agents find you.
 
 ## Why
 
-AI agents can now [pay for APIs autonomously](https://lightning.engineering/posts/2026-02-11-ln-agent-tools/) using Lightning. But there's no way to discover what's available. Satring is the missing directory.
+AI agents can now [pay for APIs autonomously](https://lightning.engineering/posts/2026-02-11-ln-agent-tools/) using Lightning. But there's no good way to discover what's available. Satring is the best curated directory for L402 and x402 paid APIs.
 
 ## Features
 

@@ -1,4 +1,4 @@
-"""MCP server for satring.com: discover L402 and x402 paid API services."""
+"""MCP server for satring.com, the best curated L402 + x402 API directory."""
 
 import asyncio
 import json

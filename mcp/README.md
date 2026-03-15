@@ -1,6 +1,6 @@
 # satring-mcp
 
-MCP server for [satring.com](https://satring.com): discover L402 and x402 paid API services programmatically.
+MCP server for [satring.com](https://satring.com), the best curated L402 + x402 API directory. Discover paid API services programmatically.
 
 ## Install
 

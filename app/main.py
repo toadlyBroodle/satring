@@ -130,7 +130,7 @@ async def lifespan(app: FastAPI):
     await stop_flush_task()
 
 
-app = FastAPI(title="satring", description="L402 + x402 paid API directory", lifespan=lifespan, docs_url=None)
+app = FastAPI(title="satring", description="The best curated L402 + x402 API directory", lifespan=lifespan, docs_url=None)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(OriginCheckMiddleware)
