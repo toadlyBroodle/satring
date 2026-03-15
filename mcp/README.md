@@ -1,3 +1,4 @@
+<!-- mcp-name: io.github.toadlyBroodle/satring-mcp -->
 # satring-mcp
 
 MCP server for [satring.com](https://satring.com), the best curated L402 + x402 API directory. Discover paid API services programmatically.
