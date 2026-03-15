@@ -6,15 +6,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 # Import internals directly so we can test without stdio transport
-from satring_mcp import (
-    CATEGORIES,
-    TOOLS,
-    _compare,
-    _dispatch,
-    _sort_services,
-    handle_call_tool,
-    handle_list_tools,
-)
+satring_mcp = pytest.importorskip("satring_mcp", reason="satring_mcp not installed")
+CATEGORIES = satring_mcp.CATEGORIES
+TOOLS = satring_mcp.TOOLS
+_compare = satring_mcp._compare
+_dispatch = satring_mcp._dispatch
+_sort_services = satring_mcp._sort_services
+handle_call_tool = satring_mcp.handle_call_tool
+handle_list_tools = satring_mcp.handle_list_tools
 
 # --- Fixtures: canned API responses ---
 
