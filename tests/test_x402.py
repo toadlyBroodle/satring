@@ -31,6 +31,12 @@ class TestBuildPaymentRequired:
         assert "description" not in accept
         assert accept["maxTimeoutSeconds"] == 300
         assert accept["extra"]["name"] == "USD Coin"
+        # Bazaar extensions for x402scan discovery
+        bazaar = decoded["extensions"]["bazaar"]
+        assert bazaar["info"]["input"]["type"] == "http"
+        assert bazaar["info"]["input"]["method"] == "GET"
+        assert bazaar["info"]["output"]["type"] == "json"
+        assert "schema" in bazaar
 
 
 class TestParsePaymentSignature:

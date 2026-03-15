@@ -45,11 +45,17 @@ def _build_requirements_object(price_usd: str) -> dict:
     }
 
 
-def build_payment_required(price_usd: str, description: str, resource_url: str = "https://satring.com/api") -> str:
+def build_payment_required(
+    price_usd: str,
+    description: str,
+    resource_url: str = "https://satring.com/api",
+    method: str = "GET",
+) -> str:
     """Build base64-encoded PaymentRequired JSON per x402 v2 spec.
 
     Returns the value for the PAYMENT-REQUIRED response header.
     In v2, resource is a ResourceInfo object (not a plain string).
+    Includes Coinbase Bazaar extensions for x402scan discovery.
     """
     payload = {
         "x402Version": 2,
@@ -59,6 +65,38 @@ def build_payment_required(price_usd: str, description: str, resource_url: str =
             "mimeType": "application/json",
         },
         "accepts": [_build_requirements_object(price_usd)],
+        "extensions": {
+            "bazaar": {
+                "info": {
+                    "input": {
+                        "type": "http",
+                        "method": method,
+                    },
+                    "output": {
+                        "type": "json",
+                    },
+                },
+                "schema": {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "type": "object",
+                    "properties": {
+                        "input": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "method": {"type": "string"},
+                            },
+                        },
+                        "output": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+            },
+        },
     }
     return base64.b64encode(json.dumps(payload).encode()).decode()
 
@@ -167,7 +205,7 @@ async def require_x402(
     if not sig_header:
         # No payment: issue x402 challenge
         resource_url = str(request.url)
-        payment_required = build_payment_required(price_usd, description, resource_url)
+        payment_required = build_payment_required(price_usd, description, resource_url, request.method)
         raise HTTPException(
             status_code=402,
             detail="Payment Required (x402)",

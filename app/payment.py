@@ -85,7 +85,7 @@ async def require_payment(
     # Add x402 challenge if configured
     if x402_enabled():
         resource_url = str(request.url)
-        x402_challenge = build_payment_required(price_usd, memo, resource_url)
+        x402_challenge = build_payment_required(price_usd, memo, resource_url, request.method)
         headers["PAYMENT-REQUIRED"] = x402_challenge
 
     raise HTTPException(
