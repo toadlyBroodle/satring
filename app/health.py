@@ -63,6 +63,11 @@ async def probe_service(service: Service, timeout: int) -> tuple[str, dict]:
                 metadata["detected_protocol"] = "unknown_402"
                 return "live", metadata
 
+            # Redirects mean the registered URL is stale
+            if 300 <= resp.status_code < 400:
+                metadata["detected_protocol"] = "none"
+                return "dead", metadata
+
             # Reachable but no paywall
             metadata["detected_protocol"] = "none"
             return "confirmed", metadata
