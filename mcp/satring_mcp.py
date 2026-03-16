@@ -38,7 +38,7 @@ TOOLS = [
                 },
                 "protocol": {
                     "type": "string",
-                    "enum": ["L402", "X402"],
+                    "enum": ["L402", "x402", "L402+x402"],
                     "description": "Filter by payment protocol",
                 },
                 "page": {"type": "integer", "minimum": 1, "default": 1},
@@ -65,7 +65,7 @@ TOOLS = [
                     "type": "string",
                     "enum": ["unverified", "confirmed", "live", "dead"],
                 },
-                "protocol": {"type": "string", "enum": ["L402", "X402"]},
+                "protocol": {"type": "string", "enum": ["L402", "x402", "L402+x402"]},
                 "sort": {
                     "type": "string",
                     "enum": ["cheapest", "top-rated", "most-reviewed"],

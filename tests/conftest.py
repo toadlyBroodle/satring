@@ -104,7 +104,7 @@ async def sample_x402_service(db: AsyncSession) -> Service:
     svc = Service(
         name="X402 Pay API", slug="x402-pay-api", url="https://x402.test.com",
         description="An x402 USDC payment API", pricing_sats=0,
-        pricing_model="per-request", protocol="X402",
+        pricing_model="per-request", protocol="x402",
         owner_name="X402 Tester", owner_contact="x402@test.com",
         x402_network="eip155:8453",
         x402_asset="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
@@ -123,8 +123,8 @@ async def sample_dual_service(db: AsyncSession) -> Service:
     cats = (await db.execute(select(Category).where(Category.slug.in_(["tools"])))).scalars().all()
     svc = Service(
         name="Dual Protocol API", slug="dual-proto-api", url="https://dual.test.com",
-        description="A dual L402+X402 API", pricing_sats=50,
-        pricing_model="per-request", protocol="L402+X402",
+        description="A dual L402+x402 API", pricing_sats=50,
+        pricing_model="per-request", protocol="L402+x402",
         owner_name="Dual Tester", owner_contact="dual@test.com",
         x402_network="eip155:8453",
         x402_asset="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",

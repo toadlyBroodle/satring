@@ -61,7 +61,7 @@ class TestProbeService:
 
     @pytest.mark.anyio
     async def test_dual_protocol_402_returns_live(self):
-        """A 402 with both L402 and x402 headers should be detected as L402+X402."""
+        """A 402 with both L402 and x402 headers should be detected as L402+x402."""
         mock_resp = MagicMock()
         mock_resp.status_code = 402
         mock_resp.headers = {
@@ -82,7 +82,7 @@ class TestProbeService:
                 status, meta = await probe_service(_make_service(), timeout=10)
 
         assert status == "live"
-        assert meta["detected_protocol"] == "L402+X402"
+        assert meta["detected_protocol"] == "L402+x402"
 
     @pytest.mark.anyio
     async def test_200_returns_confirmed(self):
