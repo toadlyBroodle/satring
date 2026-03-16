@@ -53,7 +53,7 @@ async def probe_service(service: Service, timeout: int) -> tuple[str, dict]:
             has_x402 = resp.status_code == 402 and bool(payment_required)
 
             if has_l402 and has_x402:
-                metadata["detected_protocol"] = "L402+X402"
+                metadata["detected_protocol"] = "L402+x402"
                 return "live", metadata
             if has_l402:
                 metadata["detected_protocol"] = "L402"

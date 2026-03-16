@@ -99,7 +99,7 @@ class ServiceCreate(BaseModel):
     @classmethod
     def check_protocol(cls, v: str) -> str:
         if v not in VALID_PROTOCOLS:
-            raise ValueError("protocol must be L402, X402, or L402+X402")
+            raise ValueError("protocol must be L402, x402, or L402+x402")
         return v
     owner_name: str = Field(default="", max_length=MAX_OWNER_NAME)
     owner_contact: str = Field(default="", max_length=MAX_OWNER_CONTACT)
@@ -128,11 +128,11 @@ class ServiceCreate(BaseModel):
 
     @model_validator(mode="after")
     def check_x402_requires_fields(self):
-        if self.protocol in ("X402", "L402+X402"):
+        if self.protocol in ("x402", "L402+x402"):
             if not self.x402_pay_to:
-                raise ValueError("x402_pay_to is required when protocol includes X402")
+                raise ValueError("x402_pay_to is required when protocol includes x402")
             if not self.x402_network:
-                raise ValueError("x402_network is required when protocol includes X402")
+                raise ValueError("x402_network is required when protocol includes x402")
         return self
 
 
@@ -160,7 +160,7 @@ class ServiceUpdate(BaseModel):
     @classmethod
     def check_protocol(cls, v: str | None) -> str | None:
         if v is not None and v not in VALID_PROTOCOLS:
-            raise ValueError("protocol must be L402, X402, or L402+X402")
+            raise ValueError("protocol must be L402, x402, or L402+x402")
         return v
 
     @field_validator("category_ids")

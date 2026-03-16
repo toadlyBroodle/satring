@@ -101,7 +101,7 @@ class TestWebEditFlow:
         svc, token = await create_service_with_token(db)
         resp = await client.post(
             f"/services/{svc.slug}/edit",
-            content=f"edit_token={token}&name=Updated+Name&description=Updated+desc&protocol=X402&pricing_sats=200&pricing_model=flat&owner_name=New+Owner&owner_contact=new%40example.com&logo_url=&categories=9",
+            content=f"edit_token={token}&name=Updated+Name&description=Updated+desc&protocol=x402&pricing_sats=200&pricing_model=flat&owner_name=New+Owner&owner_contact=new%40example.com&logo_url=&categories=9",
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             follow_redirects=False,
         )
@@ -111,7 +111,7 @@ class TestWebEditFlow:
         await db.refresh(svc)
         assert svc.name == "Updated Name"
         assert svc.description == "Updated desc"
-        assert svc.protocol == "X402"
+        assert svc.protocol == "x402"
         assert svc.pricing_sats == 200
 
     @pytest.mark.asyncio
@@ -119,14 +119,14 @@ class TestWebEditFlow:
         svc, token = await create_service_with_token(db)
         resp = await client.post(
             f"/services/{svc.slug}/edit",
-            content=f"edit_token={token}&name={svc.name}&description=&protocol=L402%2BX402&pricing_sats=100&pricing_model=per-request&owner_name=&owner_contact=&logo_url=&x402_pay_to=0xWallet&x402_network=eip155%3A8453&x402_asset=0xUSDC&pricing_usd=0.05&categories=9",
+            content=f"edit_token={token}&name={svc.name}&description=&protocol=L402%2Bx402&pricing_sats=100&pricing_model=per-request&owner_name=&owner_contact=&logo_url=&x402_pay_to=0xWallet&x402_network=eip155%3A8453&x402_asset=0xUSDC&pricing_usd=0.05&categories=9",
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             follow_redirects=False,
         )
         assert resp.status_code == 303
 
         await db.refresh(svc)
-        assert svc.protocol == "L402+X402"
+        assert svc.protocol == "L402+x402"
         assert svc.x402_pay_to == "0xWallet"
         assert svc.x402_network == "eip155:8453"
 

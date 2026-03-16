@@ -41,7 +41,7 @@ class TestDirectory:
 
     @pytest.mark.asyncio
     async def test_protocol_filter_includes_dual(self, client: AsyncClient, sample_service: Service, sample_dual_service: Service):
-        # L402 filter should show both L402 and L402+X402 services
+        # L402 filter should show both L402 and L402+x402 services
         resp = await client.get("/?protocol=L402")
         assert resp.status_code == 200
         assert "Test API" in resp.text
@@ -49,7 +49,7 @@ class TestDirectory:
 
     @pytest.mark.asyncio
     async def test_protocol_filter_dual_only(self, client: AsyncClient, sample_service: Service, sample_dual_service: Service):
-        resp = await client.get("/?protocol=L402%2BX402")
+        resp = await client.get("/?protocol=L402%2Bx402")
         assert resp.status_code == 200
         assert "Test API" not in resp.text
         assert "Dual Protocol API" in resp.text
@@ -118,7 +118,7 @@ class TestServiceDetail:
     async def test_detail_dual_protocol_shows_x402_fields(self, client: AsyncClient, sample_dual_service: Service):
         resp = await client.get("/services/dual-proto-api")
         assert resp.status_code == 200
-        assert "L402+X402" in resp.text
+        assert "L402+x402" in resp.text
         assert "0xDualWallet456" in resp.text
         assert "eip155:8453" in resp.text
 
@@ -155,13 +155,13 @@ class TestSubmitService:
 
     @pytest.mark.asyncio
     async def test_submit_dual_protocol(self, client: AsyncClient, db: AsyncSession):
-        resp = await client.post("/submit", content="name=Dual+Submit&url=https%3A%2F%2Fdual-submit.example.com&protocol=L402%2BX402&pricing_sats=100&pricing_model=per-request&x402_pay_to=0xWallet&x402_network=eip155%3A8453&pricing_usd=0.05&categories=9", headers={"Content-Type": "application/x-www-form-urlencoded"}, follow_redirects=False)
+        resp = await client.post("/submit", content="name=Dual+Submit&url=https%3A%2F%2Fdual-submit.example.com&protocol=L402%2Bx402&pricing_sats=100&pricing_model=per-request&x402_pay_to=0xWallet&x402_network=eip155%3A8453&pricing_usd=0.05&categories=9", headers={"Content-Type": "application/x-www-form-urlencoded"}, follow_redirects=False)
         assert resp.status_code == 200
 
         result = await db.execute(select(Service).where(Service.slug == "dual-submit"))
         svc = result.scalars().first()
         assert svc is not None
-        assert svc.protocol == "L402+X402"
+        assert svc.protocol == "L402+x402"
         assert svc.x402_pay_to == "0xWallet"
 
     @pytest.mark.asyncio

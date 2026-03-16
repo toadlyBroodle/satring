@@ -43,7 +43,7 @@ SERVICE_B = {
     "description": "An expensive service",
     "pricing_sats": 500,
     "pricing_model": "per-request",
-    "protocol": "X402",
+    "protocol": "x402",
     "owner_name": "Bob",
     "logo_url": "",
     "x402_network": "eip155:8453",
@@ -264,7 +264,7 @@ async def test_compare_services():
     assert result["pricing_sats"]["a"] == 10
     assert result["pricing_sats"]["b"] == 500
     assert result["protocol"]["a"] == "L402"
-    assert result["protocol"]["b"] == "X402"
+    assert result["protocol"]["b"] == "x402"
     assert result["avg_rating"]["a"] == 4.5
     assert result["avg_rating"]["b"] == 3.0
     assert "ai/ml" in result["categories"]["a"]

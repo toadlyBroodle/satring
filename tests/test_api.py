@@ -42,32 +42,32 @@ class TestListServices:
         assert data["total"] == 1
         assert data["services"][0]["protocol"] == "L402"
 
-        resp = await client.get("/api/v1/services?protocol=X402")
+        resp = await client.get("/api/v1/services?protocol=x402")
         data = resp.json()
         assert data["total"] == 1
-        assert data["services"][0]["protocol"] == "X402"
+        assert data["services"][0]["protocol"] == "x402"
 
     @pytest.mark.asyncio
     async def test_dual_protocol_filter(self, client: AsyncClient, sample_service: Service, sample_x402_service: Service, sample_dual_service: Service):
-        # L402 filter includes both L402 and L402+X402
+        # L402 filter includes both L402 and L402+x402
         resp = await client.get("/api/v1/services?protocol=L402")
         data = resp.json()
         assert data["total"] == 2
         protocols = {s["protocol"] for s in data["services"]}
-        assert protocols == {"L402", "L402+X402"}
+        assert protocols == {"L402", "L402+x402"}
 
-        # X402 filter includes both X402 and L402+X402
-        resp = await client.get("/api/v1/services?protocol=X402")
+        # x402 filter includes both x402 and L402+x402
+        resp = await client.get("/api/v1/services?protocol=x402")
         data = resp.json()
         assert data["total"] == 2
         protocols = {s["protocol"] for s in data["services"]}
-        assert protocols == {"X402", "L402+X402"}
+        assert protocols == {"x402", "L402+x402"}
 
-        # L402+X402 filter returns only dual-protocol services
-        resp = await client.get("/api/v1/services?protocol=L402%2BX402")
+        # L402+x402 filter returns only dual-protocol services
+        resp = await client.get("/api/v1/services?protocol=L402%2Bx402")
         data = resp.json()
         assert data["total"] == 1
-        assert data["services"][0]["protocol"] == "L402+X402"
+        assert data["services"][0]["protocol"] == "L402+x402"
 
     @pytest.mark.asyncio
     async def test_status_filter(self, client: AsyncClient, sample_service: Service):
@@ -137,7 +137,7 @@ class TestCreateService:
             "description": "Fully specified",
             "pricing_sats": 500,
             "pricing_model": "per-minute",
-            "protocol": "X402",
+            "protocol": "x402",
             "owner_name": "Builder",
             "owner_contact": "builder@test.com",
             "logo_url": "https://img.test.com/logo.png",
@@ -150,7 +150,7 @@ class TestCreateService:
         assert resp.status_code == 201
         data = resp.json()
         assert data["pricing_sats"] == 500
-        assert data["protocol"] == "X402"
+        assert data["protocol"] == "x402"
         assert data["x402_pay_to"] == "0xTestWallet"
         assert data["x402_network"] == "eip155:8453"
         assert data["pricing_usd"] == "0.50"
@@ -161,7 +161,7 @@ class TestCreateService:
         resp = await client.post("/api/v1/services", json={
             "name": "Dual API",
             "url": "https://dual.example.com",
-            "protocol": "L402+X402",
+            "protocol": "L402+x402",
             "x402_network": "eip155:8453",
             "x402_pay_to": "0xDualWallet",
             "x402_asset": "0xUSDC",
@@ -170,7 +170,7 @@ class TestCreateService:
         })
         assert resp.status_code == 201
         data = resp.json()
-        assert data["protocol"] == "L402+X402"
+        assert data["protocol"] == "L402+x402"
         assert data["x402_pay_to"] == "0xDualWallet"
 
     @pytest.mark.asyncio
@@ -178,7 +178,7 @@ class TestCreateService:
         resp = await client.post("/api/v1/services", json={
             "name": "Dual No Wallet",
             "url": "https://dual-no-wallet.example.com",
-            "protocol": "L402+X402",
+            "protocol": "L402+x402",
             "category_ids": [1],
         })
         assert resp.status_code == 422
@@ -236,16 +236,16 @@ class TestSearchAPI:
 
     @pytest.mark.asyncio
     async def test_search_protocol_filter(self, client: AsyncClient, sample_service: Service, sample_dual_service: Service):
-        # L402 filter matches both L402 and L402+X402
+        # L402 filter matches both L402 and L402+x402
         resp = await client.get("/api/v1/search?protocol=L402")
         data = resp.json()
         assert data["total"] == 2
 
-        # X402 filter matches only L402+X402 (no pure X402 in this fixture set)
-        resp = await client.get("/api/v1/search?protocol=X402")
+        # x402 filter matches only L402+x402 (no pure x402 in this fixture set)
+        resp = await client.get("/api/v1/search?protocol=x402")
         data = resp.json()
         assert data["total"] == 1
-        assert data["services"][0]["protocol"] == "L402+X402"
+        assert data["services"][0]["protocol"] == "L402+x402"
 
     @pytest.mark.asyncio
     async def test_search_pagination(self, client: AsyncClient, sample_service: Service):
