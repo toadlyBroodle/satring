@@ -44,6 +44,7 @@
           class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400">
           <option value="L402" {% if not form or form.protocol == 'L402' %}selected{% endif %}>L402</option>
           <option value="X402" {% if form and form.protocol == 'X402' %}selected{% endif %}>X402</option>
+          <option value="L402+X402" {% if form and form.protocol == 'L402+X402' %}selected{% endif %}>L402+X402</option>
         </select>
       </div>
 
@@ -100,7 +101,7 @@
       (function() {
         var proto = document.getElementById('protocol');
         var x402 = document.getElementById('x402-fields');
-        function toggle() { x402.style.display = proto.value === 'X402' ? '' : 'none'; }
+        function toggle() { x402.style.display = (proto.value === 'X402' || proto.value === 'L402+X402') ? '' : 'none'; }
         proto.addEventListener('change', toggle);
         toggle();
       })();
