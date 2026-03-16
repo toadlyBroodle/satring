@@ -22,7 +22,7 @@ from app.database import get_db
 from app.payment import require_payment
 from app.main import limiter
 from app.models import Service, Category, Rating, RouteUsage, ProbeHistory, service_categories
-from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like
+from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter, VALID_PROTOCOLS
 
 router = APIRouter(tags=["API"])
 
@@ -98,7 +98,7 @@ class ServiceCreate(BaseModel):
     @field_validator("protocol")
     @classmethod
     def check_protocol(cls, v: str) -> str:
-        if v not in ("L402", "X402", "L402+X402"):
+        if v not in VALID_PROTOCOLS:
             raise ValueError("protocol must be L402, X402, or L402+X402")
         return v
     owner_name: str = Field(default="", max_length=MAX_OWNER_NAME)
@@ -159,7 +159,7 @@ class ServiceUpdate(BaseModel):
     @field_validator("protocol")
     @classmethod
     def check_protocol(cls, v: str | None) -> str | None:
-        if v is not None and v not in ("L402", "X402", "L402+X402"):
+        if v is not None and v not in VALID_PROTOCOLS:
             raise ValueError("protocol must be L402, X402, or L402+X402")
         return v
 
@@ -915,16 +915,14 @@ async def list_services(
     page_size: int = Query(20, ge=1, le=20),
     db: AsyncSession = Depends(get_db),
 ):
+    protocol = normalize_protocol(protocol)
     query = select(Service).where(Service.status != "purged").order_by(Service.created_at.desc())
     if category:
         query = query.join(service_categories).join(Category).where(Category.slug == category)
     if status and status in ("unverified", "confirmed", "live", "dead"):
         query = query.where(Service.status == status)
-    if protocol and protocol in ("L402", "X402", "L402+X402"):
-        if protocol == "L402+X402":
-            query = query.where(Service.protocol == "L402+X402")
-        else:
-            query = query.where(Service.protocol.in_([protocol, "L402+X402"]))
+    if protocol:
+        query = query.where(protocol_filter(Service.protocol, protocol))
     return await paginated_services(db, query, page, page_size)
 
 
@@ -1167,6 +1165,7 @@ async def search_services(
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
+    protocol = normalize_protocol(protocol)
     query = select(Service).where(Service.status != "purged").order_by(Service.created_at.desc())
     if q.strip():
         # SECURITY: escape LIKE wildcards so user input is matched literally
@@ -1174,11 +1173,8 @@ async def search_services(
         query = query.where(Service.name.ilike(pattern, escape="\\") | Service.description.ilike(pattern, escape="\\"))
     if status and status in ("unverified", "confirmed", "live", "dead"):
         query = query.where(Service.status == status)
-    if protocol and protocol in ("L402", "X402", "L402+X402"):
-        if protocol == "L402+X402":
-            query = query.where(Service.protocol == "L402+X402")
-        else:
-            query = query.where(Service.protocol.in_([protocol, "L402+X402"]))
+    if protocol:
+        query = query.where(protocol_filter(Service.protocol, protocol))
     return await paginated_services(db, query, page, page_size)
 
 

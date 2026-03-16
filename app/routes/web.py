@@ -21,7 +21,7 @@ from app.l402 import create_invoice, check_payment_status, check_and_consume_pay
 from app.main import templates, limiter
 from app.models import Service, Category, Rating, service_categories
 from app.routes.api import build_reputation_data, build_analytics_data, build_service_analytics
-from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like
+from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter
 
 router = APIRouter(include_in_schema=False)
 
@@ -40,6 +40,8 @@ async def directory(
     page: int = Query(1, ge=1),
     db: AsyncSession = Depends(get_db),
 ):
+    protocol = normalize_protocol(protocol)
+
     categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
 
     query = select(Service).options(selectinload(Service.categories)).where(Service.status != "purged")
@@ -53,11 +55,8 @@ async def directory(
         query = query.where(Service.status == status)
     if verified == "true":
         query = query.where(Service.domain_verified == True)
-    if protocol and protocol in ("L402", "X402", "L402+X402"):
-        if protocol == "L402+X402":
-            query = query.where(Service.protocol == "L402+X402")
-        else:
-            query = query.where(Service.protocol.in_([protocol, "L402+X402"]))
+    if protocol:
+        query = query.where(protocol_filter(Service.protocol, protocol))
 
     sort_map = {
         "top-rated": Service.avg_rating.desc(),
@@ -84,8 +83,8 @@ async def directory(
         qs_parts.append("verified=true")
     elif status:
         qs_parts.append(f"status={status}")
-    if protocol and protocol in ("L402", "X402", "L402+X402"):
-        qs_parts.append(f"protocol={protocol}")
+    if protocol:
+        qs_parts.append(f"protocol={protocol.replace('+', '%2B')}")
     if sort and sort != "newest":
         qs_parts.append(f"sort={sort}")
     qs_base = "&".join(qs_parts)
