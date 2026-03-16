@@ -37,7 +37,7 @@ class Service(Base):
     description = Column(Text, default="")
     pricing_sats = Column(Integer, default=0)
     pricing_model = Column(String(50), default="per-request")
-    protocol = Column(String(10), default="L402")
+    protocol = Column(String(20), default="L402")
     owner_name = Column(String(200), default="")
     owner_contact = Column(String(300), default="")
     logo_url = Column(String(500), default="")

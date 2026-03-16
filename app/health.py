@@ -46,15 +46,19 @@ async def probe_service(service: Service, timeout: int) -> tuple[str, dict]:
             metadata["status_code"] = resp.status_code
             metadata["response_time_ms"] = resp.elapsed.total_seconds() * 1000 if resp.elapsed else None
 
-            # Check for L402 paywall
+            # Check for L402 and x402 paywalls
             www_auth = resp.headers.get("www-authenticate", "")
-            if resp.status_code == 402 and ("L402" in www_auth or "LSAT" in www_auth):
+            has_l402 = resp.status_code == 402 and ("L402" in www_auth or "LSAT" in www_auth)
+            payment_required = resp.headers.get("payment-required", "")
+            has_x402 = resp.status_code == 402 and bool(payment_required)
+
+            if has_l402 and has_x402:
+                metadata["detected_protocol"] = "L402+X402"
+                return "live", metadata
+            if has_l402:
                 metadata["detected_protocol"] = "L402"
                 return "live", metadata
-
-            # Check for x402 paywall
-            payment_required = resp.headers.get("payment-required", "")
-            if resp.status_code == 402 and payment_required:
+            if has_x402:
                 metadata["detected_protocol"] = "x402"
                 return "live", metadata
 

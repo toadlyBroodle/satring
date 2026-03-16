@@ -93,7 +93,14 @@ class ServiceCreate(BaseModel):
     description: str = Field(default="", max_length=MAX_DESCRIPTION)
     pricing_sats: int = Field(default=0, ge=0, le=MAX_PRICING_SATS)
     pricing_model: str = Field(default="per-request", max_length=50)
-    protocol: str = Field(default="L402", max_length=10)
+    protocol: str = Field(default="L402", max_length=20)
+
+    @field_validator("protocol")
+    @classmethod
+    def check_protocol(cls, v: str) -> str:
+        if v not in ("L402", "X402", "L402+X402"):
+            raise ValueError("protocol must be L402, X402, or L402+X402")
+        return v
     owner_name: str = Field(default="", max_length=MAX_OWNER_NAME)
     owner_contact: str = Field(default="", max_length=MAX_OWNER_CONTACT)
     logo_url: str = Field(default="", max_length=MAX_LOGO_URL)
@@ -121,11 +128,11 @@ class ServiceCreate(BaseModel):
 
     @model_validator(mode="after")
     def check_x402_requires_fields(self):
-        if self.protocol == "X402":
+        if self.protocol in ("X402", "L402+X402"):
             if not self.x402_pay_to:
-                raise ValueError("x402_pay_to is required when protocol is X402")
+                raise ValueError("x402_pay_to is required when protocol includes X402")
             if not self.x402_network:
-                raise ValueError("x402_network is required when protocol is X402")
+                raise ValueError("x402_network is required when protocol includes X402")
         return self
 
 
@@ -148,6 +155,13 @@ class ServiceUpdate(BaseModel):
     x402_pay_to: str | None = None
     pricing_usd: str | None = None
     category_ids: list[int] | None = None
+
+    @field_validator("protocol")
+    @classmethod
+    def check_protocol(cls, v: str | None) -> str | None:
+        if v is not None and v not in ("L402", "X402", "L402+X402"):
+            raise ValueError("protocol must be L402, X402, or L402+X402")
+        return v
 
     @field_validator("category_ids")
     @classmethod
@@ -906,8 +920,11 @@ async def list_services(
         query = query.join(service_categories).join(Category).where(Category.slug == category)
     if status and status in ("unverified", "confirmed", "live", "dead"):
         query = query.where(Service.status == status)
-    if protocol and protocol in ("L402", "X402"):
-        query = query.where(Service.protocol == protocol)
+    if protocol and protocol in ("L402", "X402", "L402+X402"):
+        if protocol == "L402+X402":
+            query = query.where(Service.protocol == "L402+X402")
+        else:
+            query = query.where(Service.protocol.in_([protocol, "L402+X402"]))
     return await paginated_services(db, query, page, page_size)
 
 
@@ -1157,8 +1174,11 @@ async def search_services(
         query = query.where(Service.name.ilike(pattern, escape="\\") | Service.description.ilike(pattern, escape="\\"))
     if status and status in ("unverified", "confirmed", "live", "dead"):
         query = query.where(Service.status == status)
-    if protocol and protocol in ("L402", "X402"):
-        query = query.where(Service.protocol == protocol)
+    if protocol and protocol in ("L402", "X402", "L402+X402"):
+        if protocol == "L402+X402":
+            query = query.where(Service.protocol == "L402+X402")
+        else:
+            query = query.where(Service.protocol.in_([protocol, "L402+X402"]))
     return await paginated_services(db, query, page, page_size)
 
 

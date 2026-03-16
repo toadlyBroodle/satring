@@ -58,7 +58,7 @@
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5 w-32">endpoint</td><td class="px-3 py-1.5"><a href="{{ service.url }}" class="text-amber-400 hover:underline break-all" target="_blank">{{ service.url }}</a></td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">pricing</td><td class="px-3 py-1.5">{% if service.pricing_usd %}${{ service.pricing_usd }} USD{% if service.pricing_sats %} / {{ service.pricing_sats }} sats{% endif %}{% else %}{{ service.pricing_sats }} sats{% endif %} / {{ service.pricing_model }}</td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">protocol</td><td class="px-3 py-1.5">{{ service.protocol }}</td></tr>
-      {% if service.protocol == 'X402' and service.x402_pay_to %}
+      {% if service.protocol in ('X402', 'L402+X402') and service.x402_pay_to %}
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">wallet</td><td class="px-3 py-1.5 break-all text-xs">{{ service.x402_pay_to }}</td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">network</td><td class="px-3 py-1.5">{{ service.x402_network or 'eip155:8453' }}</td></tr>
       {% if service.x402_asset %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">asset</td><td class="px-3 py-1.5 break-all text-xs">{{ service.x402_asset }}</td></tr>{% endif %}

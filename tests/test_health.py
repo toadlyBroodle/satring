@@ -60,6 +60,31 @@ class TestProbeService:
         assert meta["detected_protocol"] == "x402"
 
     @pytest.mark.anyio
+    async def test_dual_protocol_402_returns_live(self):
+        """A 402 with both L402 and x402 headers should be detected as L402+X402."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 402
+        mock_resp.headers = {
+            "www-authenticate": 'L402 macaroon="abc", invoice="lnbc..."',
+            "payment-required": "eyJ4NDAyVmVyc2lvbiI6Mn0=",
+        }
+        mock_resp.elapsed = MagicMock()
+        mock_resp.elapsed.total_seconds.return_value = 0.4
+
+        with patch("app.health.httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.get.return_value = mock_resp
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_cls.return_value = mock_client
+
+            with patch("app.health.is_public_hostname", return_value=True):
+                status, meta = await probe_service(_make_service(), timeout=10)
+
+        assert status == "live"
+        assert meta["detected_protocol"] == "L402+X402"
+
+    @pytest.mark.anyio
     async def test_200_returns_confirmed(self):
         """A 200 response means reachable but no paywall."""
         mock_resp = MagicMock()

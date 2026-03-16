@@ -53,8 +53,11 @@ async def directory(
         query = query.where(Service.status == status)
     if verified == "true":
         query = query.where(Service.domain_verified == True)
-    if protocol and protocol in ("L402", "X402"):
-        query = query.where(Service.protocol == protocol)
+    if protocol and protocol in ("L402", "X402", "L402+X402"):
+        if protocol == "L402+X402":
+            query = query.where(Service.protocol == "L402+X402")
+        else:
+            query = query.where(Service.protocol.in_([protocol, "L402+X402"]))
 
     sort_map = {
         "top-rated": Service.avg_rating.desc(),
@@ -81,7 +84,7 @@ async def directory(
         qs_parts.append("verified=true")
     elif status:
         qs_parts.append(f"status={status}")
-    if protocol and protocol in ("L402", "X402"):
+    if protocol and protocol in ("L402", "X402", "L402+X402"):
         qs_parts.append(f"protocol={protocol}")
     if sort and sort != "newest":
         qs_parts.append(f"sort={sort}")
