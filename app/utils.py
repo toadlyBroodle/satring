@@ -17,6 +17,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Service, Category, Rating
 
 
+VALID_PROTOCOLS = ("L402", "X402", "L402+X402")
+
+
+def normalize_protocol(protocol: str | None) -> str | None:
+    """Normalize a protocol query param (URL decodes '+' as space) and validate."""
+    if not protocol:
+        return None
+    protocol = protocol.replace(" ", "+")
+    return protocol if protocol in VALID_PROTOCOLS else None
+
+
+def protocol_filter(column, protocol: str):
+    """Return a SQLAlchemy filter clause for protocol matching.
+
+    L402 or X402 also matches L402+X402 (dual-protocol) services.
+    L402+X402 matches only dual-protocol services.
+    """
+    if protocol == "L402+X402":
+        return column == "L402+X402"
+    return column.in_([protocol, "L402+X402"])
+
+
 def escape_like(s: str, escape: str = "\\") -> str:
     """SECURITY: Escape SQL LIKE metacharacters (%, _, \\) in user input
     so they are matched literally instead of acting as wildcards."""
