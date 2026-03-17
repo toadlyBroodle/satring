@@ -1,6 +1,9 @@
+import logging
 import math
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
+
+logger = logging.getLogger("satring.web")
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Request, Depends, Form, Query
@@ -285,6 +288,13 @@ async def submit_service(
         }, status_code=422)
 
     url = normalize_url(url)
+    client_ip = request.client.host if request.client else "unknown"
+    logger.info(
+        "SUBMIT name=%r url=%r protocol=%s categories=%s "
+        "pricing_sats=%s pricing_model=%s owner=%r contact=%r ip=%s",
+        name, url, protocol, category_ids,
+        pricing_sats, pricing_model, owner_name, owner_contact, client_ip,
+    )
 
     # Reject duplicate URLs before payment gate so users don't pay for a rejected submission
     existing = await find_existing_service(db, url)
@@ -402,7 +412,12 @@ async def submit_service(
             service.categories = list(cats)
         db.add(service)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception:
+        logger.exception("SUBMIT FAILED commit for name=%r url=%r ip=%s", name, url, client_ip)
+        raise
+    logger.info("SUBMIT OK slug=%s id=%s url=%r ip=%s", service.slug, service.id, url, client_ip)
 
     # Send verification instructions if owner_contact contains an email
     email = extract_email(owner_contact or "")
