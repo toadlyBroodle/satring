@@ -1,8 +1,11 @@
 import json
+import logging
 import math
 import secrets
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
+
+logger = logging.getLogger("satring.api")
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
@@ -946,6 +949,13 @@ async def create_service(request: Request, body: ServiceCreate = None, backgroun
         )
         raise HTTPException(status_code=422, detail="Request body required")
     url_str = normalize_url(str(body.url))
+    client_ip = request.client.host if request.client else "unknown"
+    logger.info(
+        "API SUBMIT name=%r url=%r protocol=%s categories=%s "
+        "pricing_sats=%s owner=%r contact=%r ip=%s",
+        body.name, url_str, body.protocol, body.category_ids,
+        body.pricing_sats, body.owner_name, body.owner_contact, client_ip,
+    )
 
     # Reject duplicate URLs BEFORE payment gate so clients don't pay for a rejected submission
     existing = await find_existing_service(db, url_str)
@@ -1029,7 +1039,12 @@ async def create_service(request: Request, body: ServiceCreate = None, backgroun
             service.categories = list(cats)
         db.add(service)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception:
+        logger.exception("API SUBMIT FAILED commit for name=%r url=%r ip=%s", body.name, url_str, client_ip)
+        raise
+    logger.info("API SUBMIT OK slug=%s id=%s url=%r ip=%s", service.slug, service.id, url_str, client_ip)
     await db.refresh(service)
     result = await db.execute(
         select(Service).options(selectinload(Service.categories)).where(Service.id == service.id)
