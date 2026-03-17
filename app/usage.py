@@ -119,82 +119,101 @@ def record_details(path: str, query_params: dict[str, str], client_ip: str) -> N
 
 
 async def flush() -> None:
-    """Snapshot buffer, upsert rows into RouteUsage, and purge old data."""
+    """Snapshot buffer, upsert rows into RouteUsage, and purge old data.
+
+    The buffer is only cleared after a successful DB commit. If the write
+    fails (e.g. database locked), data stays in the buffer for the next flush.
+    """
     async with _lock:
         has_data = bool(_buffer) or bool(_detail_buffer)
         if not has_data:
             return
         snapshot = dict(_buffer)
-        _buffer.clear()
         detail_snapshot = dict(_detail_buffer)
-        _detail_buffer.clear()
         # Snapshot IP set sizes but keep sets alive for the current hour
         current_hour = datetime.now(timezone.utc).replace(
             minute=0, second=0, microsecond=0, tzinfo=None
         ).isoformat()
         ip_counts = {k: len(v) for k, v in _ip_sets.items()}
         detail_ip_counts = {k: len(v) for k, v in _detail_ip_sets.items()}
+
+    try:
+        async with async_session() as db:
+            for (route, source, hour_key), count in snapshot.items():
+                hour = datetime.fromisoformat(hour_key)
+                unique = ip_counts.get((route, source, hour_key), 0)
+                result = await db.execute(
+                    select(RouteUsage).where(
+                        RouteUsage.route == route,
+                        RouteUsage.source == source,
+                        RouteUsage.hour == hour,
+                    )
+                )
+                row = result.scalars().first()
+                if row:
+                    row.hit_count += count
+                    # For the current hour the IP set is still accumulating,
+                    # so overwrite with the latest total. For past hours the
+                    # final count was captured before eviction.
+                    row.unique_ips = unique
+                else:
+                    db.add(RouteUsage(
+                        route=route, source=source,
+                        hour=hour, hit_count=count, unique_ips=unique,
+                    ))
+
+            # Flush detail buffer
+            for (dimension, value, hour_key), count in detail_snapshot.items():
+                hour = datetime.fromisoformat(hour_key)
+                unique = detail_ip_counts.get((dimension, value, hour_key), 0)
+                result = await db.execute(
+                    select(UsageDetail).where(
+                        UsageDetail.dimension == dimension,
+                        UsageDetail.value == value,
+                        UsageDetail.hour == hour,
+                    )
+                )
+                row = result.scalars().first()
+                if row:
+                    row.hit_count += count
+                    row.unique_ips = unique
+                else:
+                    db.add(UsageDetail(
+                        dimension=dimension, value=value,
+                        hour=hour, hit_count=count, unique_ips=unique,
+                    ))
+
+            # Purge old data (bulk DELETE, no loading into Python)
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=USAGE_RETENTION_DAYS)
+            await db.execute(
+                delete(RouteUsage).where(RouteUsage.hour < cutoff)
+            )
+            await db.execute(
+                delete(UsageDetail).where(UsageDetail.hour < cutoff)
+            )
+
+            await db.commit()
+    except Exception:
+        # DB write failed; re-merge snapshot back into the live buffer so
+        # data is retried on the next flush cycle instead of being lost.
+        async with _lock:
+            for key, count in snapshot.items():
+                _buffer[key] += count
+            for key, count in detail_snapshot.items():
+                _detail_buffer[key] += count
+        raise
+
+    # Only clear and evict after successful commit
+    async with _lock:
+        for key in snapshot:
+            _buffer.pop(key, None)
+        for key in detail_snapshot:
+            _detail_buffer.pop(key, None)
         # Evict IP sets for past hours (no longer needed)
-        for sets_dict, hour_idx in [(_ip_sets, 2), (_detail_ip_sets, 2)]:
-            stale = [k for k in sets_dict if k[hour_idx] != current_hour]
+        for sets_dict in (_ip_sets, _detail_ip_sets):
+            stale = [k for k in sets_dict if k[2] != current_hour]
             for k in stale:
                 del sets_dict[k]
-
-    async with async_session() as db:
-        for (route, source, hour_key), count in snapshot.items():
-            hour = datetime.fromisoformat(hour_key)
-            unique = ip_counts.get((route, source, hour_key), 0)
-            result = await db.execute(
-                select(RouteUsage).where(
-                    RouteUsage.route == route,
-                    RouteUsage.source == source,
-                    RouteUsage.hour == hour,
-                )
-            )
-            row = result.scalars().first()
-            if row:
-                row.hit_count += count
-                # For the current hour the IP set is still accumulating,
-                # so overwrite with the latest total. For past hours the
-                # final count was captured before eviction.
-                row.unique_ips = unique
-            else:
-                db.add(RouteUsage(
-                    route=route, source=source,
-                    hour=hour, hit_count=count, unique_ips=unique,
-                ))
-
-        # Flush detail buffer
-        for (dimension, value, hour_key), count in detail_snapshot.items():
-            hour = datetime.fromisoformat(hour_key)
-            unique = detail_ip_counts.get((dimension, value, hour_key), 0)
-            result = await db.execute(
-                select(UsageDetail).where(
-                    UsageDetail.dimension == dimension,
-                    UsageDetail.value == value,
-                    UsageDetail.hour == hour,
-                )
-            )
-            row = result.scalars().first()
-            if row:
-                row.hit_count += count
-                row.unique_ips = unique
-            else:
-                db.add(UsageDetail(
-                    dimension=dimension, value=value,
-                    hour=hour, hit_count=count, unique_ips=unique,
-                ))
-
-        # Purge old data (bulk DELETE, no loading into Python)
-        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=USAGE_RETENTION_DAYS)
-        await db.execute(
-            delete(RouteUsage).where(RouteUsage.hour < cutoff)
-        )
-        await db.execute(
-            delete(UsageDetail).where(UsageDetail.hour < cutoff)
-        )
-
-        await db.commit()
 
 
 async def _flush_loop() -> None:
