@@ -1,5 +1,7 @@
 import logging
+import os
 from contextlib import asynccontextmanager
+from logging.handlers import RotatingFileHandler
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
@@ -108,6 +110,22 @@ async def seed_categories():
 
 
 logger = logging.getLogger("satring")
+
+# File logging: all satring.* loggers write to logs/satring.log
+_log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+os.makedirs(_log_dir, exist_ok=True)
+_file_handler = RotatingFileHandler(
+    os.path.join(_log_dir, "satring.log"),
+    maxBytes=10 * 1024 * 1024,  # 10 MB
+    backupCount=5,
+)
+_file_handler.setFormatter(logging.Formatter(
+    "%(asctime)s %(levelname)s %(name)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+))
+_file_handler.setLevel(logging.INFO)
+logging.getLogger("satring").addHandler(_file_handler)
+logging.getLogger("satring").setLevel(logging.INFO)
 
 
 @asynccontextmanager
