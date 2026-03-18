@@ -48,13 +48,14 @@
         </select>
       </div>
 
-      <div>
+      <!-- L402 pricing fields (hidden for x402-only) -->
+      <div id="l402-pricing-sats">
         <label for="pricing_sats" class="text-green-700 block mb-1 cursor-pointer">price (sats)&gt;</label>
         <input type="number" id="pricing_sats" name="pricing_sats" value="{{ form.pricing_sats if form else 0 }}" min="0"
           class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400" />
       </div>
 
-      <div>
+      <div id="l402-pricing-model">
         <label for="pricing_model" class="text-green-700 block mb-1 cursor-pointer">model&gt;</label>
         <select id="pricing_model" name="pricing_model"
           class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400">
@@ -101,7 +102,16 @@
       (function() {
         var proto = document.getElementById('protocol');
         var x402 = document.getElementById('x402-fields');
-        function toggle() { x402.style.display = (proto.value === 'x402' || proto.value === 'L402+x402') ? '' : 'none'; }
+        var l402Sats = document.getElementById('l402-pricing-sats');
+        var l402Model = document.getElementById('l402-pricing-model');
+        function toggle() {
+          var v = proto.value;
+          var showX402 = (v === 'x402' || v === 'L402+x402');
+          var showL402 = (v === 'L402' || v === 'L402+x402');
+          x402.style.display = showX402 ? '' : 'none';
+          l402Sats.style.display = showL402 ? '' : 'none';
+          l402Model.style.display = showL402 ? '' : 'none';
+        }
         proto.addEventListener('change', toggle);
         toggle();
       })();

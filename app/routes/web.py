@@ -286,6 +286,11 @@ async def submit_service(
             "selected_category_ids": category_ids,
         }, status_code=422)
 
+    # Clear sat pricing for x402-only services
+    if protocol == "x402":
+        pricing_sats = 0
+        pricing_model = "per-request"
+
     # Validate x402 fields before payment gate so users don't pay for a rejected submission
     if protocol in ("x402", "L402+x402"):
         missing = []
@@ -563,9 +568,14 @@ async def edit_service(
         service.description = description
     if protocol:
         service.protocol = protocol
-    service.pricing_sats = pricing_sats
-    if pricing_model:
-        service.pricing_model = pricing_model
+    # Clear sat pricing for x402-only services
+    if service.protocol == "x402":
+        service.pricing_sats = 0
+        service.pricing_model = "per-request"
+    else:
+        service.pricing_sats = pricing_sats
+        if pricing_model:
+            service.pricing_model = pricing_model
     service.owner_name = owner_name
     service.owner_contact = owner_contact
     service.logo_url = logo_url
