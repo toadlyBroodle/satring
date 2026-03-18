@@ -87,12 +87,12 @@
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label for="x402_pay_to" class="text-green-700 block mb-1 cursor-pointer">wallet address&gt;</label>
+          <label for="x402_pay_to" class="text-green-700 block mb-1 cursor-pointer">wallet address&gt; <span class="text-green-900">*</span></label>
           <input type="text" id="x402_pay_to" name="x402_pay_to" maxlength="100" value="{{ service.x402_pay_to or '' }}"
             class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400 placeholder-green-900" />
         </div>
         <div>
-          <label for="pricing_usd" class="text-green-700 block mb-1 cursor-pointer">price (USD)&gt;</label>
+          <label for="pricing_usd" class="text-green-700 block mb-1 cursor-pointer">price (USD)&gt; <span class="text-green-900">*</span></label>
           <input type="text" id="pricing_usd" name="pricing_usd" maxlength="20" value="{{ service.pricing_usd or '' }}"
             class="bg-black text-green-400 border border-green-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-green-400 placeholder-green-900" />
         </div>
