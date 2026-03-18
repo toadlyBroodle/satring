@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from sqlalchemy import select
@@ -150,7 +150,23 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="satring", description="The best curated L402 + x402 API directory", lifespan=lifespan, docs_url=None)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    # Parse window from slowapi detail (e.g. "6 per 1 minute")
+    retry_after = 60  # default fallback
+    detail = str(exc.detail) if exc.detail else ""
+    if "second" in detail:
+        retry_after = 1
+    elif "minute" in detail:
+        retry_after = 60
+    elif "hour" in detail:
+        retry_after = 3600
+    return JSONResponse(
+        status_code=429,
+        content={"detail": f"Rate limit exceeded: {detail}"},
+        headers={"Retry-After": str(retry_after)},
+    )
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 app.add_middleware(OriginCheckMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(UsageTrackingMiddleware)

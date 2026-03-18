@@ -179,6 +179,14 @@ curl -X POST https://satring.com/api/v1/services/my-service/recover/generate
 curl -X POST https://satring.com/api/v1/services/my-service/recover/verify
 ```
 
+### Rate limiting
+
+Free API endpoints are rate limited at 6 requests/minute (burst of 5). Payment-gated endpoints have a higher limit of 60 requests/minute (burst of 10). Rate-limited responses include a `Retry-After` header indicating how many seconds to wait.
+
+### Health probes
+
+The directory probes listed services periodically to detect protocol support and liveness. Probes attempt HEAD first, then fall back to GET if HEAD returns 405. Many nginx/reverse proxy configs reject HEAD by default, so if your service shows as "confirmed" rather than "live", this is normal and expected.
+
 ## Configuration
 
 Environment variables (see `.env`):
