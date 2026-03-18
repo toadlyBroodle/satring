@@ -66,11 +66,16 @@ curl https://satring.com/api/v1/services/my-service
 
 # List ratings
 curl https://satring.com/api/v1/services/my-service/ratings
+
+# List categories (use IDs in category_ids when submitting)
+curl https://satring.com/api/v1/categories
 ```
 
 ### Payment-gated endpoints
 
 These require payment via **L402** or **x402**. Without auth headers, the server returns `402` with challenges for both protocols.
+
+Each service requires 1 to 2 `category_ids`: 1=ai/ml, 2=data, 3=finance, 4=identity, 5=media, 6=social, 7=search, 8=storage, 9=tools.
 
 #### Option A: L402 (Lightning)
 
