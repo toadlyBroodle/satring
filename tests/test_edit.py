@@ -101,7 +101,7 @@ class TestWebEditFlow:
         svc, token = await create_service_with_token(db)
         resp = await client.post(
             f"/services/{svc.slug}/edit",
-            content=f"edit_token={token}&name=Updated+Name&description=Updated+desc&protocol=x402&pricing_sats=200&pricing_model=flat&owner_name=New+Owner&owner_contact=new%40example.com&logo_url=&x402_pay_to=0xTestWallet&x402_network=eip155%3A8453&categories=9",
+            content=f"edit_token={token}&name=Updated+Name&description=Updated+desc&protocol=x402&pricing_sats=200&pricing_model=flat&owner_name=New+Owner&owner_contact=new%40example.com&logo_url=&x402_pay_to=0xTestWallet&x402_network=eip155%3A8453&pricing_usd=0.50&categories=9",
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             follow_redirects=False,
         )

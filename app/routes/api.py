@@ -136,6 +136,8 @@ class ServiceCreate(BaseModel):
                 raise ValueError("x402_pay_to is required when protocol includes x402")
             if not self.x402_network:
                 raise ValueError("x402_network is required when protocol includes x402")
+            if not self.pricing_usd:
+                raise ValueError("pricing_usd is required when protocol includes x402")
         return self
 
 
@@ -1085,6 +1087,8 @@ async def update_service(
             raise HTTPException(status_code=422, detail="x402_pay_to is required when protocol includes x402")
         if not service.x402_network:
             raise HTTPException(status_code=422, detail="x402_network is required when protocol includes x402")
+        if not service.pricing_usd:
+            raise HTTPException(status_code=422, detail="pricing_usd is required when protocol includes x402")
 
     if body.category_ids is not None:
         cats = (await db.execute(
