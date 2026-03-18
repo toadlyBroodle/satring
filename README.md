@@ -109,6 +109,30 @@ curl -X POST https://satring.com/api/v1/services \
   }'
 ```
 
+#### Dual-protocol listing (L402+x402)
+
+A single service can support both payment rails. Set `"protocol": "L402+x402"` and include both sat pricing and x402 fields:
+
+```bash
+curl -X POST https://satring.com/api/v1/services \
+  -H "Authorization: L402 <macaroon>:<preimage>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Dual API",
+    "url": "https://api.example.com",
+    "pricing_sats": 10,
+    "pricing_model": "per-request",
+    "protocol": "L402+x402",
+    "x402_network": "eip155:8453",
+    "x402_asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "x402_pay_to": "0xYourWalletAddress",
+    "pricing_usd": "0.50",
+    "category_ids": [1, 2]
+  }'
+```
+
+Dual-protocol services appear in search results when filtering by either `L402` or `x402`.
+
 #### Other gated operations
 
 ```bash
