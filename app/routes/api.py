@@ -1079,6 +1079,13 @@ async def update_service(
         if value is not None:
             setattr(service, field, value)
 
+    # Validate x402 fields are present when protocol includes x402
+    if service.protocol in ("x402", "L402+x402"):
+        if not service.x402_pay_to:
+            raise HTTPException(status_code=422, detail="x402_pay_to is required when protocol includes x402")
+        if not service.x402_network:
+            raise HTTPException(status_code=422, detail="x402_network is required when protocol includes x402")
+
     if body.category_ids is not None:
         cats = (await db.execute(
             select(Category).where(Category.id.in_(body.category_ids))
