@@ -913,6 +913,14 @@ async def bulk_export(request: Request, db: AsyncSession = Depends(get_db)):
     return data
 
 
+@router.get("/categories", response_model=list[CategoryOut])
+@limiter.limit(RATE_LIST_API)
+async def list_categories(request: Request, db: AsyncSession = Depends(get_db)):
+    """List all available categories with their IDs. Use these IDs in category_ids when submitting services."""
+    result = await db.execute(select(Category).order_by(Category.id))
+    return [CategoryOut.model_validate(c) for c in result.scalars().all()]
+
+
 @router.get("/services", response_model=ServiceListOut)
 @limiter.limit(RATE_LIST_API)
 async def list_services(
