@@ -138,6 +138,10 @@ class ServiceCreate(BaseModel):
                 raise ValueError("x402_network is required when protocol includes x402")
             if not self.pricing_usd:
                 raise ValueError("pricing_usd is required when protocol includes x402")
+        # Clear sat pricing for x402-only
+        if self.protocol == "x402":
+            self.pricing_sats = 0
+            self.pricing_model = "per-request"
         return self
 
 
@@ -1089,6 +1093,11 @@ async def update_service(
             raise HTTPException(status_code=422, detail="x402_network is required when protocol includes x402")
         if not service.pricing_usd:
             raise HTTPException(status_code=422, detail="pricing_usd is required when protocol includes x402")
+
+    # Clear sat pricing for x402-only
+    if service.protocol == "x402":
+        service.pricing_sats = 0
+        service.pricing_model = "per-request"
 
     if body.category_ids is not None:
         cats = (await db.execute(

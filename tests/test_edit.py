@@ -112,7 +112,7 @@ class TestWebEditFlow:
         assert svc.name == "Updated Name"
         assert svc.description == "Updated desc"
         assert svc.protocol == "x402"
-        assert svc.pricing_sats == 200
+        assert svc.pricing_sats == 0  # x402-only clears sat pricing
 
     @pytest.mark.asyncio
     async def test_edit_post_to_dual_protocol(self, client: AsyncClient, db: AsyncSession):

@@ -149,7 +149,7 @@ class TestCreateService:
         })
         assert resp.status_code == 201
         data = resp.json()
-        assert data["pricing_sats"] == 500
+        assert data["pricing_sats"] == 0  # x402-only clears sat pricing
         assert data["protocol"] == "x402"
         assert data["x402_pay_to"] == "0xTestWallet"
         assert data["x402_network"] == "eip155:8453"
