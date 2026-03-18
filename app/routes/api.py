@@ -18,7 +18,7 @@ from app.config import (
     settings, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT, MAX_PRICING_SATS,
     MAX_X402_NETWORK, MAX_X402_ASSET, MAX_X402_PAY_TO, MAX_PRICING_USD,
-    RATE_SUBMIT, RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_REVIEW, RATE_SEARCH_API,
+    RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_SEARCH_API,
     RATE_LIST_API, RATE_DETAIL_API,
 )
 from app.database import get_db
@@ -936,7 +936,6 @@ async def get_service(request: Request, slug: str, db: AsyncSession = Depends(ge
 
 
 @router.post("/services", response_model=ServiceCreateOut, status_code=201)
-@limiter.limit(RATE_SUBMIT)
 async def create_service(request: Request, body: ServiceCreate = None, background_tasks: BackgroundTasks = None, db: AsyncSession = Depends(get_db)):
     # If no body and no payment headers, return 402 challenge (for x402 discovery probes)
     if body is None:
@@ -1212,7 +1211,6 @@ async def list_ratings(
 
 
 @router.post("/services/{slug}/ratings", response_model=RatingOut, status_code=201)
-@limiter.limit(RATE_REVIEW)
 async def create_rating(request: Request, slug: str, body: RatingCreate = None, db: AsyncSession = Depends(get_db)):
     # If no body and no payment headers, return 402 challenge (for x402 discovery probes)
     if body is None:

@@ -16,7 +16,7 @@ from app.config import (
     settings, payments_enabled, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT,
     MAX_X402_NETWORK, MAX_X402_ASSET, MAX_X402_PAY_TO, MAX_PRICING_USD,
-    RATE_SUBMIT, RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_REVIEW,
+    RATE_EDIT, RATE_DELETE, RATE_RECOVER,
     RATE_SEARCH, RATE_PAYMENT_STATUS, RATE_SITEMAP,
 )
 from app.database import get_db
@@ -196,7 +196,6 @@ async def submit_form(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/submit")
-@limiter.limit(RATE_SUBMIT)
 async def submit_service(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -699,7 +698,6 @@ async def recover_service(
 
 
 @router.post("/services/{slug}/rate", response_class=HTMLResponse)
-@limiter.limit(RATE_REVIEW)
 async def rate_service(
     request: Request,
     slug: str,
