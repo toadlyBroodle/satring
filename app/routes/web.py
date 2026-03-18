@@ -550,6 +550,19 @@ async def edit_service(
     service.x402_pay_to = x402_pay_to or None
     service.pricing_usd = pricing_usd or None
 
+    # Validate x402 fields are present when protocol includes x402
+    if service.protocol in ("x402", "L402+x402") and not service.x402_pay_to:
+        categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
+        return templates.TemplateResponse(request, "services/edit.html", {
+            "service": service,
+            "categories": categories,
+            "token_valid": True,
+            "token_invalid": False,
+            "token": edit_token,
+            "error": "Wallet address (x402_pay_to) is required for x402 protocol.",
+            "selected_category_ids": category_ids,
+        }, status_code=422)
+
     cats = (await db.execute(select(Category).where(Category.id.in_(category_ids)))).scalars().all()
     service.categories = list(cats)
 
