@@ -148,7 +148,7 @@ async def lifespan(app: FastAPI):
     await stop_flush_task()
 
 
-app = FastAPI(title="satring", description="The best curated L402 + x402 API directory", lifespan=lifespan, docs_url=None)
+app = FastAPI(title="satring", description="Paid API directory for AI agents. L402, x402, and MPP services with health monitoring, human ratings, and MCP integration.", lifespan=lifespan, docs_url=None)
 app.state.limiter = limiter
 async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
     # Parse window from slowapi detail (e.g. "6 per 1 minute")
@@ -177,7 +177,7 @@ async def custom_swagger_ui():
     return HTMLResponse("""<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
-<title>satring — API Docs</title>
+<title>satring | API Docs</title>
 <link rel="icon" type="image/png" href="/static/img/satring-logo-trans-bg.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
 <link rel="stylesheet" href="/static/css/theme.css">
