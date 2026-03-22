@@ -121,7 +121,7 @@
     {% for status, count in stats.by_status.items() %}
     <div><span class="text-green-700">{{ status }}:</span> <span class="{% if status == 'live' %}text-green-400{% elif status == 'confirmed' %}text-amber-400{% elif status == 'down' %}text-red-500{% elif status == 'verified' %}text-cyan-400{% elif status == 'purged' %}text-gray-600{% else %}text-gray-400{% endif %}">{{ count }}</span></div>
     {% endfor %}
-    <div><span class="text-green-700">live %:</span> <span class="text-amber-400">{{ "%.1f" | format(stats.live_pct) }}%</span></div>
+    <div><span class="text-green-700">healthy %:</span> <span class="text-amber-400">{{ "%.1f" | format(stats.healthy_pct) }}%</span></div>
   </div>
 </div>
 
