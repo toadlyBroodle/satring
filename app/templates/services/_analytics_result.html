@@ -17,7 +17,7 @@
     <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">─ health / status ─</div>
     <div class="px-3 py-2 space-y-1">
       {% for status, count in data.health.by_status.items() %}
-      <div><span class="text-green-700">{{ status }}:</span> <span class="{% if status == 'live' %}text-green-400{% elif status == 'confirmed' %}text-amber-400{% elif status == 'dead' %}text-red-500{% else %}text-gray-400{% endif %}">{{ count }}</span></div>
+      <div><span class="text-green-700">{{ status }}:</span> <span class="{% if status == 'live' %}text-green-400{% elif status == 'confirmed' %}text-amber-400{% elif status == 'down' %}text-red-500{% else %}text-gray-400{% endif %}">{{ count }}</span></div>
       {% endfor %}
       <div><span class="text-green-700">live %:</span> <span class="text-amber-400">{{ data.health.live_percentage }}%</span></div>
       <div><span class="text-green-700">domain verified:</span> <span class="text-cyan-400">{{ data.health.domain_verified_count }}</span> ({{ data.health.domain_verified_percentage }}%)</div>
@@ -60,7 +60,7 @@
         <tbody>
           {% for c in data.categories %}
           <tr class="border-t border-green-900">
-            <td class="px-2 py-1"><a href="/?category={{ c.slug }}" class="text-amber-400 hover:underline">{{ c.name }}</a></td>
+            <td class="px-2 py-1"><a href="/directory?category={{ c.slug }}" class="text-amber-400 hover:underline">{{ c.name }}</a></td>
             <td class="text-right px-2 py-1">{{ c.service_count }}</td>
             <td class="text-right px-2 py-1 text-green-400">{{ c.live_count }}</td>
             <td class="text-right px-2 py-1">{{ "%.1f" | format(c.avg_rating) }}</td>

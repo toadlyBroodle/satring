@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Stats{% endblock %}
+{% block meta_description %}Live statistics for satring's paid API directory. Protocol breakdown, health status, category coverage, and growth metrics across L402, x402, and MPP services.{% endblock %}
+{% block og_title %}satring | Directory Stats{% endblock %}
+{% block og_description %}Live statistics for satring's paid API directory. Protocol breakdown, health metrics, and growth across L402, x402, and MPP services.{% endblock %}
+{% block twitter_title %}satring | Directory Stats{% endblock %}
+{% block twitter_description %}Live statistics for satring's paid API directory. Protocol breakdown, health metrics, and growth across L402, x402, and MPP services.{% endblock %}
+{% block content %}
+
+<div class="mb-4">
+  <h1 class="text-xl">Directory Stats</h1>
+  <p class="text-green-700 text-sm">Live metrics from the satring directory. Updated on page load.</p>
+</div>
+
+<!-- Overview -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+  <div class="border border-green-800 p-3 text-center">
+    <div class="text-2xl text-amber-400">{{ stats.total_services }}</div>
+    <div class="text-green-700 text-xs">services</div>
+    <div class="text-green-900 text-xs">indexed endpoints</div>
+  </div>
+  <div class="border border-green-800 p-3 text-center">
+    <div class="text-2xl text-cyan-400">{{ stats.verified_count }}</div>
+    <div class="text-green-700 text-xs">verified</div>
+    <div class="text-green-900 text-xs">domain ownership proved</div>
+  </div>
+  <div class="border border-green-800 p-3 text-center">
+    <div class="text-2xl text-amber-400">{{ stats.confirmed_count }}</div>
+    <div class="text-green-700 text-xs">confirmed</div>
+    <div class="text-green-900 text-xs">paywall detected</div>
+  </div>
+  <div class="border border-green-800 p-3 text-center">
+    <div class="text-2xl text-green-400">{{ stats.live_count }}</div>
+    <div class="text-green-700 text-xs">live</div>
+    <div class="text-green-900 text-xs">responding to probes</div>
+  </div>
+  <div class="border border-green-800 p-3 text-center">
+    <div class="text-2xl text-amber-400">{{ stats.total_ratings }}</div>
+    <div class="text-green-700 text-xs">ratings</div>
+    <div class="text-green-900 text-xs">human/agent reviews</div>
+  </div>
+</div>
+
+<!-- Protocol Breakdown -->
+<div class="border border-green-800 mb-4 text-sm">
+  <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">-- by protocol --</div>
+  <div class="px-3 py-2">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-green-700">
+          <th class="text-left px-2 py-1">protocol</th>
+          <th class="text-right px-2 py-1">services</th>
+          <th class="text-right px-2 py-1">verified</th>
+          <th class="text-right px-2 py-1">confirmed</th>
+          <th class="text-right px-2 py-1">live</th>
+          <th class="text-right px-2 py-1">health %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in stats.by_protocol %}
+        <tr class="border-t border-green-900">
+          <td class="px-2 py-1 text-amber-400">{{ row.protocol }}</td>
+          <td class="text-right px-2 py-1">{{ row.count }}</td>
+          <td class="text-right px-2 py-1 text-cyan-400">{{ row.verified }}</td>
+          <td class="text-right px-2 py-1 text-amber-400">{{ row.confirmed }}</td>
+          <td class="text-right px-2 py-1 text-green-400">{{ row.live }}</td>
+          <td class="text-right px-2 py-1">{{ "%.0f" | format(row.health_pct) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Category Coverage -->
+<div class="border border-green-800 mb-4 text-sm">
+  <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">-- by category --</div>
+  <div class="px-3 py-2 overflow-x-auto">
+    <table class="w-full text-xs">
+      <thead>
+        <tr class="text-green-700">
+          <th class="text-left px-2 py-1">category</th>
+          <th class="text-right px-2 py-1">services</th>
+          <th class="text-right px-2 py-1">verified</th>
+          <th class="text-right px-2 py-1">confirmed</th>
+          <th class="text-right px-2 py-1">live</th>
+          <th class="text-right px-2 py-1">avg rating</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in stats.categories %}
+        <tr class="border-t border-green-900">
+          <td class="px-2 py-1"><a href="/directory?category={{ c.slug }}" class="text-amber-400 hover:underline">{{ c.name }}</a></td>
+          <td class="text-right px-2 py-1">{{ c.count }}</td>
+          <td class="text-right px-2 py-1 text-cyan-400">{{ c.verified }}</td>
+          <td class="text-right px-2 py-1 text-amber-400">{{ c.confirmed }}</td>
+          <td class="text-right px-2 py-1 text-green-400">{{ c.live }}</td>
+          <td class="text-right px-2 py-1">{{ "%.1f" | format(c.avg_rating) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Growth -->
+<div class="border border-green-800 mb-4 text-sm">
+  <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">-- growth --</div>
+  <div class="px-3 py-2 space-y-1">
+    <div><span class="text-green-700">services (7d):</span> <span class="text-amber-400">+{{ stats.added_7d }}</span></div>
+    <div><span class="text-green-700">services (30d):</span> <span class="text-amber-400">+{{ stats.added_30d }}</span></div>
+    <div><span class="text-green-700">ratings (7d):</span> <span class="text-amber-400">+{{ stats.ratings_7d }}</span></div>
+    <div><span class="text-green-700">ratings (30d):</span> <span class="text-amber-400">+{{ stats.ratings_30d }}</span></div>
+  </div>
+</div>
+
+<!-- Health Status -->
+<div class="border border-green-800 mb-4 text-sm">
+  <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">-- health / status --</div>
+  <div class="px-3 py-2 space-y-1">
+    {% for status, count in stats.by_status.items() %}
+    <div><span class="text-green-700">{{ status }}:</span> <span class="{% if status == 'live' %}text-green-400{% elif status == 'confirmed' %}text-amber-400{% elif status == 'down' %}text-red-500{% elif status == 'verified' %}text-cyan-400{% elif status == 'purged' %}text-gray-600{% else %}text-gray-400{% endif %}">{{ count }}</span></div>
+    {% endfor %}
+    <div><span class="text-green-700">live %:</span> <span class="text-amber-400">{{ "%.1f" | format(stats.live_pct) }}%</span></div>
+  </div>
+</div>
+
+<!-- Top Rated -->
+{% if stats.top_rated %}
+<div class="border border-green-800 mb-4 text-sm">
+  <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">-- top rated --</div>
+  <div class="px-3 py-2">
+    {% for s in stats.top_rated %}
+    <div><span class="text-green-700">{{ loop.index }}.</span> <a href="/services/{{ s.slug }}" class="text-amber-400 hover:underline">{{ s.name }}</a> <span class="text-green-700">({{ "%.1f" | format(s.avg_rating) }}/5, {{ s.rating_count }} reviews)</span></div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Recently Added -->
+{% if stats.recently_added %}
+<div class="border border-green-800 text-sm">
+  <div class="border-b border-green-800 px-3 py-1 text-green-700 text-xs">-- recently added --</div>
+  <div class="px-3 py-2">
+    {% for s in stats.recently_added %}
+    <div><span class="text-green-700">{{ loop.index }}.</span> <a href="/services/{{ s.slug }}" class="text-amber-400 hover:underline">{{ s.name }}</a> <span class="text-green-700">[{{ s.protocol }}]</span></div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

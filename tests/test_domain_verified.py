@@ -161,12 +161,12 @@ class TestVerifiedFilter:
         await db.commit()
 
         # Without filter — both show
-        resp = await client.get("/")
+        resp = await client.get("/directory")
         assert "Service filter-v" in resp.text
         assert "Service filter-u" in resp.text
 
         # With verified filter — only verified shows
-        resp = await client.get("/?verified=true")
+        resp = await client.get("/directory?verified=true")
         assert "Service filter-v" in resp.text
         assert "Service filter-u" not in resp.text
 
@@ -189,14 +189,14 @@ class TestVerifiedBadgeUI:
         svc.domain_verified = True
         await db.commit()
 
-        resp = await client.get("/")
+        resp = await client.get("/directory")
         assert "[verified]" in resp.text
 
     @pytest.mark.asyncio
     async def test_card_no_badge_when_unverified(self, client: AsyncClient, db: AsyncSession):
         svc, _ = await _create_service(db, "nobadge-card", url="https://nobadge.example.com")
 
-        resp = await client.get("/")
+        resp = await client.get("/directory")
         # The filter button text "[verified]" will be present, but not in the card context
         # Check detail page instead for clean assertion
         resp = await client.get(f"/services/{svc.slug}")

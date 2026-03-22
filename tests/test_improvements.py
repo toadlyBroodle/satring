@@ -69,7 +69,7 @@ async def many_services(db: AsyncSession):
 class TestWebPagination:
     @pytest.mark.asyncio
     async def test_directory_page_1_default(self, client: AsyncClient, many_services):
-        resp = await client.get("/")
+        resp = await client.get("/directory")
         assert resp.status_code == 200
         # Should show page controls since we have > 20 services
         assert ">1</span>/" in resp.text
@@ -77,20 +77,20 @@ class TestWebPagination:
 
     @pytest.mark.asyncio
     async def test_directory_page_2(self, client: AsyncClient, many_services):
-        resp = await client.get("/?page=2")
+        resp = await client.get("/directory?page=2")
         assert resp.status_code == 200
         assert ">2</span>/" in resp.text
 
     @pytest.mark.asyncio
     async def test_directory_page_out_of_range_clamps(self, client: AsyncClient, many_services):
-        resp = await client.get("/?page=999")
+        resp = await client.get("/directory?page=999")
         assert resp.status_code == 200
         # Should clamp to last page
         assert ">2</span>/" in resp.text
 
     @pytest.mark.asyncio
     async def test_directory_no_pagination_when_few(self, client: AsyncClient, sample_service: Service):
-        resp = await client.get("/")
+        resp = await client.get("/directory")
         assert resp.status_code == 200
         # Only 1 service, should NOT have prev/next links
         assert "prev]</a>" not in resp.text
@@ -98,7 +98,7 @@ class TestWebPagination:
 
     @pytest.mark.asyncio
     async def test_directory_pagination_preserves_filters(self, client: AsyncClient, many_services):
-        resp = await client.get("/?category=tools&page=1")
+        resp = await client.get("/directory?category=tools&page=1")
         assert resp.status_code == 200
         # Pagination links should include the category filter
         assert "category=tools" in resp.text
@@ -157,7 +157,7 @@ class TestAPIRatingsLimitOffset:
 class TestLoadingIndicators:
     @pytest.mark.asyncio
     async def test_search_has_htmx_indicator(self, client: AsyncClient):
-        resp = await client.get("/")
+        resp = await client.get("/directory")
         assert resp.status_code == 200
         assert 'id="search-indicator"' in resp.text
         assert "htmx-indicator" in resp.text

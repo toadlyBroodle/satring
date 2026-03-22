@@ -31,7 +31,7 @@
 {% block content %}
 
 <div class="mb-4 text-sm flex flex-wrap gap-4">
-  <a href="/" class="text-green-700 hover:text-amber-400">&lt; back to directory</a>
+  <a href="/directory" class="text-green-700 hover:text-amber-400">&lt; back to directory</a>
   <a href="/services/{{ service.slug }}/edit" class="btn-edit px-3 py-0.5"><span class="font-bold">[</span>EDIT LISTING<span class="font-bold">]</span></a>
   {% if not service.domain_verified %}<a href="/services/{{ service.slug }}/recover" class="btn-verify px-3 py-0.5"><span class="font-bold">[</span>VERIFY DOMAIN<span class="font-bold">]</span></a>{% endif %}
 </div>
@@ -68,7 +68,7 @@
       {% if service.mpp_realm %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">realm</td><td class="px-3 py-1.5" id="meta-mpp-realm"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>{% endif %}
       {% if service.mpp_currency %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">currency</td><td class="px-3 py-1.5" id="meta-mpp-currency"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>{% endif %}
       {% endif %}
-      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">status</td><td class="px-3 py-1.5">{% if service.domain_verified %}<span class="text-cyan-400">[domain verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% elif service.status == 'unknown' %}text-gray-400{% else %}text-green-700{% endif %}">{{ service.status }}</span>{% endif %}</td></tr>
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">status</td><td class="px-3 py-1.5">{% if service.domain_verified %}<span class="text-cyan-400">[domain verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'down' %}text-red-500{% elif service.status == 'unknown' %}text-gray-400{% else %}text-green-700{% endif %}">{{ service.status }}</span>{% endif %}</td></tr>
       {% if service.owner_name %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">provider</td><td class="px-3 py-1.5">{{ service.owner_name }}</td></tr>{% endif %}
       {% if service.owner_contact %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">contact</td><td class="px-3 py-1.5" id="meta-contact"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>{% endif %}
       {% set r_val = ("%.1f/5"|format(service.avg_rating)) if service.avg_rating else "n/a" %}

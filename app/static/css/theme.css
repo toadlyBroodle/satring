@@ -15,7 +15,7 @@
   --verified-dim: #155e75;
   --confirmed:     #ffd700;
   --live:          #5fd787;
-  --dead:          #ff5f5f;
+  --down:          #ff5f5f;
   --unknown:       #a8a8a8;
   --danger:       #991b1b;
   --danger-text:  #f87171;
@@ -69,9 +69,9 @@ input, select, textarea { caret-color: var(--text); }
 .filter-live:hover        { color: var(--live); }
 .filter-live.active       { color: var(--live); }
 
-.filter-dead              { color: color-mix(in srgb, var(--dead) 70%, transparent); }
-.filter-dead:hover        { color: var(--dead); }
-.filter-dead.active       { color: var(--dead); }
+.filter-down              { color: color-mix(in srgb, var(--down) 70%, transparent); }
+.filter-down:hover        { color: var(--down); }
+.filter-down.active       { color: var(--down); }
 
 .filter-unknown           { color: color-mix(in srgb, var(--unknown) 70%, transparent); }
 .filter-unknown:hover     { color: var(--unknown); }

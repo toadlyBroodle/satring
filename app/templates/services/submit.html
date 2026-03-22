@@ -44,10 +44,11 @@
         <div class="flex gap-4">
           {% set proto_parts = (form.protocol if form else 'L402').split('+') %}
           {% for p in ['L402', 'x402', 'MPP'] %}
-          <label class="flex items-center gap-1 cursor-pointer text-green-400">
-            <input type="checkbox" class="proto-cb accent-green-500" value="{{ p }}"
+          <label class="cursor-pointer flex items-center gap-1.5 hover:text-amber-400">
+            <input type="checkbox" class="hidden peer proto-cb" value="{{ p }}"
               {% if p in proto_parts %}checked{% endif %}>
-            {{ p }}
+            <span class="peer-checked:text-amber-400 category-check"></span>
+            <span class="peer-checked:text-amber-400">{{ p }}</span>
           </label>
           {% endfor %}
         </div>

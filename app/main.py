@@ -148,7 +148,7 @@ async def lifespan(app: FastAPI):
     await stop_flush_task()
 
 
-app = FastAPI(title="satring", description="Paid API directory for AI agents. L402, x402, and MPP services with health monitoring, human ratings, and MCP integration.", lifespan=lifespan, docs_url=None)
+app = FastAPI(title="satring", description="Curated paid API directory for AI agents. L402, x402, and MPP services with health monitoring, human/agent ratings, and MCP integration.", lifespan=lifespan, docs_url=None)
 app.state.limiter = limiter
 async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
     # Parse window from slowapi detail (e.g. "6 per 1 minute")

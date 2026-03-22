@@ -22,7 +22,7 @@ python -m pytest -k "test_create_service"
 
 ## Architecture
 
-FastAPI application serving an L402 + x402 dual-protocol paid API directory. Server-rendered HTML via Jinja2 + HTMX, with a parallel JSON API.
+FastAPI application serving an L402 + x402 + MPP tri-protocol paid API directory. Server-rendered HTML via Jinja2 + HTMX, with a parallel JSON API.
 
 **Route split:**
 - `app/routes/api.py` (prefix `/api/v1`): JSON API with dual-protocol payment gates via `require_payment()` dependency
@@ -56,7 +56,13 @@ FastAPI application serving an L402 + x402 dual-protocol paid API directory. Ser
 
 **Test mode:** `AUTH_ROOT_KEY=test-mode` in `.env` bypasses all payment gates. The `payments_enabled()` function in `config.py` controls this.
 
-**Health monitoring:** `app/health.py` runs a background task that probes all services on an interval (default 6h). Detects L402 and x402 protocols via response headers. Updates service status to `live`, `confirmed`, or `dead`.
+**Health monitoring:** `app/health.py` runs a background task that probes all services on an interval (default 6h). Detects L402, x402, and MPP protocols via response headers. Updates service status to `live`, `confirmed`, or `down`.
+
+**MPP protocol (listing only):** MPP (Machine Payments Protocol by Stripe/Tempo) services can be listed and detected. MPP uses `WWW-Authenticate: Payment` headers. MPP-specific fields: `mpp_method` (tempo/stripe/lightning/custom), `mpp_realm`, `mpp_currency`. The scraper indexes mpp.dev registry as source 8. Accepting MPP payments is not yet implemented.
+
+**Free API quota:** Free list/search endpoints return up to 10 results per IP per day (`FREE_API_RESULTS_PER_DAY` in config.py). Enforced in `paginated_services()` via in-memory daily counter. Skipped in test mode.
+
+**Stats landing page:** `/` serves a free public stats page with protocol breakdown, category coverage, health status, growth, and leaderboards. The service directory is at `/directory`.
 
 
 ## Key Files
@@ -66,8 +72,8 @@ FastAPI application serving an L402 + x402 dual-protocol paid API directory. Ser
 - `app/l402.py`: Macaroon minting/verification, invoice creation via LNbits API
 - `app/x402.py`: x402 protocol: build challenges, parse signatures, facilitator calls
 - `app/health.py`: Background service liveness probing
-- `app/models.py`: SQLAlchemy async models (Service with x402 columns, Category, Rating, ConsumedPayment)
-- `app/utils.py`: Slugification, edit tokens, domain extraction, SSRF protection (`is_public_hostname`)
+- `app/models.py`: SQLAlchemy async models (Service with x402 + MPP columns, Category, Rating, ConsumedPayment)
+- `app/utils.py`: Slugification, edit tokens, domain extraction, SSRF protection (`is_public_hostname`), protocol validation (`is_valid_protocol`, `canonical_protocol`, `BASE_PROTOCOLS`)
 - `app/main.py`: App factory, security middleware (CSP, CSRF origin check), category seeding, health monitor lifecycle
 
 ## Config Variables
@@ -92,7 +98,7 @@ SQLite via aiosqlite async driver. Default path: `db/sr.db`. Models use SQLAlche
 
 Service ratings are denormalized: `avg_rating` and `rating_count` on the Service model are updated on each new Rating insert.
 
-x402 columns (`x402_network`, `x402_asset`, `x402_pay_to`, `pricing_usd`) are nullable on the Service model. Migration in `init_db()` adds them via `ALTER TABLE` if missing.
+x402 columns (`x402_network`, `x402_asset`, `x402_pay_to`, `pricing_usd`) and MPP columns (`mpp_method`, `mpp_realm`, `mpp_currency`) are nullable on the Service model. Migration in `init_db()` adds them via `ALTER TABLE` if missing, and renames status `'dead'` to `'down'` in services and probe_history tables.
 
 ## Testing
 
@@ -100,6 +106,7 @@ Tests use async fixtures from `tests/conftest.py`:
 - `client`: AsyncClient with fresh in-memory SQLite DB (function-scoped)
 - `sample_service`: Pre-created L402 service with categories
 - `sample_x402_service`: Pre-created x402 service with full metadata
+- `sample_mpp_service`: Pre-created MPP service with method/realm/currency
 - `sample_service_with_ratings`: Service with 3 ratings
 - `class_client`/`class_db`: Class-scoped variants for shared state across test methods
 
@@ -121,4 +128,4 @@ Comments prefixed `SECURITY:` mark security-critical code. Key patterns:
 - Terminal dark theme: green-on-black UI using Tailwind classes + CSS variables from `app/static/css/theme.css`
 - Use CSS variables (`--text`, `--bg`, `--accent`, etc.) from theme.css for any JS-generated colors
 - Pydantic response models are defined inline in `api.py` alongside the routes that use them
-- Service statuses: `unverified`, `confirmed`, `live`, `dead`, `purged` (purged = soft-deleted, excluded from all queries)
+- Service statuses: `unverified`, `confirmed`, `live`, `down`, `purged` (purged = soft-deleted, excluded from all queries)

@@ -3,34 +3,38 @@
 / __|/ _` | __| '__| | '_ \ / _` |
 \__ \ (_| | |_| |  | | | | | (_| |
 |___/\__,_|\__|_|  |_|_| |_|\__, |
-                             |___/  ⚡ L402 + x402
+                             |___/  L402 + x402 + MPP
 ```
 
-<img src="app/static/img/satring-logo-trans-bg.png" alt="satring" width="20"> [satring.com](https://satring.com) — the best curated L402 + x402 API directory. Find, rate, and connect to paid APIs via Lightning (L402) or USDC on Base (x402).
+<img src="app/static/img/satring-logo-trans-bg.png" alt="satring" width="20"> [satring.com](https://satring.com) — curated paid API directory for AI agents. Find, rate, and connect to paid APIs via Lightning (L402), USDC on Base (x402), or Stripe/Tempo (MPP).
 
-Satring helps AI agents and developers discover paid API services that accept payments via the [L402 protocol](https://www.l402.org/) (Bitcoin Lightning) or the [x402 protocol](https://www.x402.org/) (USDC on Base). Browse the curated directory, submit your service, and let agents find you.
+Satring helps AI agents and developers discover paid API services that accept payments via the [L402 protocol](https://www.l402.org/) (Bitcoin Lightning), the [x402 protocol](https://www.x402.org/) (USDC on Base), or the [Machine Payments Protocol](https://mpp.dev/) (Stripe/Tempo). Browse the curated directory, submit your service, and let agents find you.
 
 [![Watch the demo](https://img.youtube.com/vi/tjcg0qo5mMo/maxresdefault.jpg)](https://youtu.be/tjcg0qo5mMo)
 **▶ Watch the 3-minute demo**
 
 ## Why
 
-AI agents can now [pay for APIs autonomously](https://lightning.engineering/posts/2026-02-11-ln-agent-tools/) using Lightning. But there's no good way to discover what's available. Satring is the best curated directory for L402 and x402 paid APIs.
+AI agents can now [pay for APIs autonomously](https://lightning.engineering/posts/2026-02-11-ln-agent-tools/) using Lightning, USDC, or Stripe. But there's no good way to discover what's available. Satring is the only curated, health-monitored directory with human ratings across all three payment protocols.
 
 ## Features
 
+- **Stats landing page** with live directory metrics: protocol breakdown, category coverage, health status, growth
 - Browse, search, and filter paid APIs by category, status, and protocol
-- **Dual-protocol payments**: L402 (Bitcoin Lightning) and x402 (USDC on Base) supported side by side
-- Submit services with payment gate (anti-spam), payable via either protocol
+- **Three-protocol support**: L402 (Bitcoin Lightning), x402 (USDC on Base), and MPP (Stripe/Tempo)
+- Protocol checkboxes on submit/edit forms for multi-protocol services (e.g. L402+MPP)
+- Submit services with payment gate (anti-spam), payable via L402 or x402
 - Ratings and reputation system (also payment-gated)
 - Edit your listing with secure edit tokens
 - Recover lost edit tokens via domain verification (`.well-known/satring-verify`)
 - Shared edit tokens across same-domain services; one token manages all your listings
 - JSON API for programmatic access and agent queries
+- **Daily free API quota** (10 results/IP/day) with unlimited access via paid bulk endpoint
 - Premium endpoints (bulk export, analytics, reputation) gated via L402 or x402
 - Per-service health analytics: uptime percentage, average latency, probe history
-- Health probing with automatic protocol detection (L402, x402, or both)
-- Service status tracking (live / confirmed / dead)
+- Health probing with automatic protocol detection (L402, x402, MPP, or any combination)
+- Service status tracking (live / confirmed / down / unverified)
+- Anti-scraping protection with IP-based daily quotas and permanent bans
 
 ## Quick Start
 
@@ -54,12 +58,14 @@ Full interactive docs at [satring.com/docs](https://satring.com/docs).
 
 ### Free endpoints
 
+Free endpoints return up to 10 results per IP per day. For unlimited access, use the payment-gated `/services/bulk` endpoint.
+
 ```bash
 # List services (paginated, filterable by category, status, and protocol)
 curl "https://satring.com/api/v1/services?category=search&status=live&protocol=L402&page=1&page_size=20"
 
 # Search (also filterable by status and protocol)
-curl "https://satring.com/api/v1/search?q=satring&protocol=X402"
+curl "https://satring.com/api/v1/search?q=satring&protocol=x402"
 
 # Service details
 curl https://satring.com/api/v1/services/my-service
@@ -114,11 +120,12 @@ curl -X POST https://satring.com/api/v1/services \
   }'
 ```
 
-#### Dual-protocol listing (L402+x402)
+#### Multi-protocol listings
 
-A single service can support both payment rails. Set `"protocol": "L402+x402"` and include both sat pricing and x402 fields:
+A single service can support multiple payment rails. Use `+` to combine protocols (e.g. `L402+x402`, `L402+MPP`, `x402+MPP`, `L402+x402+MPP`) and include the required fields for each:
 
 ```bash
+# L402 + MPP dual-protocol service
 curl -X POST https://satring.com/api/v1/services \
   -H "Authorization: L402 <macaroon>:<preimage>" \
   -H "Content-Type: application/json" \
@@ -127,16 +134,33 @@ curl -X POST https://satring.com/api/v1/services \
     "url": "https://api.example.com",
     "pricing_sats": 10,
     "pricing_model": "per-request",
-    "protocol": "L402+x402",
-    "x402_network": "eip155:8453",
-    "x402_asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    "x402_pay_to": "0xYourWalletAddress",
-    "pricing_usd": "0.50",
+    "protocol": "L402+MPP",
+    "mpp_method": "tempo",
+    "mpp_currency": "usd",
     "category_ids": [1, 2]
   }'
 ```
 
-Dual-protocol services appear in search results when filtering by either `L402` or `x402`.
+Multi-protocol services appear in search results when filtering by any of their constituent protocols.
+
+#### MPP-only listing
+
+```bash
+curl -X POST https://satring.com/api/v1/services \
+  -H "Authorization: L402 <macaroon>:<preimage>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My MPP API",
+    "url": "https://mpp.api.example.com",
+    "protocol": "MPP",
+    "mpp_method": "tempo",
+    "mpp_realm": "api.example.com",
+    "mpp_currency": "usd",
+    "category_ids": [1]
+  }'
+```
+
+MPP fields: `mpp_method` (required: "tempo", "stripe", "lightning", "custom"), `mpp_realm` (optional), `mpp_currency` (optional).
 
 #### Other gated operations
 
@@ -186,11 +210,11 @@ curl -X POST https://satring.com/api/v1/services/my-service/recover/verify
 
 ### Rate limiting
 
-Free API endpoints are rate limited at 6 requests/minute (burst of 5). Payment-gated endpoints have a higher limit of 60 requests/minute (burst of 10). Rate-limited responses include a `Retry-After` header indicating how many seconds to wait.
+Free API endpoints are rate limited at 6 requests/minute (burst of 5) with a daily quota of 10 results per IP. Payment-gated endpoints have a higher limit of 60 requests/minute (burst of 10). Rate-limited responses include a `Retry-After` header indicating how many seconds to wait.
 
 ### Health probes
 
-The directory probes listed services periodically to detect protocol support and liveness. Probes attempt HEAD first, then fall back to GET if HEAD returns 405. Many nginx/reverse proxy configs reject HEAD by default, so if your service shows as "confirmed" rather than "live", this is normal and expected.
+The directory probes listed services periodically to detect protocol support and liveness. Probes detect L402 (`WWW-Authenticate: L402/LSAT`), x402 (`PAYMENT-REQUIRED` header), and MPP (`WWW-Authenticate: Payment`) protocols automatically. Probes attempt HEAD first, then fall back to GET if HEAD returns 405. Many nginx/reverse proxy configs reject HEAD by default, so if your service shows as "confirmed" rather than "live", this is normal and expected.
 
 ## Configuration
 
@@ -219,6 +243,26 @@ Environment variables (see `.env`):
 | `AUTH_ANALYTICS_PRICE_USD` | `0.25` | x402 cost for directory analytics |
 | `AUTH_SERVICE_ANALYTICS_PRICE_USD` | `0.025` | x402 cost for per-service health analytics |
 | `AUTH_REPUTATION_PRICE_USD` | `0.05` | x402 cost for reputation lookup |
+
+## Scraper
+
+The scraper discovers and indexes services from multiple sources:
+
+```bash
+# Scrape all 8 sources, probe endpoints, write to CSV for review
+python db/scrape_sources.py
+
+# Dry run (scrape + probe, print results, don't write CSV)
+python db/scrape_sources.py --dry-run -v
+
+# Re-probe existing DB services and update status
+python db/scrape_sources.py --recheck
+
+# Ingest reviewed CSV into the database
+python db/scrape_sources.py --add-scraped
+```
+
+Sources: Lightning Faucet catalog, awesome-L402, Lightning Faucet Registry, domain crawler, GitHub search, x402.org ecosystem, awesome-x402, mpp.dev registry.
 
 ## MCP Server
 
@@ -252,6 +296,7 @@ Tools: `discover_services`, `list_services`, `get_service`, `get_ratings`, `list
 - **SQLAlchemy** (async) + **SQLite**: simple, no external DB needed
 - **L402 / Macaroons**: Lightning-native authentication via [pymacaroons](https://github.com/ecordell/pymacaroons)
 - **x402 / USDC on Base**: stablecoin payments via [xpay.sh](https://xpay.sh) facilitator
+- **MPP**: Machine Payments Protocol support (listing and detection; payment acceptance coming soon)
 - **Tailwind CSS** (browser CDN): terminal-themed green-on-black UI
 
 ## Contributing

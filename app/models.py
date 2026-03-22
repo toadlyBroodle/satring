@@ -54,7 +54,7 @@ class Service(Base):
     mpp_currency = Column(String(50), nullable=True)       # "usd" or token address
     avg_rating = Column(Float, default=0.0)
     rating_count = Column(Integer, default=0)
-    status = Column(String(20), default="unverified")  # unverified | confirmed | live | dead | purged
+    status = Column(String(20), default="unverified")  # unverified | confirmed | live | down | purged
     last_probed_at = Column(DateTime, nullable=True)
     dead_since = Column(DateTime, nullable=True)
     avg_latency_ms = Column(Float, nullable=True)       # rolling 7-day average
@@ -73,7 +73,7 @@ class ProbeHistory(Base):
     id = Column(Integer, primary_key=True)
     service_id = Column(Integer, ForeignKey("services.id", ondelete="CASCADE"), nullable=False, index=True)
     probed_at = Column(DateTime, nullable=False)
-    status = Column(String(20), nullable=False)        # live | confirmed | dead
+    status = Column(String(20), nullable=False)        # live | confirmed | down
     response_time_ms = Column(Float, nullable=True)
     detected_protocol = Column(String(20), nullable=True)
     status_code = Column(Integer, nullable=True)

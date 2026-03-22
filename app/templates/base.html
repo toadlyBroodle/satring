@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}satring{% endblock %} | Paid API Directory for AI Agents</title>
-  <meta name="description" content="{% block meta_description %}Curated, health-monitored paid API directory for AI agents. Browse L402 (Lightning), x402 (USDC), and MPP services with human ratings, liveness probes, and MCP integration.{% endblock %}">
+  <title>{% block title %}satring{% endblock %} | Curated Paid API Directory for AI Agents</title>
+  <meta name="description" content="{% block meta_description %}Curated, health-monitored paid API directory for AI agents. Browse L402 (Lightning), x402 (USDC), and MPP services with human/agent ratings, liveness probes, and MCP integration.{% endblock %}">
   <!-- Open Graph -->
-  <meta property="og:title" content="{% block og_title %}satring | Paid API Directory for AI Agents{% endblock %}">
-  <meta property="og:description" content="{% block og_description %}Curated, health-monitored paid API directory for AI agents. L402, x402, and MPP services with human ratings and MCP integration.{% endblock %}">
+  <meta property="og:title" content="{% block og_title %}satring | Curated Paid API Directory for AI Agents{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}Curated, health-monitored paid API directory for AI agents. L402, x402, and MPP services with human/agent ratings and MCP integration.{% endblock %}">
   <meta property="og:type" content="{% block og_type %}website{% endblock %}">
   <meta property="og:image" content="{% block og_image %}https://satring.com/static/img/satring-logo.jpg{% endblock %}">
   <meta property="og:site_name" content="satring">
   <meta name="keywords" content="paid api directory, l402 directory, x402 directory, mpp directory, ai agent api, agentic commerce, machine payments, pay per request api, mcp server, api health monitoring, api marketplace for agents">
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="{% block twitter_title %}satring | Paid API Directory for AI Agents{% endblock %}">
-  <meta name="twitter:description" content="{% block twitter_description %}Curated, health-monitored paid API directory for AI agents. L402, x402, and MPP services with human ratings and MCP integration.{% endblock %}">
+  <meta name="twitter:title" content="{% block twitter_title %}satring | Curated Paid API Directory for AI Agents{% endblock %}">
+  <meta name="twitter:description" content="{% block twitter_description %}Curated, health-monitored paid API directory for AI agents. L402, x402, and MPP services with human/agent ratings and MCP integration.{% endblock %}">
   <meta name="twitter:image" content="{% block twitter_image %}https://satring.com/static/img/satring-logo.jpg{% endblock %}">
   {% block extra_head %}{% endblock %}
   <link rel="icon" type="image/png" href="/static/img/satring-logo-trans-bg.png">
@@ -65,10 +65,11 @@
 \__ \ (_| | |_| |  | | | | | (_| |
 |___/\__,_|\__|_|  |_|_| |_|\__, |
                              |___/</pre>
-      <div class="text-amber-400 flex items-center gap-1 mb-2"><img src="/static/img/satring-logo-trans-bg.png" alt="" class="h-5 w-5"> paid API directory for AI agents</div></a>
+      <div class="text-amber-400 flex items-center gap-1 mb-2"><img src="/static/img/satring-logo-trans-bg.png" alt="" class="h-5 w-5"> curated paid API directory for AI agents</div></a>
       <nav class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <span class="text-amber-400">₿</span>
-        <a href="/" class="nav-link hover:text-amber-400 transition-colors {% if request and request.url.path == '/' %}text-amber-400{% endif %}">&gt; <span class="font-bold">[</span>directory<span class="font-bold">]</span></a>
+        <a href="/" class="nav-link hover:text-amber-400 transition-colors {% if request and request.url.path == '/' %}text-amber-400{% endif %}">&gt; <span class="font-bold">[</span>stats<span class="font-bold">]</span></a>
+        <a href="/directory" class="nav-link hover:text-amber-400 transition-colors {% if request and request.url.path == '/directory' %}text-amber-400{% endif %}">&gt; <span class="font-bold">[</span>directory<span class="font-bold">]</span></a>
         <a href="/submit" class="nav-link hover:text-amber-400 transition-colors {% if request and request.url.path == '/submit' %}text-amber-400{% endif %}">&gt; <span class="font-bold">[</span>submit<span class="font-bold">]</span></a>
         <a href="/docs" target="_blank" hx-boost="false" class="nav-link hover:text-amber-400 transition-colors">&gt; <span class="font-bold">[</span>api<span class="font-bold">]</span></a>
         <a href="https://youtu.be/tjcg0qo5mMo" target="_blank" hx-boost="false" class="nav-link transition-colors" style="color: var(--verified);">&gt; <span class="font-bold">[</span>demo<span class="font-bold">]</span></a>
@@ -84,7 +85,7 @@
 
   <footer class="border-t border-green-900 px-4 py-3">
     <div class="max-w-6xl mx-auto text-green-700 text-xs">
-      <span>satring | paid API directory for AI agents</span>
+      <span>satring | curated paid API directory for AI agents</span>
       <span class="hidden sm:inline ml-4">// connecting AI agents with paid APIs via Lightning and USDC</span>
     </div>
   </footer>
