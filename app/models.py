@@ -49,6 +49,9 @@ class Service(Base):
     x402_asset = Column(String(100), nullable=True)       # USDC contract address
     x402_pay_to = Column(String(100), nullable=True)      # wallet address
     pricing_usd = Column(String(20), nullable=True)       # "0.01"
+    mpp_method = Column(String(50), nullable=True)         # "tempo", "stripe", "lightning"
+    mpp_realm = Column(String(200), nullable=True)         # protection space / domain
+    mpp_currency = Column(String(50), nullable=True)       # "usd" or token address
     avg_rating = Column(Float, default=0.0)
     rating_count = Column(Integer, default=0)
     status = Column(String(20), default="unverified")  # unverified | confirmed | live | dead | purged

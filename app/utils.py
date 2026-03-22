@@ -17,7 +17,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Service, Category, Rating
 
 
-VALID_PROTOCOLS = ("L402", "x402", "L402+x402")
+BASE_PROTOCOLS = ("L402", "x402", "MPP")
+_PROTO_ORDER = {"L402": 0, "x402": 1, "MPP": 2}
+
+
+def canonical_protocol(*parts: str) -> str:
+    """Sort protocol parts into canonical order and join with '+'."""
+    return "+".join(sorted(set(parts), key=lambda p: _PROTO_ORDER.get(p, 99)))
+
+
+def is_valid_protocol(protocol: str) -> bool:
+    """Check if a '+'-joined protocol string contains only valid base protocols in canonical order."""
+    if not protocol:
+        return False
+    parts = protocol.split("+")
+    if not parts or not all(p in _PROTO_ORDER for p in parts):
+        return False
+    if len(parts) != len(set(parts)):
+        return False
+    return protocol == canonical_protocol(*parts)
+
+
+# Keep for backwards compatibility in imports
+VALID_PROTOCOLS = ("L402", "x402", "MPP", "L402+x402", "L402+MPP", "x402+MPP", "L402+x402+MPP")
 
 
 def normalize_protocol(protocol: str | None) -> str | None:
@@ -25,18 +47,20 @@ def normalize_protocol(protocol: str | None) -> str | None:
     if not protocol:
         return None
     protocol = protocol.replace(" ", "+")
-    return protocol if protocol in VALID_PROTOCOLS else None
+    return protocol if is_valid_protocol(protocol) else None
 
 
 def protocol_filter(column, protocol: str):
     """Return a SQLAlchemy filter clause for protocol matching.
 
-    L402 or x402 also matches L402+x402 (dual-protocol) services.
-    L402+x402 matches only dual-protocol services.
+    Single-protocol filter (e.g. "MPP") matches any combo containing it.
+    Multi-protocol filter (e.g. "L402+x402") matches only that exact combo.
     """
-    if protocol == "L402+x402":
-        return column == "L402+x402"
-    return column.in_([protocol, "L402+x402"])
+    if "+" in protocol:
+        return column == protocol
+    # Match any protocol string that contains this base protocol
+    matching = [p for p in VALID_PROTOCOLS if protocol in p.split("+")]
+    return column.in_(matching)
 
 
 def escape_like(s: str, escape: str = "\\") -> str:
@@ -183,6 +207,9 @@ async def overwrite_purged_service(
     x402_asset: str | None = None,
     x402_pay_to: str | None = None,
     pricing_usd: str | None = None,
+    mpp_method: str | None = None,
+    mpp_realm: str | None = None,
+    mpp_currency: str | None = None,
 ) -> None:
     """Overwrite a purged service's fields for re-submission. Preserves ratings."""
     service.name = name
@@ -198,6 +225,9 @@ async def overwrite_purged_service(
     service.x402_asset = x402_asset
     service.x402_pay_to = x402_pay_to
     service.pricing_usd = pricing_usd
+    service.mpp_method = mpp_method
+    service.mpp_realm = mpp_realm
+    service.mpp_currency = mpp_currency
     service.status = status
     service.dead_since = None
     service.last_probed_at = None

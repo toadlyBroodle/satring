@@ -16,6 +16,7 @@ from app.config import (
     settings, payments_enabled, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT,
     MAX_X402_NETWORK, MAX_X402_ASSET, MAX_X402_PAY_TO, MAX_PRICING_USD,
+    MAX_MPP_METHOD, MAX_MPP_REALM, MAX_MPP_CURRENCY,
     RATE_EDIT, RATE_DELETE, RATE_RECOVER,
     RATE_SEARCH, RATE_PAYMENT_STATUS, RATE_SITEMAP,
 )
@@ -24,7 +25,7 @@ from app.l402 import create_invoice, check_payment_status, check_and_consume_pay
 from app.main import templates, limiter
 from app.models import Service, Category, Rating, service_categories
 from app.routes.api import build_reputation_data, build_analytics_data, build_service_analytics
-from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter
+from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter, is_valid_protocol, BASE_PROTOCOLS
 
 router = APIRouter(include_in_schema=False)
 
@@ -206,11 +207,18 @@ async def service_meta(request: Request, slug: str, db: AsyncSession = Depends(g
         "url": service.url,
         "owner_contact": service.owner_contact or "",
     }
-    if service.protocol in ("x402", "L402+x402") and service.x402_pay_to:
+    parts = service.protocol.split("+")
+    if "x402" in parts and service.x402_pay_to:
         data["x402_pay_to"] = service.x402_pay_to
         data["x402_network"] = service.x402_network or "eip155:8453"
         if service.x402_asset:
             data["x402_asset"] = service.x402_asset
+    if "MPP" in parts and service.mpp_method:
+        data["mpp_method"] = service.mpp_method
+        if service.mpp_realm:
+            data["mpp_realm"] = service.mpp_realm
+        if service.mpp_currency:
+            data["mpp_currency"] = service.mpp_currency
     return JSONResponse(data)
 
 
@@ -240,6 +248,9 @@ async def submit_service(
     x402_asset: str = Form(""),
     x402_pay_to: str = Form(""),
     pricing_usd: str = Form(""),
+    mpp_method: str = Form(""),
+    mpp_realm: str = Form(""),
+    mpp_currency: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     form_data = await request.form()
@@ -259,6 +270,7 @@ async def submit_service(
                 "existing_edit_token": existing_edit_token,
                 "x402_network": x402_network, "x402_asset": x402_asset,
                 "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
+                "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
             },
             "selected_category_ids": category_ids,
         }, status_code=422)
@@ -271,6 +283,8 @@ async def submit_service(
         "logo_url": MAX_LOGO_URL, "x402_network": MAX_X402_NETWORK,
         "x402_asset": MAX_X402_ASSET, "x402_pay_to": MAX_X402_PAY_TO,
         "pricing_usd": MAX_PRICING_USD,
+        "mpp_method": MAX_MPP_METHOD, "mpp_realm": MAX_MPP_REALM,
+        "mpp_currency": MAX_MPP_CURRENCY,
     }
     for field_name, max_len in LENGTH_LIMITS.items():
         val = locals()[field_name]
@@ -287,6 +301,7 @@ async def submit_service(
                     "existing_edit_token": existing_edit_token,
                     "x402_network": x402_network, "x402_asset": x402_asset,
                     "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
+                "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
                 },
                 "selected_category_ids": category_ids,
             }, status_code=422)
@@ -309,17 +324,19 @@ async def submit_service(
                 "existing_edit_token": existing_edit_token,
                 "x402_network": x402_network, "x402_asset": x402_asset,
                 "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
+                "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
             },
             "selected_category_ids": category_ids,
         }, status_code=422)
 
-    # Clear sat pricing for x402-only services
-    if protocol == "x402":
+    proto_parts = protocol.split("+")
+    # Clear sat pricing when no L402 component
+    if "L402" not in proto_parts:
         pricing_sats = 0
         pricing_model = "per-request"
 
     # Validate x402 fields before payment gate so users don't pay for a rejected submission
-    if protocol in ("x402", "L402+x402"):
+    if "x402" in proto_parts:
         missing = []
         if not x402_pay_to:
             missing.append("wallet address")
@@ -338,6 +355,27 @@ async def submit_service(
                     "existing_edit_token": existing_edit_token,
                     "x402_network": x402_network, "x402_asset": x402_asset,
                     "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
+                "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
+                },
+                "selected_category_ids": category_ids,
+            }, status_code=422)
+
+    # Validate MPP fields before payment gate
+    if "MPP" in proto_parts:
+        if not mpp_method:
+            categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
+            return templates.TemplateResponse(request, "services/submit.html", {
+                "categories": categories,
+                "error": "Payment method required for MPP protocol.",
+                "form": {
+                    "name": name, "url": url, "description": description,
+                    "protocol": protocol, "pricing_sats": pricing_sats,
+                    "pricing_model": pricing_model, "owner_name": owner_name,
+                    "owner_contact": owner_contact, "logo_url": logo_url,
+                    "existing_edit_token": existing_edit_token,
+                    "x402_network": x402_network, "x402_asset": x402_asset,
+                    "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
+                    "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
                 },
                 "selected_category_ids": category_ids,
             }, status_code=422)
@@ -366,6 +404,7 @@ async def submit_service(
                 "existing_edit_token": existing_edit_token,
                 "x402_network": x402_network, "x402_asset": x402_asset,
                 "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
+                "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
             },
             "selected_category_ids": category_ids,
             "existing_slug": existing.slug,
@@ -388,6 +427,7 @@ async def submit_service(
                 "existing_edit_token": existing_edit_token,
                 "x402_network": x402_network, "x402_asset": x402_asset,
                 "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
+                "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
             }
             for cid in category_ids:
                 form_fields[f"categories_{cid}"] = str(cid)
@@ -449,6 +489,8 @@ async def submit_service(
             category_ids=category_ids,
             domain_verified=auto_verified,
             domain_challenge=inherited_challenge,
+            mpp_method=mpp_method or None, mpp_realm=mpp_realm or None,
+            mpp_currency=mpp_currency or None,
         )
         service = purged
     else:
@@ -458,6 +500,8 @@ async def submit_service(
             owner_name=owner_name, owner_contact=owner_contact, logo_url=logo_url,
             x402_network=x402_network or None, x402_asset=x402_asset or None,
             x402_pay_to=x402_pay_to or None, pricing_usd=pricing_usd or None,
+            mpp_method=mpp_method or None, mpp_realm=mpp_realm or None,
+            mpp_currency=mpp_currency or None,
             edit_token_hash=edit_token_hash,
             domain_verified=auto_verified,
             domain_challenge=inherited_challenge,
@@ -543,6 +587,9 @@ async def edit_service(
     x402_asset: str = Form(""),
     x402_pay_to: str = Form(""),
     pricing_usd: str = Form(""),
+    mpp_method: str = Form(""),
+    mpp_realm: str = Form(""),
+    mpp_currency: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -595,8 +642,9 @@ async def edit_service(
         service.description = description
     if protocol:
         service.protocol = protocol
-    # Clear sat pricing for x402-only services
-    if service.protocol == "x402":
+    # Clear sat pricing when no L402 component
+    edit_parts = service.protocol.split("+")
+    if "L402" not in edit_parts:
         service.pricing_sats = 0
         service.pricing_model = "per-request"
     else:
@@ -610,9 +658,12 @@ async def edit_service(
     service.x402_asset = x402_asset or None
     service.x402_pay_to = x402_pay_to or None
     service.pricing_usd = pricing_usd or None
+    service.mpp_method = mpp_method or None
+    service.mpp_realm = mpp_realm or None
+    service.mpp_currency = mpp_currency or None
 
     # Validate x402 fields are present when protocol includes x402
-    if service.protocol in ("x402", "L402+x402"):
+    if "x402" in edit_parts:
         missing = []
         if not service.x402_pay_to:
             missing.append("wallet address")
@@ -627,6 +678,20 @@ async def edit_service(
                 "token_invalid": False,
                 "token": edit_token,
                 "error": f"{', '.join(missing)} required for x402 protocol.",
+                "selected_category_ids": category_ids,
+            }, status_code=422)
+
+    # Validate MPP fields when protocol includes MPP
+    if "MPP" in edit_parts:
+        if not service.mpp_method:
+            categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
+            return templates.TemplateResponse(request, "services/edit.html", {
+                "service": service,
+                "categories": categories,
+                "token_valid": True,
+                "token_invalid": False,
+                "token": edit_token,
+                "error": "Payment method required for MPP protocol.",
                 "selected_category_ids": category_ids,
             }, status_code=422)
 

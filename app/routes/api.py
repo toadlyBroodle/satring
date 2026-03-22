@@ -18,6 +18,7 @@ from app.config import (
     settings, MAX_NAME, MAX_URL, MAX_DESCRIPTION, MAX_OWNER_NAME,
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT, MAX_PRICING_SATS,
     MAX_X402_NETWORK, MAX_X402_ASSET, MAX_X402_PAY_TO, MAX_PRICING_USD,
+    MAX_MPP_METHOD, MAX_MPP_REALM, MAX_MPP_CURRENCY,
     RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_SEARCH_API,
     RATE_LIST_API, RATE_DETAIL_API, FREE_API_RESULTS_PER_DAY,
     payments_enabled,
@@ -26,7 +27,7 @@ from app.database import get_db
 from app.payment import require_payment
 from app.main import limiter
 from app.models import Service, Category, Rating, RouteUsage, ProbeHistory, service_categories
-from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter, VALID_PROTOCOLS
+from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter, is_valid_protocol, VALID_PROTOCOLS
 
 router = APIRouter(tags=["API"])
 
@@ -105,6 +106,9 @@ class ServiceOut(BaseModel):
     x402_asset: str | None = None
     x402_pay_to: str | None = None
     pricing_usd: str | None = None
+    mpp_method: str | None = None
+    mpp_realm: str | None = None
+    mpp_currency: str | None = None
     avg_rating: float
     rating_count: int
     domain_verified: bool
@@ -128,13 +132,13 @@ class ServiceCreate(BaseModel):
     description: str = Field(default="", max_length=MAX_DESCRIPTION)
     pricing_sats: int = Field(default=0, ge=0, le=MAX_PRICING_SATS)
     pricing_model: str = Field(default="per-request", max_length=50)
-    protocol: str = Field(default="L402", max_length=20)
+    protocol: str = Field(default="L402", max_length=30)
 
     @field_validator("protocol")
     @classmethod
     def check_protocol(cls, v: str) -> str:
-        if v not in VALID_PROTOCOLS:
-            raise ValueError("protocol must be L402, x402, or L402+x402")
+        if not is_valid_protocol(v):
+            raise ValueError("protocol must be a '+'-joined combination of L402, x402, MPP")
         return v
     owner_name: str = Field(default="", max_length=MAX_OWNER_NAME)
     owner_contact: str = Field(default="", max_length=MAX_OWNER_CONTACT)
@@ -143,6 +147,9 @@ class ServiceCreate(BaseModel):
     x402_asset: str | None = Field(default=None, max_length=MAX_X402_ASSET)
     x402_pay_to: str | None = Field(default=None, max_length=MAX_X402_PAY_TO)
     pricing_usd: str | None = Field(default=None, max_length=MAX_PRICING_USD)
+    mpp_method: str | None = Field(default=None, max_length=MAX_MPP_METHOD)
+    mpp_realm: str | None = Field(default=None, max_length=MAX_MPP_REALM)
+    mpp_currency: str | None = Field(default=None, max_length=MAX_MPP_CURRENCY)
     category_ids: list[int] = Field(default_factory=lambda: [], description="1–2 category IDs required")
     existing_edit_token: str | None = None
 
@@ -162,16 +169,20 @@ class ServiceCreate(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def check_x402_requires_fields(self):
-        if self.protocol in ("x402", "L402+x402"):
+    def check_protocol_requires_fields(self):
+        parts = self.protocol.split("+")
+        if "x402" in parts:
             if not self.x402_pay_to:
                 raise ValueError("x402_pay_to is required when protocol includes x402")
             if not self.x402_network:
                 raise ValueError("x402_network is required when protocol includes x402")
             if not self.pricing_usd:
                 raise ValueError("pricing_usd is required when protocol includes x402")
-        # Clear sat pricing for x402-only
-        if self.protocol == "x402":
+        if "MPP" in parts:
+            if not self.mpp_method:
+                raise ValueError("mpp_method is required when protocol includes MPP")
+        # Clear sat pricing when no L402 component
+        if "L402" not in parts:
             self.pricing_sats = 0
             self.pricing_model = "per-request"
         return self
@@ -195,13 +206,16 @@ class ServiceUpdate(BaseModel):
     x402_asset: str | None = None
     x402_pay_to: str | None = None
     pricing_usd: str | None = None
+    mpp_method: str | None = None
+    mpp_realm: str | None = None
+    mpp_currency: str | None = None
     category_ids: list[int] | None = None
 
     @field_validator("protocol")
     @classmethod
     def check_protocol(cls, v: str | None) -> str | None:
-        if v is not None and v not in VALID_PROTOCOLS:
-            raise ValueError("protocol must be L402, x402, or L402+x402")
+        if v is not None and not is_valid_protocol(v):
+            raise ValueError("protocol must be a '+'-joined combination of L402, x402, MPP")
         return v
 
     @field_validator("category_ids")
@@ -319,6 +333,9 @@ class ServiceDetail(BaseModel):
     x402_asset: str | None = None
     x402_pay_to: str | None = None
     pricing_usd: str | None = None
+    mpp_method: str | None = None
+    mpp_realm: str | None = None
+    mpp_currency: str | None = None
     domain_verified: bool
     status: str
     last_probed_at: datetime | None
@@ -1094,6 +1111,8 @@ async def create_service(request: Request, body: ServiceCreate = None, backgroun
             domain_challenge=inherited_challenge,
             x402_network=body.x402_network, x402_asset=body.x402_asset,
             x402_pay_to=body.x402_pay_to, pricing_usd=body.pricing_usd,
+            mpp_method=body.mpp_method, mpp_realm=body.mpp_realm,
+            mpp_currency=body.mpp_currency,
         )
         service = purged
     else:
@@ -1104,6 +1123,8 @@ async def create_service(request: Request, body: ServiceCreate = None, backgroun
             owner_contact=body.owner_contact, logo_url=body.logo_url,
             x402_network=body.x402_network, x402_asset=body.x402_asset,
             x402_pay_to=body.x402_pay_to, pricing_usd=body.pricing_usd,
+            mpp_method=body.mpp_method, mpp_realm=body.mpp_realm,
+            mpp_currency=body.mpp_currency,
             edit_token_hash=edit_token_hash,
             domain_verified=auto_verified,
             domain_challenge=inherited_challenge,
@@ -1151,22 +1172,27 @@ async def update_service(
     if not service.edit_token_hash or not verify_edit_token(x_edit_token, service.edit_token_hash):
         raise HTTPException(status_code=403, detail="Invalid edit token")
 
-    for field in ("name", "description", "pricing_sats", "pricing_model", "protocol", "owner_name", "owner_contact", "logo_url", "x402_network", "x402_asset", "x402_pay_to", "pricing_usd"):
+    for field in ("name", "description", "pricing_sats", "pricing_model", "protocol", "owner_name", "owner_contact", "logo_url", "x402_network", "x402_asset", "x402_pay_to", "pricing_usd", "mpp_method", "mpp_realm", "mpp_currency"):
         value = getattr(body, field)
         if value is not None:
             setattr(service, field, value)
 
+    parts = service.protocol.split("+")
     # Validate x402 fields are present when protocol includes x402
-    if service.protocol in ("x402", "L402+x402"):
+    if "x402" in parts:
         if not service.x402_pay_to:
             raise HTTPException(status_code=422, detail="x402_pay_to is required when protocol includes x402")
         if not service.x402_network:
             raise HTTPException(status_code=422, detail="x402_network is required when protocol includes x402")
         if not service.pricing_usd:
             raise HTTPException(status_code=422, detail="pricing_usd is required when protocol includes x402")
+    # Validate MPP fields when protocol includes MPP
+    if "MPP" in parts:
+        if not service.mpp_method:
+            raise HTTPException(status_code=422, detail="mpp_method is required when protocol includes MPP")
 
-    # Clear sat pricing for x402-only
-    if service.protocol == "x402":
+    # Clear sat pricing when no L402 component
+    if "L402" not in parts:
         service.pricing_sats = 0
         service.pricing_model = "per-request"
 

@@ -58,10 +58,15 @@
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5 w-32">endpoint</td><td class="px-3 py-1.5" id="meta-url"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">pricing</td><td class="px-3 py-1.5">{% if service.pricing_usd %}${{ service.pricing_usd }} USD{% if service.pricing_sats %} / {{ service.pricing_sats }} sats{% endif %}{% else %}{{ service.pricing_sats }} sats{% endif %} / {{ service.pricing_model }}</td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">protocol</td><td class="px-3 py-1.5">{{ service.protocol }}</td></tr>
-      {% if service.protocol in ('x402', 'L402+x402') and service.x402_pay_to %}
+      {% if 'x402' in service.protocol.split('+') and service.x402_pay_to %}
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">wallet</td><td class="px-3 py-1.5 break-all text-xs" id="meta-wallet"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">network</td><td class="px-3 py-1.5" id="meta-network"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>
       <tr class="border-b border-green-900 meta-asset-row" style="display:none"><td class="text-green-700 px-3 py-1.5">asset</td><td class="px-3 py-1.5 break-all text-xs" id="meta-asset"></td></tr>
+      {% endif %}
+      {% if 'MPP' in service.protocol.split('+') and service.mpp_method %}
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">method</td><td class="px-3 py-1.5" id="meta-mpp-method"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>
+      {% if service.mpp_realm %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">realm</td><td class="px-3 py-1.5" id="meta-mpp-realm"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>{% endif %}
+      {% if service.mpp_currency %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">currency</td><td class="px-3 py-1.5" id="meta-mpp-currency"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>{% endif %}
       {% endif %}
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">status</td><td class="px-3 py-1.5">{% if service.domain_verified %}<span class="text-cyan-400">[domain verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% elif service.status == 'unknown' %}text-gray-400{% else %}text-green-700{% endif %}">{{ service.status }}</span>{% endif %}</td></tr>
       {% if service.owner_name %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">provider</td><td class="px-3 py-1.5">{{ service.owner_name }}</td></tr>{% endif %}
@@ -127,6 +132,12 @@ function loadReport(url, targetId) {
         var row = document.querySelector('.meta-asset-row');
         if (row) row.style.display = '';
       }
+      var mppMethodEl = document.getElementById('meta-mpp-method');
+      if (mppMethodEl && d.mpp_method) mppMethodEl.textContent = d.mpp_method;
+      var mppRealmEl = document.getElementById('meta-mpp-realm');
+      if (mppRealmEl && d.mpp_realm) mppRealmEl.textContent = d.mpp_realm;
+      var mppCurrencyEl = document.getElementById('meta-mpp-currency');
+      if (mppCurrencyEl && d.mpp_currency) mppCurrencyEl.textContent = d.mpp_currency;
     })
     .catch(function() {
       var urlEl = document.getElementById('meta-url');

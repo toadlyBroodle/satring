@@ -36,6 +36,9 @@ async def init_db():
             ("avg_latency_ms", "FLOAT"),
             ("total_checks", "INTEGER DEFAULT 0"),
             ("successful_checks", "INTEGER DEFAULT 0"),
+            ("mpp_method", "VARCHAR(50)"),
+            ("mpp_realm", "VARCHAR(200)"),
+            ("mpp_currency", "VARCHAR(50)"),
         ]
         for col_name, col_type in migrations:
             if col_name not in existing_cols:

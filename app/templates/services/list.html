@@ -58,7 +58,7 @@
 <div class="mb-2 flex flex-wrap gap-1 text-sm">
   <span style="color: var(--accent)">proto&gt;</span>
   <a href="/?{{ qs_q_amp }}{{ qs_cat_filter }}{{ qs_sort }}" class="filter-default {% if not active_protocol %}active{% endif %}"><span class="bracket">[</span>all<span class="bracket">]</span></a>
-  {% for p in ['L402', 'x402', 'L402+x402'] %}
+  {% for p in ['L402', 'x402', 'MPP'] %}
   <a href="/?{{ qs_q_amp }}{{ ('category=' ~ active_category ~ '&') if active_category else '' }}{{ qs_filter[1:] ~ '&' if qs_filter else '' }}protocol={{ p | urlencode }}{{ qs_sort }}" class="filter-default {% if active_protocol == p %}active{% endif %}"><span class="bracket">[</span>{{ p }}<span class="bracket">]</span></a>
   {% endfor %}
 </div>
