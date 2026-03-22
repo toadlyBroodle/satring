@@ -70,6 +70,14 @@ class TestListServices:
         assert data["services"][0]["protocol"] == "L402+x402"
 
     @pytest.mark.asyncio
+    async def test_mpp_protocol_filter(self, client: AsyncClient, sample_mpp_service: Service):
+        resp = await client.get("/api/v1/services?protocol=MPP")
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["services"][0]["protocol"] == "MPP"
+        assert data["services"][0]["mpp_method"] == "tempo"
+
+    @pytest.mark.asyncio
     async def test_status_filter(self, client: AsyncClient, sample_service: Service):
         resp = await client.get("/api/v1/services?status=unverified")
         data = resp.json()
@@ -182,6 +190,46 @@ class TestCreateService:
             "category_ids": [1],
         })
         assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_create_mpp_service(self, client: AsyncClient):
+        resp = await client.post("/api/v1/services", json={
+            "name": "MPP API",
+            "url": "https://mpp.example.com",
+            "protocol": "MPP",
+            "mpp_method": "tempo",
+            "mpp_currency": "usd",
+            "category_ids": [1],
+        })
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["protocol"] == "MPP"
+        assert data["mpp_method"] == "tempo"
+        assert data["pricing_sats"] == 0  # cleared for non-L402
+
+    @pytest.mark.asyncio
+    async def test_create_mpp_requires_method(self, client: AsyncClient):
+        resp = await client.post("/api/v1/services", json={
+            "name": "MPP No Method",
+            "url": "https://mpp-nomethod.example.com",
+            "protocol": "MPP",
+            "category_ids": [1],
+        })
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_create_l402_mpp_combo(self, client: AsyncClient):
+        resp = await client.post("/api/v1/services", json={
+            "name": "L402+MPP API",
+            "url": "https://l402mpp.example.com",
+            "protocol": "L402+MPP",
+            "mpp_method": "stripe",
+            "category_ids": [1],
+        })
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["protocol"] == "L402+MPP"
+        assert data["mpp_method"] == "stripe"
 
     @pytest.mark.asyncio
     async def test_create_invalid_protocol(self, client: AsyncClient):

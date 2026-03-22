@@ -46,20 +46,25 @@ async def probe_service(service: Service, timeout: int) -> tuple[str, dict]:
             metadata["status_code"] = resp.status_code
             metadata["response_time_ms"] = resp.elapsed.total_seconds() * 1000 if resp.elapsed else None
 
-            # Check for L402 and x402 paywalls
+            # Check for L402, x402, and MPP paywalls
             www_auth = resp.headers.get("www-authenticate", "")
             has_l402 = resp.status_code == 402 and ("L402" in www_auth or "LSAT" in www_auth)
             payment_required = resp.headers.get("payment-required", "")
             has_x402 = resp.status_code == 402 and bool(payment_required)
+            # MPP uses WWW-Authenticate: Payment scheme
+            has_mpp = resp.status_code == 402 and "payment " in www_auth.lower()
 
-            if has_l402 and has_x402:
-                metadata["detected_protocol"] = "L402+x402"
-                return "live", metadata
+            detected = set()
             if has_l402:
-                metadata["detected_protocol"] = "L402"
-                return "live", metadata
+                detected.add("L402")
             if has_x402:
-                metadata["detected_protocol"] = "x402"
+                detected.add("x402")
+            if has_mpp:
+                detected.add("MPP")
+
+            if detected:
+                _order = {"L402": 0, "x402": 1, "MPP": 2}
+                metadata["detected_protocol"] = "+".join(sorted(detected, key=lambda p: _order.get(p, 99)))
                 return "live", metadata
 
             # Generic 402 without recognized headers

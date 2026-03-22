@@ -69,6 +69,9 @@ MAX_X402_NETWORK = 50
 MAX_X402_ASSET = 100
 MAX_X402_PAY_TO = 100
 MAX_PRICING_USD = 20
+MAX_MPP_METHOD = 50
+MAX_MPP_REALM = 200
+MAX_MPP_CURRENCY = 50
 
 # SECURITY: Rate limits per IP. Change values here — not in individual files.
 RATE_SUBMIT = "20/hour"

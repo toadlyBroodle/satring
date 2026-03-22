@@ -53,6 +53,7 @@ class TestListServicesResponse:
             "id", "name", "slug", "url", "description", "pricing_sats",
             "pricing_model", "protocol", "owner_name", "logo_url",
             "x402_network", "x402_asset", "x402_pay_to", "pricing_usd",
+            "mpp_method", "mpp_realm", "mpp_currency",
             "avg_rating", "rating_count", "domain_verified", "categories", "created_at",
         }
         assert set(svc.keys()) == expected_fields

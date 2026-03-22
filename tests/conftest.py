@@ -139,6 +139,23 @@ async def sample_dual_service(db: AsyncSession) -> Service:
 
 
 @pytest_asyncio.fixture
+async def sample_mpp_service(db: AsyncSession) -> Service:
+    cats = (await db.execute(select(Category).where(Category.slug.in_(["tools"])))).scalars().all()
+    svc = Service(
+        name="MPP Pay API", slug="mpp-pay-api", url="https://mpp.test.com",
+        description="An MPP payment API", pricing_sats=0,
+        pricing_model="per-request", protocol="MPP",
+        mpp_method="tempo", mpp_realm="api.test.com",
+        mpp_currency="usd",
+    )
+    svc.categories = list(cats)
+    db.add(svc)
+    await db.commit()
+    await db.refresh(svc)
+    return svc
+
+
+@pytest_asyncio.fixture
 async def sample_service_with_ratings(db: AsyncSession, sample_service: Service) -> Service:
     for score, comment, name in [
         (5, "Excellent", "Alice"),
