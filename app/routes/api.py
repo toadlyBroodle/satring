@@ -1005,7 +1005,7 @@ async def list_services(
     query = select(Service).where(Service.status != "purged").order_by(Service.created_at.desc())
     if category:
         query = query.join(service_categories).join(Category).where(Category.slug == category)
-    if status and status in ("unverified", "confirmed", "live", "dead"):
+    if status and status in ("unverified", "confirmed", "live", "down"):
         query = query.where(Service.status == status)
     if protocol:
         query = query.where(protocol_filter(Service.protocol, protocol))
@@ -1302,7 +1302,7 @@ async def search_services(
         # SECURITY: escape LIKE wildcards so user input is matched literally
         pattern = f"%{escape_like(q.strip())}%"
         query = query.where(Service.name.ilike(pattern, escape="\\") | Service.description.ilike(pattern, escape="\\"))
-    if status and status in ("unverified", "confirmed", "live", "dead"):
+    if status and status in ("unverified", "confirmed", "live", "down"):
         query = query.where(Service.status == status)
     if protocol:
         query = query.where(protocol_filter(Service.protocol, protocol))

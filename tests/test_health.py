@@ -107,8 +107,8 @@ class TestProbeService:
         assert meta["detected_protocol"] == "none"
 
     @pytest.mark.anyio
-    async def test_timeout_returns_dead(self):
-        """A timeout should mark the service as dead."""
+    async def test_timeout_returns_down(self):
+        """A timeout should mark the service as down."""
         import httpx
 
         with patch("app.health.httpx.AsyncClient") as mock_cls:
@@ -121,7 +121,7 @@ class TestProbeService:
             with patch("app.health.is_public_hostname", return_value=True):
                 status, meta = await probe_service(_make_service(), timeout=10)
 
-        assert status == "dead"
+        assert status == "down"
         assert "error" in meta
 
     @pytest.mark.anyio

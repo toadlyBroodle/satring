@@ -8,7 +8,7 @@ logger = logging.getLogger("satring.web")
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Request, Depends, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -32,7 +32,7 @@ router = APIRouter(include_in_schema=False)
 PAGE_SIZE = 20
 
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("/directory", response_class=HTMLResponse)
 async def directory(
     request: Request,
     q: str = "",
@@ -1042,6 +1042,128 @@ async def payment_status(request: Request, payment_hash: str):
     return JSONResponse({"paid": paid})
 
 
+@router.get("/", response_class=HTMLResponse)
+async def stats_page(request: Request, db: AsyncSession = Depends(get_db)):
+    """Free public stats page with high-level directory metrics."""
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+
+    # Total services (non-purged)
+    total = (await db.execute(
+        select(func.count(Service.id)).where(Service.status != "purged")
+    )).scalar() or 0
+
+    # By status (include all types)
+    all_status_rows = (await db.execute(
+        select(Service.status, func.count(Service.id))
+        .group_by(Service.status)
+    )).all()
+    by_status = {r[0]: r[1] for r in all_status_rows}
+    confirmed_count = by_status.get("confirmed", 0)
+    live_count = by_status.get("live", 0)
+    live_pct = (live_count / total * 100) if total else 0
+
+    # By protocol: aggregate combo protocols into base components
+    # e.g. "L402+x402" counts toward both L402 and x402 totals
+    proto_rows = (await db.execute(
+        select(Service.protocol, func.count(Service.id),
+               func.sum(case((Service.status == "confirmed", 1), else_=0)),
+               func.sum(case((Service.status == "live", 1), else_=0)),
+               func.sum(case((Service.domain_verified == True, 1), else_=0)))
+        .where(Service.status != "purged")
+        .group_by(Service.protocol)
+    )).all()
+    base_counts: dict[str, dict] = {}
+    for proto, count, confirmed, live, verified in proto_rows:
+        for base in proto.split("+"):
+            if base not in base_counts:
+                base_counts[base] = {"count": 0, "confirmed": 0, "live": 0, "verified": 0}
+            base_counts[base]["count"] += count
+            base_counts[base]["confirmed"] += (confirmed or 0)
+            base_counts[base]["live"] += (live or 0)
+            base_counts[base]["verified"] += (verified or 0)
+    by_protocol = []
+    for base in ("L402", "x402", "MPP"):
+        if base in base_counts:
+            c = base_counts[base]
+            health_pct = ((c["confirmed"] + c["live"]) / c["count"] * 100) if c["count"] else 0
+            by_protocol.append({"protocol": base, "count": c["count"], "confirmed": c["confirmed"], "live": c["live"], "verified": c["verified"], "health_pct": health_pct})
+
+    # Domain verified
+    verified_count = (await db.execute(
+        select(func.count(Service.id)).where(Service.status != "purged", Service.domain_verified == True)
+    )).scalar() or 0
+
+    # Total ratings
+    total_ratings = (await db.execute(select(func.count(Rating.id)))).scalar() or 0
+
+    # By category
+    cat_rows = (await db.execute(
+        select(Category.name, Category.slug,
+               func.count(Service.id),
+               func.sum(case((Service.status == "confirmed", 1), else_=0)),
+               func.sum(case((Service.status == "live", 1), else_=0)),
+               func.sum(case((Service.domain_verified == True, 1), else_=0)),
+               func.avg(Service.avg_rating))
+        .join(service_categories, Category.id == service_categories.c.category_id)
+        .join(Service, Service.id == service_categories.c.service_id)
+        .where(Service.status != "purged")
+        .group_by(Category.id)
+        .order_by(func.count(Service.id).desc())
+    )).all()
+    categories = [{"name": r[0], "slug": r[1], "count": r[2], "confirmed": r[3] or 0, "live": r[4] or 0, "verified": r[5] or 0, "avg_rating": r[6] or 0} for r in cat_rows]
+
+    # Growth
+    added_7d = (await db.execute(
+        select(func.count(Service.id)).where(Service.status != "purged", Service.created_at >= now - timedelta(days=7))
+    )).scalar() or 0
+    added_30d = (await db.execute(
+        select(func.count(Service.id)).where(Service.status != "purged", Service.created_at >= now - timedelta(days=30))
+    )).scalar() or 0
+    ratings_7d = (await db.execute(
+        select(func.count(Rating.id)).where(Rating.created_at >= now - timedelta(days=7))
+    )).scalar() or 0
+    ratings_30d = (await db.execute(
+        select(func.count(Rating.id)).where(Rating.created_at >= now - timedelta(days=30))
+    )).scalar() or 0
+
+    newest = (await db.execute(
+        select(Service).where(Service.status != "purged").order_by(Service.created_at.desc()).limit(1)
+    )).scalars().first()
+
+    # Top rated (min 2 reviews)
+    top_rated = (await db.execute(
+        select(Service).where(Service.status != "purged", Service.rating_count >= 2)
+        .order_by(Service.avg_rating.desc(), Service.rating_count.desc()).limit(5)
+    )).scalars().all()
+
+    # Recently added
+    recently_added = (await db.execute(
+        select(Service).where(Service.status != "purged").order_by(Service.created_at.desc()).limit(5)
+    )).scalars().all()
+
+    return templates.TemplateResponse(request, "services/stats.html", {
+        "stats": {
+            "total_services": total,
+            "confirmed_count": confirmed_count,
+            "live_count": live_count,
+            "total_ratings": total_ratings,
+            "verified_count": verified_count,
+            "by_status": by_status,
+            "live_pct": live_pct,
+            "by_protocol": by_protocol,
+            "categories": categories,
+            "added_7d": added_7d,
+            "added_30d": added_30d,
+            "ratings_7d": ratings_7d,
+            "ratings_30d": ratings_30d,
+            "newest": newest,
+            "top_rated": top_rated,
+            "recently_added": recently_added,
+        },
+    })
+
+
 @router.get("/sitemap.xml")
 @limiter.limit(RATE_SITEMAP)
 async def sitemap(request: Request, db: AsyncSession = Depends(get_db)):
@@ -1050,6 +1172,7 @@ async def sitemap(request: Request, db: AsyncSession = Depends(get_db)):
 
     urls = [
         f'  <url><loc>{base}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>',
+        f'  <url><loc>{base}/directory</loc><changefreq>daily</changefreq><priority>0.9</priority></url>',
         f'  <url><loc>{base}/submit</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>',
         f'  <url><loc>{base}/docs</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>',
         f'  <url><loc>{base}/robots.txt</loc><changefreq>monthly</changefreq><priority>0.3</priority></url>',
@@ -1101,33 +1224,34 @@ async def llms_txt():
     lines = [
         "# satring",
         "",
-        "> L402 + x402 paid API directory. Discover Lightning and USDC paywalled APIs for AI agents and developers.",
+        "> Curated paid API directory for AI agents. L402 + x402 + MPP.",
         "",
-        "Satring is a curated directory of L402 and x402 services: APIs that accept Bitcoin Lightning or USDC micropayments.",
+        "Satring is a curated directory of paid API services: APIs that accept payments via Lightning (L402), USDC on Base (x402), or Stripe/Tempo (MPP).",
         "AI agents use satring to find and connect to paid APIs autonomously via MCP.",
         "Humans use it to discover, rate, and submit services.",
         "",
-        f"- [Browse directory]({base}/): Search and filter services by category, status, rating",
-        f"- [Submit a service]({base}/submit): List your L402 API (Lightning payment required)",
+        f"- [Stats]({base}/): Live directory metrics, protocol breakdown, category coverage",
+        f"- [Browse directory]({base}/directory): Search and filter services by category, status, protocol, rating",
+        f"- [Submit a service]({base}/submit): List your paid API (L402 or x402 payment required)",
         f"- [API docs]({base}/docs): OpenAPI/Swagger interactive documentation",
-        f"- [JSON API]({base}/api/v1/services): Programmatic access to the full catalog",
+        f"- [JSON API]({base}/api/v1/services): Programmatic access to the catalog",
         "",
         "## API",
         "",
-        f"- [List services]({base}/api/v1/services): GET — paginated, filterable by category. Returns name, url, pricing, protocol, ratings, categories.",
+        f"- [List services]({base}/api/v1/services): GET — paginated, filterable by category, status, protocol",
         f"- [Search]({base}/api/v1/search?q=example): GET — full-text search across names and descriptions",
         f"- [Service detail]({base}/api/v1/services/{{slug}}): GET — full service info with categories",
         f"- [Ratings]({base}/api/v1/services/{{slug}}/ratings): GET — paginated reviews for a service",
-        f"- [Submit service]({base}/api/v1/services): POST — create a new listing (L402 payment required)",
-        f"- [Submit rating]({base}/api/v1/services/{{slug}}/ratings): POST — rate a service (L402 payment required)",
-        f"- [Bulk export]({base}/api/v1/services/bulk): GET — all services as JSON (L402 payment required)",
-        f"- [Analytics]({base}/api/v1/analytics): GET — aggregate directory stats (L402 payment required)",
+        f"- [Submit service]({base}/api/v1/services): POST — create a new listing (L402 or x402 payment required)",
+        f"- [Submit rating]({base}/api/v1/services/{{slug}}/ratings): POST — rate a service (L402 or x402 payment required)",
+        f"- [Bulk export]({base}/api/v1/services/bulk): GET — all services as JSON (L402 or x402 payment required)",
+        f"- [Analytics]({base}/api/v1/analytics): GET — aggregate directory stats (L402 or x402 payment required)",
         "",
         "## Categories",
         "",
     ]
     for name, slug, description in SEED_CATEGORIES:
-        lines.append(f"- [{name}]({base}/?category={slug}): {description}")
+        lines.append(f"- [{name}]({base}/directory?category={slug}): {description}")
 
     lines.append("")
     return PlainTextResponse("\n".join(lines), media_type="text/plain")

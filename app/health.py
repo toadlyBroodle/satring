@@ -33,7 +33,7 @@ async def probe_service(service: Service, timeout: int) -> tuple[str, dict]:
     Returns:
         ("live", {...})       if a valid 402 paywall is detected
         ("confirmed", {...})  if reachable but no 402
-        ("dead", {...})       if unreachable/timeout
+        ("down", {...})       if unreachable/timeout
     """
     hostname = extract_domain(service.url)
     if not hostname or not is_public_hostname(hostname):
@@ -75,7 +75,7 @@ async def probe_service(service: Service, timeout: int) -> tuple[str, dict]:
             # Redirects mean the registered URL is stale
             if 300 <= resp.status_code < 400:
                 metadata["detected_protocol"] = "none"
-                return "dead", metadata
+                return "down", metadata
 
             # Reachable but no paywall
             metadata["detected_protocol"] = "none"
@@ -83,7 +83,7 @@ async def probe_service(service: Service, timeout: int) -> tuple[str, dict]:
 
     except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPError) as exc:
         metadata["error"] = str(exc)[:200]
-        return "dead", metadata
+        return "down", metadata
 
 
 async def probe_all():
@@ -107,9 +107,9 @@ async def probe_all():
 
                 svc.last_probed_at = now
 
-                if new_status == "dead" and svc.status != "dead":
+                if new_status == "down" and svc.status != "down":
                     svc.dead_since = now
-                elif new_status != "dead":
+                elif new_status != "down":
                     svc.dead_since = None
 
                 svc.status = new_status
@@ -128,7 +128,7 @@ async def probe_all():
 
                 # Update rolling stats
                 svc.total_checks = (svc.total_checks or 0) + 1
-                if new_status != "dead":
+                if new_status != "down":
                     svc.successful_checks = (svc.successful_checks or 0) + 1
 
                 # Compute rolling 7-day avg latency

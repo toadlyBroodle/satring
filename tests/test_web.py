@@ -9,31 +9,31 @@ from app.models import Service, Rating
 class TestDirectory:
     @pytest.mark.asyncio
     async def test_homepage_returns_200(self, client: AsyncClient):
-        resp = await client.get("/")
+        resp = await client.get("/directory")
         assert resp.status_code == 200
         assert "API Directory" in resp.text
 
     @pytest.mark.asyncio
     async def test_homepage_shows_services(self, client: AsyncClient, sample_service: Service):
-        resp = await client.get("/")
+        resp = await client.get("/directory")
         assert resp.status_code == 200
         assert "Test API" in resp.text
 
     @pytest.mark.asyncio
     async def test_category_filter(self, client: AsyncClient, sample_service: Service):
-        resp = await client.get("/?category=ai-ml")
+        resp = await client.get("/directory?category=ai-ml")
         assert resp.status_code == 200
         assert "Test API" in resp.text
 
     @pytest.mark.asyncio
     async def test_category_filter_no_match(self, client: AsyncClient, sample_service: Service):
-        resp = await client.get("/?category=finance")
+        resp = await client.get("/directory?category=finance")
         assert resp.status_code == 200
         assert "Test API" not in resp.text
 
     @pytest.mark.asyncio
     async def test_category_tabs_rendered(self, client: AsyncClient):
-        resp = await client.get("/")
+        resp = await client.get("/directory")
         assert "ai/ml" in resp.text
         assert "finance" in resp.text
         assert "tools" in resp.text
@@ -42,14 +42,14 @@ class TestDirectory:
     @pytest.mark.asyncio
     async def test_protocol_filter_includes_dual(self, client: AsyncClient, sample_service: Service, sample_dual_service: Service):
         # L402 filter should show both L402 and L402+x402 services
-        resp = await client.get("/?protocol=L402")
+        resp = await client.get("/directory?protocol=L402")
         assert resp.status_code == 200
         assert "Test API" in resp.text
         assert "Dual Protocol API" in resp.text
 
     @pytest.mark.asyncio
     async def test_protocol_filter_dual_only(self, client: AsyncClient, sample_service: Service, sample_dual_service: Service):
-        resp = await client.get("/?protocol=L402%2Bx402")
+        resp = await client.get("/directory?protocol=L402%2Bx402")
         assert resp.status_code == 200
         assert "Test API" not in resp.text
         assert "Dual Protocol API" in resp.text

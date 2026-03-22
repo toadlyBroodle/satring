@@ -45,3 +45,11 @@ async def init_db():
                 await conn.execute(
                     sqlalchemy.text(f"ALTER TABLE services ADD COLUMN {col_name} {col_type}")
                 )
+
+        # Rename status 'dead' -> 'down'
+        await conn.execute(
+            sqlalchemy.text("UPDATE services SET status = 'down' WHERE status = 'dead'")
+        )
+        await conn.execute(
+            sqlalchemy.text("UPDATE probe_history SET status = 'down' WHERE status = 'dead'")
+        )

@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Directory{% endblock %}
-{% block meta_description %}Paid API directory for AI agents. Browse {{ services|length }}+ curated L402, x402, and MPP services with health monitoring, human ratings, and MCP integration.{% endblock %}
-{% block og_title %}satring | Paid API Directory for AI Agents{% endblock %}
-{% block og_description %}Browse {{ services|length }}+ curated L402, x402, and MPP paid API services with health monitoring, human ratings, and MCP integration.{% endblock %}
-{% block twitter_title %}satring | Paid API Directory for AI Agents{% endblock %}
-{% block twitter_description %}Browse {{ services|length }}+ curated L402, x402, and MPP paid API services with health monitoring, human ratings, and MCP integration.{% endblock %}
+{% block meta_description %}Curated paid API directory for AI agents. Browse {{ services|length }}+ L402, x402, and MPP services with health monitoring, human/agent ratings, and MCP integration.{% endblock %}
+{% block og_title %}satring | Curated Paid API Directory for AI Agents{% endblock %}
+{% block og_description %}Browse {{ services|length }}+ curated L402, x402, and MPP paid API services with health monitoring, human/agent ratings, and MCP integration.{% endblock %}
+{% block twitter_title %}satring | Curated Paid API Directory for AI Agents{% endblock %}
+{% block twitter_description %}Browse {{ services|length }}+ curated L402, x402, and MPP paid API services with health monitoring, human/agent ratings, and MCP integration.{% endblock %}
 {% block content %}
 
 <div class="mb-4">
   <div class="text-amber-400 text-sm mb-1">₿ satring --list</div>
-  <h1 class="text-xl">Paid API Directory for AI Agents</h1>
+  <h1 class="text-xl">Curated Paid API Directory for AI Agents</h1>
   <p class="text-green-700 text-sm">Discover paid APIs for your AI agents, via Lightning and USDC</p>
 </div>
 
@@ -37,29 +37,29 @@
 <!-- Category Filters -->
 <div class="mb-2 flex flex-wrap gap-1 text-sm">
   <span style="color: var(--accent)">cat&gt;</span>
-  <a href="/?{{ qs_q_amp }}{{ qs_filter[1:] if qs_filter else '' }}{{ qs_sort }}" class="filter-default {% if not active_category %}active{% endif %}"><span class="bracket">[</span>all<span class="bracket">]</span></a>
+  <a href="/directory?{{ qs_q_amp }}{{ qs_filter[1:] if qs_filter else '' }}{{ qs_sort }}" class="filter-default {% if not active_category %}active{% endif %}"><span class="bracket">[</span>all<span class="bracket">]</span></a>
   {% for cat in categories %}
-  <a href="/?{{ qs_q_amp }}category={{ cat.slug }}{{ qs_filter }}{{ qs_sort }}" data-tip="{{ cat.description }}" class="filter-cat {% if active_category == cat.slug %}active{% endif %}"><span class="bracket">[</span>{{ cat.name }}<span class="bracket">]</span></a>
+  <a href="/directory?{{ qs_q_amp }}category={{ cat.slug }}{{ qs_filter }}{{ qs_sort }}" data-tip="{{ cat.description }}" class="filter-cat {% if active_category == cat.slug %}active{% endif %}"><span class="bracket">[</span>{{ cat.name }}<span class="bracket">]</span></a>
   {% endfor %}
 </div>
 
 <!-- Status Filters -->
 <div class="mb-2 flex flex-wrap gap-1 text-sm">
   <span style="color: var(--accent)">filter&gt;</span>
-  <a href="/?{{ qs_q_amp }}{{ ('category=' ~ active_category) if active_category else '' }}{{ qs_sort }}" class="filter-default {% if not active_status and active_verified != 'true' %}active{% endif %}"><span class="bracket">[</span>all<span class="bracket">]</span></a>
-  <a href="/?{{ qs_q_amp }}verified=true{{ qs_cat }}{{ qs_sort }}" data-tip="Owner proved domain control" class="filter-verified {% if active_verified == 'true' %}active{% endif %}"><span class="bracket">[</span>verified<span class="bracket">]</span></a>
-  {% set status_tips = {'confirmed': 'L402 paywall detected by probe', 'live': 'Endpoint reachable, no L402 paywall found', 'dead': 'Endpoint unreachable', 'unknown': 'Status could not be determined (e.g. .onion)'} %}
-  {% for st in ['confirmed', 'live', 'dead', 'unknown'] %}
-  <a href="/?{{ qs_q_amp }}status={{ st }}{{ qs_cat }}{{ qs_sort }}" data-tip="{{ status_tips[st] }}" class="filter-{{ st }} {% if active_status == st %}active{% endif %}"><span class="bracket">[</span>{{ st }}<span class="bracket">]</span></a>
+  <a href="/directory?{{ qs_q_amp }}{{ ('category=' ~ active_category) if active_category else '' }}{{ qs_sort }}" class="filter-default {% if not active_status and active_verified != 'true' %}active{% endif %}"><span class="bracket">[</span>all<span class="bracket">]</span></a>
+  <a href="/directory?{{ qs_q_amp }}verified=true{{ qs_cat }}{{ qs_sort }}" data-tip="Owner proved domain control" class="filter-verified {% if active_verified == 'true' %}active{% endif %}"><span class="bracket">[</span>verified<span class="bracket">]</span></a>
+  {% set status_tips = {'confirmed': 'L402 paywall detected by probe', 'live': 'Endpoint reachable, no L402 paywall found', 'down': 'Endpoint unreachable', 'unknown': 'Status could not be determined (e.g. .onion)'} %}
+  {% for st in ['confirmed', 'live', 'down', 'unknown'] %}
+  <a href="/directory?{{ qs_q_amp }}status={{ st }}{{ qs_cat }}{{ qs_sort }}" data-tip="{{ status_tips[st] }}" class="filter-{{ st }} {% if active_status == st %}active{% endif %}"><span class="bracket">[</span>{{ st }}<span class="bracket">]</span></a>
   {% endfor %}
 </div>
 
 <!-- Protocol Filter -->
 <div class="mb-2 flex flex-wrap gap-1 text-sm">
   <span style="color: var(--accent)">proto&gt;</span>
-  <a href="/?{{ qs_q_amp }}{{ qs_cat_filter }}{{ qs_sort }}" class="filter-default {% if not active_protocol %}active{% endif %}"><span class="bracket">[</span>all<span class="bracket">]</span></a>
+  <a href="/directory?{{ qs_q_amp }}{{ qs_cat_filter }}{{ qs_sort }}" class="filter-default {% if not active_protocol %}active{% endif %}"><span class="bracket">[</span>all<span class="bracket">]</span></a>
   {% for p in ['L402', 'x402', 'MPP'] %}
-  <a href="/?{{ qs_q_amp }}{{ ('category=' ~ active_category ~ '&') if active_category else '' }}{{ qs_filter[1:] ~ '&' if qs_filter else '' }}protocol={{ p | urlencode }}{{ qs_sort }}" class="filter-default {% if active_protocol == p %}active{% endif %}"><span class="bracket">[</span>{{ p }}<span class="bracket">]</span></a>
+  <a href="/directory?{{ qs_q_amp }}{{ ('category=' ~ active_category ~ '&') if active_category else '' }}{{ qs_filter[1:] ~ '&' if qs_filter else '' }}protocol={{ p | urlencode }}{{ qs_sort }}" class="filter-default {% if active_protocol == p %}active{% endif %}"><span class="bracket">[</span>{{ p }}<span class="bracket">]</span></a>
   {% endfor %}
 </div>
 
@@ -67,7 +67,7 @@
 <div class="mb-4 flex flex-wrap gap-1 text-sm">
   <span style="color: var(--accent)">sort&gt;</span>
   {% for sort_key, sort_label in [('newest', 'newest'), ('top-rated', 'top-rated'), ('cheapest', 'cheapest'), ('most-reviewed', 'most-reviewed')] %}
-  <a href="/?{{ qs_q_amp }}{{ qs_cat_filter }}{{ ('&' if qs_cat_filter else '') }}sort={{ sort_key }}" class="filter-sort {% if active_sort == sort_key or (sort_key == 'newest' and not active_sort) %}active{% endif %}"><span class="bracket">[</span>{{ sort_label }}<span class="bracket">]</span></a>
+  <a href="/directory?{{ qs_q_amp }}{{ qs_cat_filter }}{{ ('&' if qs_cat_filter else '') }}sort={{ sort_key }}" class="filter-sort {% if active_sort == sort_key or (sort_key == 'newest' and not active_sort) %}active{% endif %}"><span class="bracket">[</span>{{ sort_label }}<span class="bracket">]</span></a>
   {% endfor %}
 </div>
 
