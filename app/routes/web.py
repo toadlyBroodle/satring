@@ -1061,7 +1061,9 @@ async def stats_page(request: Request, db: AsyncSession = Depends(get_db)):
     by_status = {r[0]: r[1] for r in all_status_rows}
     confirmed_count = by_status.get("confirmed", 0)
     live_count = by_status.get("live", 0)
-    live_pct = (live_count / total * 100) if total else 0
+    unhealthy = by_status.get("down", 0) + by_status.get("unknown", 0)
+    healthy_count = total - unhealthy
+    healthy_pct = (healthy_count / total * 100) if total else 0
 
     # By protocol: aggregate combo protocols into base components
     # e.g. "L402+x402" counts toward both L402 and x402 totals
@@ -1150,7 +1152,7 @@ async def stats_page(request: Request, db: AsyncSession = Depends(get_db)):
             "total_ratings": total_ratings,
             "verified_count": verified_count,
             "by_status": by_status,
-            "live_pct": live_pct,
+            "healthy_pct": healthy_pct,
             "by_protocol": by_protocol,
             "categories": categories,
             "added_7d": added_7d,
