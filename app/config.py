@@ -10,6 +10,7 @@ class Settings:
     PAYMENT_KEY: str = os.getenv("PAYMENT_KEY", "")
     AUTH_ROOT_KEY: str = os.getenv("AUTH_ROOT_KEY", "")
     AUTH_PRICE_SATS: int = int(os.getenv("AUTH_PRICE_SATS", "100"))
+    AUTH_PRICE_USD: str = os.getenv("AUTH_PRICE_USD", "0.05")
     AUTH_SUBMIT_PRICE_SATS: int = int(os.getenv("AUTH_SUBMIT_PRICE_SATS", "1000"))
     AUTH_REVIEW_PRICE_SATS: int = int(os.getenv("AUTH_REVIEW_PRICE_SATS", "10"))
     AUTH_BULK_PRICE_SATS: int = int(os.getenv("AUTH_BULK_PRICE_SATS", "5000"))
@@ -78,6 +79,7 @@ RATE_REVIEW = "20/hour"
 RATE_SEARCH = "2/second"
 RATE_SEARCH_API = "6/minute"
 RATE_LIST_API = "6/minute"
+FREE_API_RESULTS_PER_DAY = 10       # max service results returned per IP per day (free tier)
 RATE_DETAIL_API = "15/minute"
 RATE_SITEMAP = "3/hour"
 RATE_PAYMENT_STATUS = "30/minute"

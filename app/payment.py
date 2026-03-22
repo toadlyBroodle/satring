@@ -42,7 +42,7 @@ async def require_payment(
 
     # L402 auth header present: delegate to L402 handler
     if has_l402:
-        await require_l402(request=request, amount_sats=amount_sats, memo=memo)
+        await require_l402(request=request, db=db, amount_sats=amount_sats, memo=memo)
         return None
 
     # x402 payment signature present: delegate to x402 handler

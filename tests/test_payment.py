@@ -1,14 +1,24 @@
 """Integration tests for app/payment.py: dual-protocol payment gate."""
 
+import hashlib
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from unittest.mock import patch, AsyncMock
 
 from app.config import settings
+from app.l402 import mint_macaroon
 from app.main import app, limiter
 from app.database import get_db
 
 from tests.conftest import _make_db, _teardown_db
+
+
+MOCK_INVOICE = {
+    "payment_hash": "mockhash" * 8,
+    "payment_request": "lnbc1000n1mock",
+}
 
 
 @pytest_asyncio.fixture
@@ -26,6 +36,17 @@ async def payment_client():
         yield ac
     app.dependency_overrides.clear()
     await _teardown_db(engine, session)
+
+
+def _make_l402_token(preimage_bytes: bytes) -> tuple[str, str]:
+    """Create a valid L402 auth header value from a preimage.
+
+    Returns (auth_header_value, payment_hash).
+    """
+    preimage_hex = preimage_bytes.hex()
+    payment_hash = hashlib.sha256(preimage_bytes).hexdigest()
+    mac_b64 = mint_macaroon(payment_hash)
+    return f"L402 {mac_b64}:{preimage_hex}", payment_hash
 
 
 class TestPaymentRouting:
@@ -79,3 +100,157 @@ class TestPaymentRouting:
             "comment": "Great service",
         })
         assert resp.status_code == 201
+
+
+# ---------------------------------------------------------------------------
+# L402 replay protection
+# ---------------------------------------------------------------------------
+
+class TestL402ReplayProtection:
+    """Reusing the same L402 token for multiple paid actions must be blocked."""
+
+    @pytest.mark.anyio
+    async def test_submit_replay_blocked(self, payment_client):
+        """Second service submission with the same L402 token gets 402."""
+        with patch.object(settings, "AUTH_ROOT_KEY", "replay-test-key"), \
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv, \
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv:
+            mock_inv.return_value = MOCK_INVOICE
+            mock_l402_inv.return_value = MOCK_INVOICE
+
+            auth_header, _ = _make_l402_token(b"submit-replay-preimage")
+
+            resp1 = await payment_client.post("/api/v1/services", json={
+                "name": "Legit Paid Service",
+                "url": "https://legit-paid.example.com",
+                "category_ids": [1],
+            }, headers={"Authorization": auth_header})
+            assert resp1.status_code == 201
+
+            resp2 = await payment_client.post("/api/v1/services", json={
+                "name": "Replay Attack Service",
+                "url": "https://replay-attack.example.com",
+                "category_ids": [1],
+            }, headers={"Authorization": auth_header})
+            assert resp2.status_code == 402
+            assert "already consumed" in resp2.json()["detail"]
+
+    @pytest.mark.anyio
+    async def test_rating_replay_blocked(self, payment_client):
+        """Second rating with the same L402 token gets 402."""
+        # Create service in test mode
+        resp = await payment_client.post("/api/v1/services", json={
+            "name": "Rating Replay Target",
+            "url": "https://rating-replay-target.example.com",
+            "category_ids": [1],
+        })
+        assert resp.status_code == 201
+        slug = resp.json()["slug"]
+
+        with patch.object(settings, "AUTH_ROOT_KEY", "replay-test-key"), \
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv, \
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv:
+            mock_inv.return_value = MOCK_INVOICE
+            mock_l402_inv.return_value = MOCK_INVOICE
+
+            auth_header, _ = _make_l402_token(b"rating-replay-preimage")
+
+            resp1 = await payment_client.post(f"/api/v1/services/{slug}/ratings", json={
+                "score": 5, "comment": "Legit review",
+            }, headers={"Authorization": auth_header})
+            assert resp1.status_code == 201
+
+            resp2 = await payment_client.post(f"/api/v1/services/{slug}/ratings", json={
+                "score": 1, "comment": "Replay review",
+            }, headers={"Authorization": auth_header})
+            assert resp2.status_code == 402
+
+    @pytest.mark.anyio
+    async def test_different_tokens_both_accepted(self, payment_client):
+        """Two different L402 tokens (separate payments) should both work."""
+        with patch.object(settings, "AUTH_ROOT_KEY", "replay-test-key"), \
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv, \
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv:
+            mock_inv.return_value = MOCK_INVOICE
+            mock_l402_inv.return_value = MOCK_INVOICE
+
+            auth1, _ = _make_l402_token(b"first-payment-preimage")
+            auth2, _ = _make_l402_token(b"second-payment-preimage")
+
+            resp1 = await payment_client.post("/api/v1/services", json={
+                "name": "First Paid Service",
+                "url": "https://first-paid.example.com",
+                "category_ids": [1],
+            }, headers={"Authorization": auth1})
+            assert resp1.status_code == 201
+
+            resp2 = await payment_client.post("/api/v1/services", json={
+                "name": "Second Paid Service",
+                "url": "https://second-paid.example.com",
+                "category_ids": [1],
+            }, headers={"Authorization": auth2})
+            assert resp2.status_code == 201
+
+    @pytest.mark.anyio
+    async def test_replay_returns_fresh_challenge(self, payment_client):
+        """Blocked replay should include a fresh WWW-Authenticate header."""
+        with patch.object(settings, "AUTH_ROOT_KEY", "replay-test-key"), \
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv, \
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv:
+            mock_inv.return_value = MOCK_INVOICE
+            mock_l402_inv.return_value = MOCK_INVOICE
+
+            auth_header, _ = _make_l402_token(b"challenge-replay-preimage")
+
+            resp1 = await payment_client.post("/api/v1/services", json={
+                "name": "Challenge Service",
+                "url": "https://challenge-service.example.com",
+                "category_ids": [1],
+            }, headers={"Authorization": auth_header})
+            assert resp1.status_code == 201
+
+            resp2 = await payment_client.post("/api/v1/services", json={
+                "name": "Replay Service",
+                "url": "https://replay-service.example.com",
+                "category_ids": [1],
+            }, headers={"Authorization": auth_header})
+            assert resp2.status_code == 402
+            assert "www-authenticate" in resp2.headers
+            www_auth = resp2.headers["www-authenticate"]
+            assert www_auth.startswith("L402 ")
+            assert "macaroon=" in www_auth
+            assert "invoice=" in www_auth
+
+    @pytest.mark.anyio
+    async def test_cross_endpoint_replay_blocked(self, payment_client):
+        """Token used for submission cannot be reused for a rating."""
+        # Create service in test mode
+        resp = await payment_client.post("/api/v1/services", json={
+            "name": "Cross Endpoint Target",
+            "url": "https://cross-endpoint-target.example.com",
+            "category_ids": [1],
+        })
+        assert resp.status_code == 201
+        slug = resp.json()["slug"]
+
+        with patch.object(settings, "AUTH_ROOT_KEY", "replay-test-key"), \
+             patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv, \
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv:
+            mock_inv.return_value = MOCK_INVOICE
+            mock_l402_inv.return_value = MOCK_INVOICE
+
+            auth_header, _ = _make_l402_token(b"cross-endpoint-preimage")
+
+            # Use token to submit a service
+            resp1 = await payment_client.post("/api/v1/services", json={
+                "name": "Cross Endpoint Service",
+                "url": "https://cross-endpoint-service.example.com",
+                "category_ids": [1],
+            }, headers={"Authorization": auth_header})
+            assert resp1.status_code == 201
+
+            # Try to reuse same token for a rating
+            resp2 = await payment_client.post(f"/api/v1/services/{slug}/ratings", json={
+                "score": 5, "comment": "Stolen token review",
+            }, headers={"Authorization": auth_header})
+            assert resp2.status_code == 402
