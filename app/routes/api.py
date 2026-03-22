@@ -19,7 +19,8 @@ from app.config import (
     MAX_OWNER_CONTACT, MAX_LOGO_URL, MAX_REVIEWER_NAME, MAX_COMMENT, MAX_PRICING_SATS,
     MAX_X402_NETWORK, MAX_X402_ASSET, MAX_X402_PAY_TO, MAX_PRICING_USD,
     RATE_EDIT, RATE_DELETE, RATE_RECOVER, RATE_SEARCH_API,
-    RATE_LIST_API, RATE_DETAIL_API,
+    RATE_LIST_API, RATE_DETAIL_API, FREE_API_RESULTS_PER_DAY,
+    payments_enabled,
 )
 from app.database import get_db
 from app.payment import require_payment
@@ -28,6 +29,37 @@ from app.models import Service, Category, Rating, RouteUsage, ProbeHistory, serv
 from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter, VALID_PROTOCOLS
 
 router = APIRouter(tags=["API"])
+
+
+# --- Daily free-result quota per IP ---
+# Tracks how many service records each IP has received today.
+# Resets automatically when the date rolls over.
+
+from datetime import date as _date_type
+
+_daily_quota: dict[str, int] = {}   # ip -> results returned
+_quota_date: str = ""                # "YYYY-MM-DD" of current quota window
+
+
+def _check_and_consume_quota(ip: str, count: int) -> int:
+    """Return how many results this IP may still receive (0 = exhausted).
+    Consumes up to `count` from the remaining allowance and returns the
+    number actually granted.  Skipped when payments are in test-mode."""
+    global _daily_quota, _quota_date
+
+    if not payments_enabled():
+        return count
+
+    today = str(_date_type.today())
+    if _quota_date != today:
+        _daily_quota.clear()
+        _quota_date = today
+
+    used = _daily_quota.get(ip, 0)
+    remaining = max(0, FREE_API_RESULTS_PER_DAY - used)
+    granted = min(count, remaining)
+    _daily_quota[ip] = used + granted
+    return granted
 
 
 # --- Pydantic Schemas ---
@@ -353,7 +385,10 @@ class ReputationResponse(BaseModel):
 
 # --- Helpers ---
 
-async def paginated_services(db: AsyncSession, query, page: int, page_size: int) -> ServiceListOut:
+async def paginated_services(
+    db: AsyncSession, query, page: int, page_size: int,
+    request: Request | None = None,
+) -> ServiceListOut:
     count_q = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_q)).scalar() or 0
 
@@ -363,6 +398,23 @@ async def paginated_services(db: AsyncSession, query, page: int, page_size: int)
         .offset(offset).limit(page_size)
     )
     services = results.scalars().all()
+
+    # Enforce daily free-result quota per IP; once exhausted, require payment
+    if request is not None and services:
+        ip = request.client.host if request.client else "unknown"
+        granted = _check_and_consume_quota(ip, len(services))
+        if granted == 0:
+            await require_payment(
+                request=request,
+                amount_sats=settings.AUTH_PRICE_SATS,
+                price_usd=settings.AUTH_PRICE_USD,
+                memo=f"satring.com API access (free tier: {FREE_API_RESULTS_PER_DAY}/day)",
+                db=db,
+            )
+            # Payment accepted; return full results
+            granted = len(services)
+        services = services[:granted]
+
     return ServiceListOut(
         services=[ServiceOut.model_validate(s) for s in services],
         total=total, page=page, page_size=page_size,
@@ -940,12 +992,23 @@ async def list_services(
         query = query.where(Service.status == status)
     if protocol:
         query = query.where(protocol_filter(Service.protocol, protocol))
-    return await paginated_services(db, query, page, page_size)
+    return await paginated_services(db, query, page, page_size, request=request)
 
 
 @router.get("/services/{slug}", response_model=ServiceOut)
 @limiter.limit(RATE_DETAIL_API)
 async def get_service(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
+    # Enforce daily free-result quota per IP; once exhausted, require payment
+    if payments_enabled():
+        ip = request.client.host if request.client else "unknown"
+        if _check_and_consume_quota(ip, 1) == 0:
+            await require_payment(
+                request=request,
+                amount_sats=settings.AUTH_PRICE_SATS,
+                price_usd=settings.AUTH_PRICE_USD,
+                memo=f"satring.com API access (free tier: {FREE_API_RESULTS_PER_DAY}/day)",
+                db=db,
+            )
     return ServiceOut.model_validate(await get_service_or_404(db, slug))
 
 
@@ -1217,7 +1280,7 @@ async def search_services(
         query = query.where(Service.status == status)
     if protocol:
         query = query.where(protocol_filter(Service.protocol, protocol))
-    return await paginated_services(db, query, page, page_size)
+    return await paginated_services(db, query, page, page_size, request=request)
 
 
 @router.get("/services/{slug}/ratings", response_model=list[RatingOut])

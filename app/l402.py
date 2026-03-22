@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import logging
 
 import httpx
 from fastapi import HTTPException, Request
@@ -9,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings, payments_enabled
 from app.models import ConsumedPayment
+
+logger = logging.getLogger("satring.l402")
 
 
 async def check_payment_status(payment_hash: str) -> bool:
@@ -100,6 +103,22 @@ def verify_l402(macaroon_b64: str, preimage_hex: str) -> bool:
         return False
 
 
+def _extract_payment_hash(macaroon_b64: str) -> str | None:
+    """Extract the payment_hash from a serialized macaroon's caveats."""
+    try:
+        raw = base64.b64decode(macaroon_b64).decode()
+        mac = Macaroon.deserialize(raw)
+        for caveat in mac.caveats:
+            cid = caveat.caveat_id
+            if hasattr(cid, "decode"):
+                cid = cid.decode()
+            if cid.startswith("payment_hash = "):
+                return cid.split("= ", 1)[1]
+    except Exception:
+        pass
+    return None
+
+
 async def require_l402(
     request: Request = None,
     db=None,
@@ -120,6 +139,28 @@ async def require_l402(
             raise HTTPException(status_code=401, detail="Invalid L402 token format")
         macaroon_b64, preimage_hex = token.split(":", 1)
         if verify_l402(macaroon_b64, preimage_hex):
+            # SECURITY: Replay protection — record the payment_hash so the same
+            # L402 token cannot be reused for multiple paid actions.
+            if db is not None:
+                payment_hash = _extract_payment_hash(macaroon_b64)
+                if payment_hash:
+                    consumed = await check_and_consume_payment(payment_hash, db)
+                    if not consumed:
+                        logger.warning(f"L402 replay blocked: payment_hash={payment_hash}")
+                        price = amount_sats if amount_sats is not None else settings.AUTH_PRICE_SATS
+                        inv_memo = memo or "satring.com premium API access"
+                        invoice_data = await create_invoice(price, inv_memo)
+                        fresh_mac = mint_macaroon(invoice_data["payment_hash"])
+                        raise HTTPException(
+                            status_code=402,
+                            detail="L402 payment already consumed. Please pay a new invoice.",
+                            headers={
+                                "WWW-Authenticate": (
+                                    f'L402 macaroon="{fresh_mac}", '
+                                    f'invoice="{invoice_data["payment_request"]}"'
+                                )
+                            },
+                        )
             return
         # Return 402 with a fresh challenge instead of a dead-end 401, so the client
         # can retry without an extra round-trip. This helps L402 clients that
