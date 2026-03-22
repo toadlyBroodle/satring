@@ -11,8 +11,7 @@
     <span class="text-amber-400">[{% for i in range(5) %}{% if i < (service.avg_rating | round(0, 'floor') | int) %}*{% else %}-{% endif %}{% endfor %}]</span>
     <span class="text-green-700">({{ service.rating_count }})</span>
   </div>
-  {% set parsed_url = service.url | replace("https://", "") | replace("http://", "") %}
-  <div class="text-green-900 text-xs mt-1 truncate font-mono">{{ parsed_url }}</div>
+  <div class="text-green-900 text-xs mt-1 truncate font-mono">{{ service.slug }}</div>
   {% if service.description %}
   <div class="text-green-700 text-xs mt-0.5 truncate">{{ service.description }}</div>
   {% endif %}

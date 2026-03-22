@@ -14,7 +14,7 @@
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": {{ service.name | tojson }},
-  "url": {{ service.url | tojson }},
+  "url": {{ ("/services/" ~ service.slug) | tojson }},
   "description": {{ (service.description or '') | tojson }},
   "applicationCategory": "WebApplication",
   "operatingSystem": "Any"{% if service.rating_count > 0 %},
@@ -55,17 +55,17 @@
 <div class="border border-green-800 mb-4 text-sm overflow-x-auto">
   <table class="w-full">
     <tbody>
-      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5 w-32">endpoint</td><td class="px-3 py-1.5"><a href="{{ service.url }}" class="text-amber-400 hover:underline break-all" target="_blank">{{ service.url }}</a></td></tr>
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5 w-32">endpoint</td><td class="px-3 py-1.5" id="meta-url"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">pricing</td><td class="px-3 py-1.5">{% if service.pricing_usd %}${{ service.pricing_usd }} USD{% if service.pricing_sats %} / {{ service.pricing_sats }} sats{% endif %}{% else %}{{ service.pricing_sats }} sats{% endif %} / {{ service.pricing_model }}</td></tr>
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">protocol</td><td class="px-3 py-1.5">{{ service.protocol }}</td></tr>
       {% if service.protocol in ('x402', 'L402+x402') and service.x402_pay_to %}
-      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">wallet</td><td class="px-3 py-1.5 break-all text-xs">{{ service.x402_pay_to }}</td></tr>
-      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">network</td><td class="px-3 py-1.5">{{ service.x402_network or 'eip155:8453' }}</td></tr>
-      {% if service.x402_asset %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">asset</td><td class="px-3 py-1.5 break-all text-xs">{{ service.x402_asset }}</td></tr>{% endif %}
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">wallet</td><td class="px-3 py-1.5 break-all text-xs" id="meta-wallet"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>
+      <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">network</td><td class="px-3 py-1.5" id="meta-network"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>
+      <tr class="border-b border-green-900 meta-asset-row" style="display:none"><td class="text-green-700 px-3 py-1.5">asset</td><td class="px-3 py-1.5 break-all text-xs" id="meta-asset"></td></tr>
       {% endif %}
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">status</td><td class="px-3 py-1.5">{% if service.domain_verified %}<span class="text-cyan-400">[domain verified]</span> {% endif %}{% if service.status != 'unverified' %}<span class="{% if service.status == 'live' %}text-green-400{% elif service.status == 'confirmed' %}text-amber-400{% elif service.status == 'dead' %}text-red-500{% elif service.status == 'unknown' %}text-gray-400{% else %}text-green-700{% endif %}">{{ service.status }}</span>{% endif %}</td></tr>
       {% if service.owner_name %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">provider</td><td class="px-3 py-1.5">{{ service.owner_name }}</td></tr>{% endif %}
-      {% if service.owner_contact %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">contact</td><td class="px-3 py-1.5">{{ service.owner_contact }}</td></tr>{% endif %}
+      {% if service.owner_contact %}<tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">contact</td><td class="px-3 py-1.5" id="meta-contact"><span class="text-green-900">loading<span class="blink">_</span></span></td></tr>{% endif %}
       {% set r_val = ("%.1f/5"|format(service.avg_rating)) if service.avg_rating else "n/a" %}
       {% set r_count = "(" ~ service.rating_count|string ~ " review" ~ ("s" if service.rating_count != 1 else "") ~ ")" %}
       <tr class="border-b border-green-900"><td class="text-green-700 px-3 py-1.5">rating</td><td class="px-3 py-1.5"><span class="text-amber-400">{{ r_val }}</span> {{ r_count }}</td></tr>
@@ -99,6 +99,40 @@ function loadReport(url, targetId) {
     })
     .catch(function() { el.innerHTML = '<span class="text-red-400 text-sm">error loading report.</span>'; });
 }
+</script>
+<script>
+(function() {
+  fetch('/services/{{ service.slug }}/meta.json')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var urlEl = document.getElementById('meta-url');
+      if (urlEl && d.url) {
+        var a = document.createElement('a');
+        a.href = d.url;
+        a.className = 'text-amber-400 hover:underline break-all';
+        a.target = '_blank';
+        a.textContent = d.url;
+        urlEl.innerHTML = '';
+        urlEl.appendChild(a);
+      }
+      var contactEl = document.getElementById('meta-contact');
+      if (contactEl && d.owner_contact) contactEl.textContent = d.owner_contact;
+      var walletEl = document.getElementById('meta-wallet');
+      if (walletEl && d.x402_pay_to) walletEl.textContent = d.x402_pay_to;
+      var networkEl = document.getElementById('meta-network');
+      if (networkEl && d.x402_network) networkEl.textContent = d.x402_network;
+      var assetEl = document.getElementById('meta-asset');
+      if (assetEl && d.x402_asset) {
+        assetEl.textContent = d.x402_asset;
+        var row = document.querySelector('.meta-asset-row');
+        if (row) row.style.display = '';
+      }
+    })
+    .catch(function() {
+      var urlEl = document.getElementById('meta-url');
+      if (urlEl) urlEl.innerHTML = '<span class="text-red-400">failed to load</span>';
+    });
+})();
 </script>
 
 <!-- Reviews -->

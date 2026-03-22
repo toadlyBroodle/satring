@@ -93,8 +93,27 @@ class TestServiceDetail:
         resp = await client.get("/services/test-api")
         assert resp.status_code == 200
         assert "Test API" in resp.text
-        assert "https://api.test.com" in resp.text
+        # Endpoint URL is loaded via JS (meta.json), not in static HTML
+        assert "meta.json" in resp.text
         assert "100 sats" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_detail_html_does_not_leak_url(self, client: AsyncClient, sample_service: Service):
+        """Endpoint URL must not appear in static HTML (only via JS meta.json)."""
+        resp = await client.get("/services/test-api")
+        assert "https://api.test.com" not in resp.text
+
+    @pytest.mark.asyncio
+    async def test_meta_json_returns_url(self, client: AsyncClient, sample_service: Service):
+        resp = await client.get("/services/test-api/meta.json")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["url"] == "https://api.test.com"
+
+    @pytest.mark.asyncio
+    async def test_meta_json_404_for_missing(self, client: AsyncClient):
+        resp = await client.get("/services/no-such-service/meta.json")
+        assert resp.status_code == 404
 
     @pytest.mark.asyncio
     async def test_detail_404(self, client: AsyncClient):
@@ -116,11 +135,17 @@ class TestServiceDetail:
 
     @pytest.mark.asyncio
     async def test_detail_dual_protocol_shows_x402_fields(self, client: AsyncClient, sample_dual_service: Service):
+        """x402 fields are loaded via JS (meta.json), not in static HTML."""
         resp = await client.get("/services/dual-proto-api")
         assert resp.status_code == 200
         assert "L402+x402" in resp.text
-        assert "0xDualWallet456" in resp.text
-        assert "eip155:8453" in resp.text
+        # Wallet/network now loaded via meta.json, not embedded in HTML
+        assert "0xDualWallet456" not in resp.text
+        # But the meta.json endpoint returns them
+        meta = await client.get("/services/dual-proto-api/meta.json")
+        data = meta.json()
+        assert data["x402_pay_to"] == "0xDualWallet456"
+        assert data["x402_network"] == "eip155:8453"
 
 
 class TestSubmitService:
