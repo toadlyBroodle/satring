@@ -187,6 +187,33 @@ async def service_detail(request: Request, slug: str, db: AsyncSession = Depends
     })
 
 
+@router.get("/services/{slug}/meta.json")
+async def service_meta(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
+    """Return sensitive service fields via JS-only endpoint.
+
+    Static HTML scrapers won't execute JS, so they never see endpoint URLs,
+    wallet addresses, or contact info. Real browsers fetch this on page load.
+    """
+    result = await db.execute(
+        select(Service)
+        .where(Service.slug == slug)
+        .where(Service.status != "purged")
+    )
+    service = result.scalars().first()
+    if not service:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    data = {
+        "url": service.url,
+        "owner_contact": service.owner_contact or "",
+    }
+    if service.protocol in ("x402", "L402+x402") and service.x402_pay_to:
+        data["x402_pay_to"] = service.x402_pay_to
+        data["x402_network"] = service.x402_network or "eip155:8453"
+        if service.x402_asset:
+            data["x402_asset"] = service.x402_asset
+    return JSONResponse(data)
+
+
 @router.get("/submit", response_class=HTMLResponse)
 async def submit_form(request: Request, db: AsyncSession = Depends(get_db)):
     categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
