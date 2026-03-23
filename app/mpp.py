@@ -257,12 +257,14 @@ async def require_mpp(
     amount_sats: int | None = None,
     memo: str | None = None,
 ):
-    """MPP payment gate. Similar to require_l402 but uses the Payment auth scheme.
+    """MPP payment gate. Uses the Payment HTTP auth scheme.
 
-    Returns None on success. Raises HTTPException(402) if unpaid or invalid.
+    Returns a dict with receipt info on success (or None in test mode).
+    Raises HTTPException(402) with Cache-Control: no-store if unpaid or invalid.
+    402 error bodies use RFC 9457 Problem Details format.
     """
     if not payments_enabled():
-        return
+        return None
 
     if request is None:
         raise HTTPException(status_code=500, detail="MPP requires request context")
@@ -274,48 +276,65 @@ async def require_mpp(
     if auth.startswith("Payment "):
         credential = parse_mpp_credential(auth)
         if not credential:
-            raise HTTPException(status_code=400, detail="Invalid MPP credential encoding")
+            await _raise_402_problem(
+                "malformed-credential", "Malformed Credential",
+                "Invalid base64url or JSON encoding in Payment credential.",
+                price, inv_memo,
+            )
 
         if verify_mpp_credential(credential):
+            payment_hash = _extract_payment_hash_from_credential(credential)
             # SECURITY: Replay protection via ConsumedPayment table
-            if db is not None:
-                payment_hash = _extract_payment_hash_from_credential(credential)
-                if payment_hash:
-                    consumed = await check_and_consume_payment(payment_hash, db)
-                    if not consumed:
-                        logger.warning(f"MPP replay blocked: payment_hash={payment_hash}")
-                        invoice_data = await create_invoice(price, inv_memo)
-                        challenge = build_mpp_challenge(
-                            price, invoice_data["payment_hash"],
-                            invoice_data["payment_request"], inv_memo,
-                        )
-                        raise HTTPException(
-                            status_code=402,
-                            detail="MPP payment already consumed. Please pay a new invoice.",
-                            headers={"WWW-Authenticate": challenge},
-                        )
-            return
+            if db is not None and payment_hash:
+                consumed = await check_and_consume_payment(payment_hash, db)
+                if not consumed:
+                    logger.warning(f"MPP replay blocked: payment_hash={payment_hash}")
+                    await _raise_402_problem(
+                        "invalid-challenge", "Challenge Already Used",
+                        "This payment credential has already been consumed.",
+                        price, inv_memo,
+                    )
+            # Return receipt info so the caller can attach Payment-Receipt header
+            return {"payment_hash": payment_hash or ""}
 
         # Invalid credential: return fresh challenge
-        invoice_data = await create_invoice(price, inv_memo)
-        challenge = build_mpp_challenge(
-            price, invoice_data["payment_hash"],
-            invoice_data["payment_request"], inv_memo,
-        )
-        raise HTTPException(
-            status_code=402,
-            detail="Invalid MPP credential. Ensure the preimage matches the invoice.",
-            headers={"WWW-Authenticate": challenge},
+        await _raise_402_problem(
+            "verification-failed", "Payment Verification Failed",
+            "Invalid payment proof. Ensure the preimage matches the invoice.",
+            price, inv_memo,
         )
 
     # No Payment auth: issue 402 challenge
-    invoice_data = await create_invoice(price, inv_memo)
+    await _raise_402_problem(
+        "payment-required", "Payment Required",
+        "This resource requires payment.",
+        price, inv_memo,
+    )
+
+
+async def _raise_402_problem(
+    problem_code: str,
+    title: str,
+    detail: str,
+    amount_sats: int,
+    memo: str,
+):
+    """Raise a 402 with RFC 9457 Problem Details body and Cache-Control: no-store."""
+    invoice_data = await create_invoice(amount_sats, memo)
     challenge = build_mpp_challenge(
-        price, invoice_data["payment_hash"],
-        invoice_data["payment_request"], inv_memo,
+        amount_sats, invoice_data["payment_hash"],
+        invoice_data["payment_request"], memo,
     )
     raise HTTPException(
         status_code=402,
-        detail="Payment Required",
-        headers={"WWW-Authenticate": challenge},
+        detail={
+            "type": f"https://paymentauth.org/problems/{problem_code}",
+            "title": title,
+            "status": 402,
+            "detail": detail,
+        },
+        headers={
+            "WWW-Authenticate": challenge,
+            "Cache-Control": "no-store",
+        },
     )

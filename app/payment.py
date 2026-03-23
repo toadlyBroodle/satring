@@ -16,12 +16,26 @@ import logging
 from fastapi import HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi.responses import JSONResponse
+
 from app.config import settings, payments_enabled, x402_enabled
 from app.l402 import require_l402, create_invoice, mint_macaroon, check_and_consume_payment
-from app.mpp import require_mpp, build_mpp_challenge
+from app.mpp import require_mpp, build_mpp_challenge, build_receipt
 from app.x402 import require_x402, build_payment_required
 
 logger = logging.getLogger("satring.payment")
+
+
+def attach_payment_receipt(response: JSONResponse, settlement: dict | None) -> JSONResponse:
+    """Attach Payment-Receipt and Cache-Control headers if this was an MPP payment."""
+    if not settlement:
+        return response
+    if settlement.get("_protocol") == "mpp":
+        payment_hash = settlement.get("payment_hash", "")
+        if payment_hash:
+            response.headers["Payment-Receipt"] = build_receipt(payment_hash)
+            response.headers["Cache-Control"] = "private"
+    return response
 
 
 async def require_payment(
@@ -54,8 +68,11 @@ async def require_payment(
 
     # MPP Payment auth header present: delegate to MPP handler
     if has_mpp:
-        await require_mpp(request=request, db=db, amount_sats=amount_sats, memo=memo)
-        return None
+        mpp_result = await require_mpp(request=request, db=db, amount_sats=amount_sats, memo=memo)
+        # Return receipt info so callers can attach Payment-Receipt header
+        if mpp_result:
+            mpp_result["_protocol"] = "mpp"
+        return mpp_result
 
     # x402 payment signature present: delegate to x402 handler
     if has_x402 and x402_enabled():
@@ -100,7 +117,10 @@ async def require_payment(
     )
 
     # Combine L402 and MPP in WWW-Authenticate (comma-separated per RFC 9110)
-    headers = {"WWW-Authenticate": f"{l402_challenge}, {mpp_challenge}"}
+    headers = {
+        "WWW-Authenticate": f"{l402_challenge}, {mpp_challenge}",
+        "Cache-Control": "no-store",
+    }
 
     # Add x402 challenge if configured
     if x402_enabled():

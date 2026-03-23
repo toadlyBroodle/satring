@@ -318,7 +318,8 @@ class TestRequireMpp:
             }
             request = Request(scope)
             result = await require_mpp(request=request)
-            assert result is None
+            assert result is not None
+            assert "payment_hash" in result
 
     @pytest.mark.asyncio
     async def test_invalid_mpp_token_returns_402(self):
@@ -353,4 +354,5 @@ class TestRequireMpp:
             with pytest.raises(HTTPException) as exc_info:
                 await require_mpp(request=request)
             assert exc_info.value.status_code == 402
-            assert "Invalid MPP credential" in exc_info.value.detail
+            detail = exc_info.value.detail
+            assert detail["type"] == "https://paymentauth.org/problems/verification-failed"
