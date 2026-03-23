@@ -34,10 +34,22 @@ router = APIRouter(tags=["API"])
 
 @router.get("/openapi.json", include_in_schema=False)
 async def api_openapi():
-    """Serve OpenAPI spec at /api/v1/openapi.json for MPP discovery scanners."""
+    """Serve OpenAPI spec at /api/v1/openapi.json for MPP discovery scanners.
+
+    Strips the /api/v1 prefix from paths so they're relative to the server URL
+    (https://satring.com/api/v1). The root /openapi.json keeps full paths for Swagger UI.
+    """
+    import copy
     from fastapi.responses import JSONResponse
     from app.main import app
-    return JSONResponse(app.openapi(), headers={"Cache-Control": "public, max-age=300"})
+
+    schema = copy.deepcopy(app.openapi())
+    prefix = "/api/v1"
+    schema["paths"] = {
+        (p.removeprefix(prefix) or "/"): ops
+        for p, ops in schema.get("paths", {}).items()
+    }
+    return JSONResponse(schema, headers={"Cache-Control": "public, max-age=300"})
 
 
 # ---------------------------------------------------------------------------

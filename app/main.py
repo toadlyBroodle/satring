@@ -220,16 +220,6 @@ def _custom_openapi():
                 if "201" in responses and "200" not in responses:
                     responses["200"] = responses["201"]
 
-    # Strip /api/v1 prefix from paths so they're relative to the server URL.
-    # OpenAPI resolves full URL as server.url + path, so with server
-    # "https://satring.com/api/v1", paths must not include the prefix.
-    prefix = "/api/v1"
-    stripped = {}
-    for path, ops in schema.get("paths", {}).items():
-        new_path = path.removeprefix(prefix) or "/"
-        stripped[new_path] = ops
-    schema["paths"] = stripped
-
     app.openapi_schema = schema
     return schema
 
