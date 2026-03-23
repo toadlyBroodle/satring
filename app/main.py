@@ -208,11 +208,17 @@ def _custom_openapi():
         "ownershipProofs": [],
     }
     # Add security references to paid endpoints (those with x-payment-info)
+    # Also ensure every paid endpoint has a 200 response with a schema
+    # (some scanners only look for 200, not 201)
     payment_security = [{"L402": []}, {"MPP": []}, {"x402": []}]
     for path_ops in schema.get("paths", {}).values():
         for op in path_ops.values():
             if isinstance(op, dict) and op.get("x-payment-info"):
                 op.setdefault("security", payment_security)
+                responses = op.get("responses", {})
+                # Copy 201 schema to 200 if 200 is missing (for POST endpoints)
+                if "201" in responses and "200" not in responses:
+                    responses["200"] = responses["201"]
 
     app.openapi_schema = schema
     return schema
