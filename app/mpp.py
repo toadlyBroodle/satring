@@ -119,7 +119,7 @@ def build_mpp_challenge(
     # request auth-param: base64url-encoded JSON per draft-lightning-charge-00
     request_obj = {
         "amount": str(amount_sats),
-        "currency": "sat",
+        "currency": "BTC",
         "recipient": _MPP_REALM,
         "methodDetails": {
             "invoice": invoice,

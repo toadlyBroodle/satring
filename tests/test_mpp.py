@@ -98,7 +98,7 @@ class TestBuildChallenge:
         request_json = json.loads(_b64url_decode(request_b64))
 
         assert request_json["amount"] == "100"
-        assert request_json["currency"] == "sat"
+        assert request_json["currency"] == "BTC"
         assert request_json["methodDetails"]["invoice"] == "lnbc100n1mock"
         assert request_json["methodDetails"]["paymentHash"] == "hash123"
         assert request_json["methodDetails"]["network"] == "mainnet"
@@ -139,7 +139,7 @@ class TestVerifyCredential:
         expires = str(int(time.time()) + 600)
         request_obj = {
             "amount": str(amount_sats),
-            "currency": "sat",
+            "currency": "BTC",
             "methodDetails": {
                 "invoice": invoice,
                 "paymentHash": payment_hash,
@@ -284,7 +284,7 @@ class TestRequireMpp:
             expires = str(int(time.time()) + 600)
             request_obj = {
                 "amount": "100",
-                "currency": "sat",
+                "currency": "BTC",
                 "methodDetails": {
                     "invoice": "lnbc100n1mock",
                     "paymentHash": payment_hash,
