@@ -22,19 +22,20 @@ python -m pytest -k "test_create_service"
 
 ## Architecture
 
-FastAPI application serving an L402 + x402 + MPP tri-protocol paid API directory. Server-rendered HTML via Jinja2 + HTMX, with a parallel JSON API.
+FastAPI application serving an L402 + x402 + MPP multi-protocol paid API directory. Server-rendered HTML via Jinja2 + HTMX, with a parallel JSON API.
 
 **Route split:**
-- `app/routes/api.py` (prefix `/api/v1`): JSON API with dual-protocol payment gates via `require_payment()` dependency
+- `app/routes/api.py` (prefix `/api/v1`): JSON API with multi-protocol payment gates via `require_payment()` dependency
 - `app/routes/web.py`: HTML pages with form handling. Payment flows use invoice widgets polled via JS
 - Shared data builders (`build_analytics_data`, `build_reputation_data`) live in `api.py` and are imported by `web.py`
 
-**Dual-protocol payment flow (API):**
+**Tri-protocol payment flow (API):**
 - `app/payment.py` routes requests based on headers:
   1. `Authorization: L402/LSAT ...` header -> L402 path via `app/l402.py`
-  2. `PAYMENT-SIGNATURE` header -> x402 path via `app/x402.py`
-  3. No auth headers -> 402 with BOTH `WWW-Authenticate` (L402) and `PAYMENT-REQUIRED` (x402) headers
-  4. If only L402 is configured (no X402_PAY_TO), falls back to L402-only challenge.
+  2. `Authorization: Payment ...` header -> MPP path via `app/mpp.py`
+  3. `PAYMENT-SIGNATURE` header -> x402 path via `app/x402.py`
+  4. No auth headers -> 402 with `WWW-Authenticate` (L402 + MPP) and optionally `PAYMENT-REQUIRED` (x402) headers
+  5. If only L402 is configured (no X402_PAY_TO), falls back to L402+MPP challenge only.
 
 **L402 payment flow (API):**
 1. Client hits gated endpoint without auth -> 402 with `WWW-Authenticate: L402 macaroon="...", invoice="..."`
@@ -58,7 +59,7 @@ FastAPI application serving an L402 + x402 + MPP tri-protocol paid API directory
 
 **Health monitoring:** `app/health.py` runs a background task that probes all services on an interval (default 6h). Detects L402, x402, and MPP protocols via response headers. Updates service status to `live`, `confirmed`, or `down`.
 
-**MPP protocol (listing only):** MPP (Machine Payments Protocol by Stripe/Tempo) services can be listed and detected. MPP uses `WWW-Authenticate: Payment` headers. MPP-specific fields: `mpp_method` (tempo/stripe/lightning/custom), `mpp_realm`, `mpp_currency`. The scraper indexes mpp.dev registry as source 8. Accepting MPP payments is not yet implemented.
+**MPP protocol (Lightning payments):** MPP (Machine Payments Protocol) services can be listed, detected, and paid via Lightning. Implements the `Payment` HTTP auth scheme (draft-httpauth-payment-00) with the Lightning charge method (draft-lightning-charge-00). Uses the same LNbits wallet as L402 for invoice creation. Verification is identical: SHA256(preimage) == paymentHash. Challenge binding uses stateless HMAC-SHA256 (no DB storage for challenges). MPP-specific listing fields: `mpp_method` (tempo/stripe/lightning/custom), `mpp_realm`, `mpp_currency`. The scraper indexes mpp.dev registry as source 8.
 
 **Free API quota:** Free list/search endpoints return up to 10 results per IP per day (`FREE_API_RESULTS_PER_DAY` in config.py). Enforced in `paginated_services()` via in-memory daily counter. Skipped in test mode.
 
@@ -68,8 +69,9 @@ FastAPI application serving an L402 + x402 + MPP tri-protocol paid API directory
 ## Key Files
 
 - `app/config.py`: All settings, rate limits, input length constants, x402/health probe config. Change limits here, not in handlers.
-- `app/payment.py`: Unified dual-protocol payment gate (require_payment)
+- `app/payment.py`: Unified multi-protocol payment gate (require_payment)
 - `app/l402.py`: Macaroon minting/verification, invoice creation via LNbits API
+- `app/mpp.py`: MPP Lightning payment: HMAC-bound challenges, credential verification, receipts
 - `app/x402.py`: x402 protocol: build challenges, parse signatures, facilitator calls
 - `app/health.py`: Background service liveness probing
 - `app/models.py`: SQLAlchemy async models (Service with x402 + MPP columns, Category, Rating, ConsumedPayment)

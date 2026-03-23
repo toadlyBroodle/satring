@@ -23,14 +23,14 @@ AI agents can now [pay for APIs autonomously](https://lightning.engineering/post
 - Browse, search, and filter paid APIs by category, status, and protocol
 - **Three-protocol support**: L402 (Bitcoin Lightning), x402 (USDC on Base), and MPP (Stripe/Tempo)
 - Protocol checkboxes on submit/edit forms for multi-protocol services (e.g. L402+MPP)
-- Submit services with payment gate (anti-spam), payable via L402 or x402
-- Ratings and reputation system (also payment-gated)
+- Submit services with payment gate (anti-spam), payable via L402, MPP, or x402
+- Ratings and reputation system (also payment-gated via any protocol)
 - Edit your listing with secure edit tokens
 - Recover lost edit tokens via domain verification (`.well-known/satring-verify`)
 - Shared edit tokens across same-domain services; one token manages all your listings
 - JSON API for programmatic access and agent queries
 - **Daily free API quota** (10 results/IP/day) with unlimited access via paid bulk endpoint
-- Premium endpoints (bulk export, analytics, reputation) gated via L402 or x402
+- Premium endpoints (bulk export, analytics, reputation) gated via L402, MPP, or x402
 - Per-service health analytics: uptime percentage, average latency, probe history
 - Health probing with automatic protocol detection (L402, x402, MPP, or any combination)
 - Service status tracking (live / confirmed / down / unverified)
@@ -79,7 +79,7 @@ curl https://satring.com/api/v1/categories
 
 ### Payment-gated endpoints
 
-These require payment via **L402** or **x402**. Without auth headers, the server returns `402` with challenges for both protocols.
+These require payment via **L402**, **MPP** (Lightning), or **x402** (USDC). Without auth headers, the server returns `402` with challenges for all configured protocols.
 
 Each service requires 1 to 2 `category_ids`: 1=ai/ml, 2=data, 3=finance, 4=identity, 5=media, 6=social, 7=search, 8=storage, 9=tools.
 
@@ -100,7 +100,26 @@ curl -X POST https://satring.com/api/v1/services \
   }'
 ```
 
-#### Option B: x402 (USDC on Base)
+#### Option B: MPP (Lightning via Payment auth scheme)
+
+```bash
+# Submit a service via MPP
+curl -X POST https://satring.com/api/v1/services \
+  -H "Authorization: Payment <base64url-encoded-credential>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My API",
+    "url": "https://api.example.com",
+    "pricing_sats": 10,
+    "pricing_model": "per-request",
+    "protocol": "L402",
+    "category_ids": [1, 2]
+  }'
+```
+
+The MPP flow: hit the endpoint without auth to get a `402` with `WWW-Authenticate: Payment` containing a BOLT11 invoice, pay via Lightning, then retry with `Authorization: Payment <credential>` containing the preimage. See the [MPP spec](https://paymentauth.org/) for full details.
+
+#### Option C: x402 (USDC on Base)
 
 ```bash
 # Submit a service via x402
@@ -125,7 +144,7 @@ curl -X POST https://satring.com/api/v1/services \
 A single service can support multiple payment rails. Use `+` to combine protocols (e.g. `L402+x402`, `L402+MPP`, `x402+MPP`, `L402+x402+MPP`) and include the required fields for each:
 
 ```bash
-# L402 + MPP dual-protocol service
+# L402 + MPP multi-protocol service
 curl -X POST https://satring.com/api/v1/services \
   -H "Authorization: L402 <macaroon>:<preimage>" \
   -H "Content-Type: application/json" \
@@ -146,8 +165,9 @@ Multi-protocol services appear in search results when filtering by any of their 
 #### MPP-only listing
 
 ```bash
+# Pay with any supported protocol (L402, MPP, or x402)
 curl -X POST https://satring.com/api/v1/services \
-  -H "Authorization: L402 <macaroon>:<preimage>" \
+  -H "Authorization: Payment <base64url-credential>" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "My MPP API",
@@ -165,7 +185,7 @@ MPP fields: `mpp_method` (required: "tempo", "stripe", "lightning", "custom"), `
 #### Other gated operations
 
 ```bash
-# Link to existing service on same domain (L402 or x402 auth)
+# Link to existing service on same domain (L402, MPP, or x402 auth)
 curl -X POST https://satring.com/api/v1/services \
   -H "Authorization: L402 <macaroon>:<preimage>" \
   -H "Content-Type: application/json" \
@@ -296,7 +316,7 @@ Tools: `discover_services`, `list_services`, `get_service`, `get_ratings`, `list
 - **SQLAlchemy** (async) + **SQLite**: simple, no external DB needed
 - **L402 / Macaroons**: Lightning-native authentication via [pymacaroons](https://github.com/ecordell/pymacaroons)
 - **x402 / USDC on Base**: stablecoin payments via [xpay.sh](https://xpay.sh) facilitator
-- **MPP**: Machine Payments Protocol support (listing and detection; payment acceptance coming soon)
+- **MPP**: Machine Payments Protocol Lightning payments via the [Payment HTTP auth scheme](https://paymentauth.org/) (uses same LNbits wallet as L402)
 - **Tailwind CSS** (browser CDN): terminal-themed green-on-black UI
 
 ## Contributing
