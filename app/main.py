@@ -162,6 +162,8 @@ def _custom_openapi():
         description=app.description,
         routes=app.routes,
     )
+    # Server URL so scanners can resolve endpoint paths
+    schema["servers"] = [{"url": "https://satring.com/api/v1"}]
     # Security schemes for payment protocols
     schema.setdefault("components", {})["securitySchemes"] = {
         "L402": {
