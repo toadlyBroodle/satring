@@ -32,26 +32,6 @@ from app.utils import generate_edit_token, hash_token, verify_edit_token, get_sa
 router = APIRouter(tags=["API"])
 
 
-@router.get("/openapi.json", include_in_schema=False)
-async def api_openapi():
-    """Serve OpenAPI spec at /api/v1/openapi.json for MPP discovery scanners.
-
-    Strips the /api/v1 prefix from paths so they're relative to the server URL
-    (https://satring.com/api/v1). The root /openapi.json keeps full paths for Swagger UI.
-    """
-    import copy
-    from fastapi.responses import JSONResponse
-    from app.main import app
-
-    schema = copy.deepcopy(app.openapi())
-    prefix = "/api/v1"
-    schema["paths"] = {
-        (p.removeprefix(prefix) or "/"): ops
-        for p, ops in schema.get("paths", {}).items()
-    }
-    return JSONResponse(schema, headers={"Cache-Control": "public, max-age=300"})
-
-
 # ---------------------------------------------------------------------------
 # x-payment-info helpers (MPP discovery via OpenAPI, draft-payment-discovery-00)
 # ---------------------------------------------------------------------------
@@ -59,17 +39,12 @@ async def api_openapi():
 _402_RESPONSE = {"description": "Payment Required (L402 / MPP / x402)"}
 
 def _payment_extra(amount_sats: int | str, description: str) -> dict:
-    """Build openapi_extra dict with x-payment-info for a paid endpoint.
-
-    Per draft-payment-discovery-00: intent, method, amount, currency.
-    """
+    """Build openapi_extra with x-payment-info per draft-payment-discovery-00."""
     return {
         "x-payment-info": {
-            "protocols": ["mpp"],
-            "pricingMode": "fixed",
-            "price": str(amount_sats),
             "intent": "charge",
             "method": "lightning",
+            "amount": str(amount_sats),
             "currency": "sat",
             "description": description,
         },
@@ -80,9 +55,9 @@ def _free_extra() -> dict:
     """Mark an endpoint as free (no payment required)."""
     return {
         "x-payment-info": {
-            "protocols": ["mpp"],
-            "pricingMode": "fixed",
-            "price": "0",
+            "intent": "charge",
+            "method": "lightning",
+            "amount": "0",
         },
     }
 
@@ -91,11 +66,9 @@ def _quota_extra(free_per_day: int, amount_sats: int | str, description: str) ->
     """Mark an endpoint with free tier + paid fallback."""
     return {
         "x-payment-info": {
-            "protocols": ["mpp"],
-            "pricingMode": "fixed",
-            "price": str(amount_sats),
             "intent": "charge",
             "method": "lightning",
+            "amount": str(amount_sats),
             "currency": "sat",
             "description": f"Free tier: {free_per_day}/day per IP, then {amount_sats} sats per request",
         },
