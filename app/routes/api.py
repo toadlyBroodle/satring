@@ -39,17 +39,9 @@ router = APIRouter(tags=["API"])
 _402_RESPONSE = {"description": "Payment Required (L402 / MPP / x402)"}
 
 def _payment_extra(amount_sats: int | str, description: str) -> dict:
-    """Build openapi_extra with x-payment-info.
-
-    Uses the schema the @agentcash/discovery validator actually enforces:
-    pricingMode (required), price, protocols. Also includes the IETF draft
-    fields (intent, method, amount, currency) for forward compatibility.
-    """
+    """Build openapi_extra with x-payment-info per draft-payment-discovery-00."""
     return {
         "x-payment-info": {
-            "pricingMode": "fixed",
-            "price": str(amount_sats),
-            "protocols": ["mpp"],
             "intent": "charge",
             "method": "lightning",
             "amount": str(amount_sats),
@@ -63,9 +55,9 @@ def _free_extra() -> dict:
     """Mark an endpoint as free (no payment required)."""
     return {
         "x-payment-info": {
-            "pricingMode": "fixed",
-            "price": "0",
-            "protocols": ["mpp"],
+            "intent": "charge",
+            "method": "lightning",
+            "amount": "0",
         },
     }
 
@@ -74,9 +66,6 @@ def _quota_extra(free_per_day: int, amount_sats: int | str, description: str) ->
     """Mark an endpoint with free tier + paid fallback."""
     return {
         "x-payment-info": {
-            "pricingMode": "fixed",
-            "price": str(amount_sats),
-            "protocols": ["mpp"],
             "intent": "charge",
             "method": "lightning",
             "amount": str(amount_sats),
