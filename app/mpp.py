@@ -120,6 +120,7 @@ def build_mpp_challenge(
     request_obj = {
         "amount": str(amount_sats),
         "currency": "sat",
+        "recipient": _MPP_REALM,
         "methodDetails": {
             "invoice": invoice,
             "paymentHash": payment_hash,
