@@ -39,13 +39,19 @@ _402_RESPONSE = {"description": "Payment Required (L402 / MPP / x402)"}
 
 
 def _payment_extra(amount_sats: int | str, description: str) -> dict:
-    """Build openapi_extra dict with x-payment-info for a paid endpoint."""
+    """Build openapi_extra dict with x-payment-info for a paid endpoint.
+
+    Uses the practical format from live MPP services (protocols/pricingMode/price)
+    alongside the draft-payment-discovery-00 fields (intent/method/amount/currency).
+    """
     return {
         "x-payment-info": {
+            "protocols": ["mpp"],
+            "pricingMode": "fixed",
+            "price": str(amount_sats),
+            "currency": "sat",
             "intent": "charge",
             "method": "lightning",
-            "amount": str(amount_sats),
-            "currency": "sat",
             "description": description,
         },
     }
@@ -54,7 +60,11 @@ def _payment_extra(amount_sats: int | str, description: str) -> dict:
 def _free_extra() -> dict:
     """Mark an endpoint as free (no payment required)."""
     return {
-        "x-payment-info": None,
+        "x-payment-info": {
+            "protocols": ["mpp"],
+            "pricingMode": "fixed",
+            "price": "0",
+        },
     }
 
 
@@ -62,10 +72,12 @@ def _quota_extra(free_per_day: int, amount_sats: int | str, description: str) ->
     """Mark an endpoint with free tier + paid fallback."""
     return {
         "x-payment-info": {
+            "protocols": ["mpp"],
+            "pricingMode": "fixed",
+            "price": str(amount_sats),
+            "currency": "sat",
             "intent": "charge",
             "method": "lightning",
-            "amount": str(amount_sats),
-            "currency": "sat",
             "description": f"Free tier: {free_per_day}/day per IP, then {amount_sats} sats per request",
         },
     }
