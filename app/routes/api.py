@@ -31,6 +31,15 @@ from app.utils import generate_edit_token, hash_token, verify_edit_token, get_sa
 
 router = APIRouter(tags=["API"])
 
+
+@router.get("/openapi.json", include_in_schema=False)
+async def api_openapi():
+    """Serve OpenAPI spec at /api/v1/openapi.json for MPP discovery scanners."""
+    from fastapi.responses import JSONResponse
+    from app.main import app
+    return JSONResponse(app.openapi(), headers={"Cache-Control": "public, max-age=300"})
+
+
 # ---------------------------------------------------------------------------
 # x-payment-info helpers (MPP discovery via OpenAPI, draft-payment-discovery-00)
 # ---------------------------------------------------------------------------
@@ -1436,8 +1445,8 @@ async def create_rating(request: Request, slug: str, body: RatingCreate = None, 
 
 # --- Premium Endpoints (L402/MPP/x402-gated) ---
 
-@router.get("/analytics",
-             responses={200: {"description": "Directory analytics", "content": {"application/json": {"schema": {"type": "object"}}}}, 402: _402_RESPONSE},
+@router.get("/analytics", response_model=AnalyticsResponse,
+             responses={402: _402_RESPONSE},
              openapi_extra=_payment_extra(settings.AUTH_ANALYTICS_PRICE_SATS, "Directory analytics"))
 async def analytics(request: Request, db: AsyncSession = Depends(get_db)):
     await require_payment(
@@ -1450,8 +1459,8 @@ async def analytics(request: Request, db: AsyncSession = Depends(get_db)):
     return await build_analytics_data(db)
 
 
-@router.get("/services/{slug}/reputation",
-             responses={200: {"description": "Service reputation report", "content": {"application/json": {"schema": {"type": "object"}}}}, 402: _402_RESPONSE},
+@router.get("/services/{slug}/reputation", response_model=ReputationResponse,
+             responses={402: _402_RESPONSE},
              openapi_extra=_payment_extra(settings.AUTH_REPUTATION_PRICE_SATS, "Service reputation report"))
 async def reputation(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     await require_payment(
@@ -1464,8 +1473,8 @@ async def reputation(request: Request, slug: str, db: AsyncSession = Depends(get
     return await build_reputation_data(db, slug)
 
 
-@router.get("/services/{slug}/analytics",
-             responses={200: {"description": "Per-service health analytics", "content": {"application/json": {"schema": {"type": "object"}}}}, 402: _402_RESPONSE},
+@router.get("/services/{slug}/analytics", response_model=ServiceAnalyticsResponse,
+             responses={402: _402_RESPONSE},
              openapi_extra=_payment_extra(settings.AUTH_SERVICE_ANALYTICS_PRICE_SATS, "Per-service health analytics"))
 async def service_analytics(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     await require_payment(
