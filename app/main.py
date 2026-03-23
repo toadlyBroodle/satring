@@ -149,6 +149,70 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="satring", description="Curated paid API directory for AI agents. L402, x402, and MPP services with health monitoring, human/agent ratings, and MCP integration.", lifespan=lifespan, docs_url=None)
+
+
+def _custom_openapi():
+    """Extend the generated OpenAPI schema with MPP discovery metadata."""
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    # Security schemes for payment protocols
+    schema.setdefault("components", {})["securitySchemes"] = {
+        "L402": {
+            "type": "http",
+            "scheme": "L402",
+            "description": "L402 Lightning payment: Authorization: L402 <macaroon>:<preimage>",
+        },
+        "MPP": {
+            "type": "http",
+            "scheme": "Payment",
+            "description": "MPP Lightning payment: Authorization: Payment <base64url-credential>",
+        },
+        "x402": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "PAYMENT-SIGNATURE",
+            "description": "x402 USDC payment: base64-encoded payment signature",
+        },
+    }
+    # x-service-info (draft-payment-discovery-00)
+    schema["x-service-info"] = {
+        "categories": ["search", "data"],
+        "docs": {
+            "homepage": "https://satring.com/docs",
+            "llms": "https://satring.com/llms.txt",
+            "apiReference": "https://satring.com/docs",
+        },
+    }
+    # info.guidance for agent-readable instructions
+    schema["info"]["x-guidance"] = (
+        "Satring is a curated paid API directory. "
+        "Free endpoints (categories, ratings, search, list) have a daily quota of 10 results per IP. "
+        "Once exhausted, or for premium endpoints (bulk, analytics, reputation), "
+        "payment is required via L402 (Authorization: L402 <macaroon>:<preimage>), "
+        "MPP (Authorization: Payment <base64url-credential>), "
+        "or x402 (PAYMENT-SIGNATURE header). "
+        "Hit any paid endpoint without auth to receive a 402 with payment challenges for all supported protocols. "
+        "Endpoints marked with x-payment-info show the cost in sats (Lightning)."
+    )
+    # Add security references to paid endpoints (those with x-payment-info)
+    payment_security = [{"L402": []}, {"MPP": []}, {"x402": []}]
+    for path_ops in schema.get("paths", {}).values():
+        for op in path_ops.values():
+            if isinstance(op, dict) and op.get("x-payment-info"):
+                op.setdefault("security", payment_security)
+
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = _custom_openapi
 app.state.limiter = limiter
 async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
     # Parse window from slowapi detail (e.g. "6 per 1 minute")
