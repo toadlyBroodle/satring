@@ -192,8 +192,8 @@ def _custom_openapi():
             "apiReference": "https://satring.com/docs",
         },
     }
-    # info.guidance for agent-readable instructions
-    schema["info"]["x-guidance"] = (
+    # info.guidance for agent-readable instructions (per MPP discovery spec)
+    schema["info"]["guidance"] = (
         "Satring is a curated paid API directory. "
         "Free endpoints (categories, ratings, search, list) have a daily quota of 10 results per IP. "
         "Once exhausted, or for premium endpoints (bulk, analytics, reputation), "
@@ -203,6 +203,10 @@ def _custom_openapi():
         "Hit any paid endpoint without auth to receive a 402 with payment challenges for all supported protocols. "
         "Endpoints marked with x-payment-info show the cost in sats (Lightning)."
     )
+    # x-discovery for ownership proofs (per MPP discovery spec)
+    schema["x-discovery"] = {
+        "ownershipProofs": [],
+    }
     # Add security references to paid endpoints (those with x-payment-info)
     payment_security = [{"L402": []}, {"MPP": []}, {"x402": []}]
     for path_ops in schema.get("paths", {}).values():
