@@ -1,7 +1,7 @@
 """Background service health monitoring.
 
 Probes registered services for liveness and updates their status.
-Detects L402 and x402 protocols via response headers.
+Detects L402, x402, and MPP protocols via response headers.
 Records probe history for uptime/latency tracking.
 """
 

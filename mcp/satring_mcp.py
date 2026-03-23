@@ -1,4 +1,4 @@
-"""MCP server for satring.com, the best curated L402 + x402 API directory."""
+"""MCP server for satring.com, the best curated L402 + x402 + MPP API directory."""
 
 import asyncio
 import json
@@ -26,7 +26,7 @@ CATEGORIES = [
 TOOLS = [
     Tool(
         name="discover_services",
-        description="Search satring.com for L402/x402 paid API services by keyword.",
+        description="Search satring.com for L402/x402/MPP paid API services by keyword.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -38,7 +38,7 @@ TOOLS = [
                 },
                 "protocol": {
                     "type": "string",
-                    "enum": ["L402", "x402", "L402+x402"],
+                    "enum": ["L402", "x402", "MPP", "L402+x402", "L402+MPP", "x402+MPP", "L402+x402+MPP"],
                     "description": "Filter by payment protocol",
                 },
                 "page": {"type": "integer", "minimum": 1, "default": 1},

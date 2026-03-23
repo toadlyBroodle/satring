@@ -1,4 +1,4 @@
-"""Integration tests for app/payment.py: dual-protocol payment gate."""
+"""Integration tests for app/payment.py: multi-protocol payment gate."""
 
 import hashlib
 

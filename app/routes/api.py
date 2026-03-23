@@ -1031,7 +1031,7 @@ async def get_service(request: Request, slug: str, db: AsyncSession = Depends(ge
 
 @router.post("/services", response_model=ServiceCreateOut, status_code=201)
 async def create_service(request: Request, body: ServiceCreate = None, background_tasks: BackgroundTasks = None, db: AsyncSession = Depends(get_db)):
-    # If no body and no payment headers, return 402 challenge (for x402 discovery probes)
+    # If no body and no payment headers, return 402 challenge (for protocol discovery probes)
     if body is None:
         await require_payment(
             request=request,
@@ -1329,7 +1329,7 @@ async def list_ratings(
 
 @router.post("/services/{slug}/ratings", response_model=RatingOut, status_code=201)
 async def create_rating(request: Request, slug: str, body: RatingCreate = None, db: AsyncSession = Depends(get_db)):
-    # If no body and no payment headers, return 402 challenge (for x402 discovery probes)
+    # If no body and no payment headers, return 402 challenge (for protocol discovery probes)
     if body is None:
         await require_payment(
             request=request,
@@ -1367,7 +1367,7 @@ async def create_rating(request: Request, slug: str, body: RatingCreate = None, 
     return RatingOut.model_validate(rating)
 
 
-# --- Premium Endpoints (L402-gated) ---
+# --- Premium Endpoints (L402/MPP/x402-gated) ---
 
 @router.get("/analytics")
 async def analytics(request: Request, db: AsyncSession = Depends(get_db)):

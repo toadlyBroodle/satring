@@ -1066,7 +1066,7 @@ async def stats_page(request: Request, db: AsyncSession = Depends(get_db)):
     healthy_pct = (healthy_count / total * 100) if total else 0
 
     # By protocol: aggregate combo protocols into base components
-    # e.g. "L402+x402" counts toward both L402 and x402 totals
+    # e.g. "L402+x402" counts toward both L402 and x402 totals; "L402+MPP" toward L402 and MPP
     proto_rows = (await db.execute(
         select(Service.protocol, func.count(Service.id),
                func.sum(case((Service.status == "confirmed", 1), else_=0)),
@@ -1234,7 +1234,7 @@ async def llms_txt():
         "",
         f"- [Stats]({base}/): Live directory metrics, protocol breakdown, category coverage",
         f"- [Browse directory]({base}/directory): Search and filter services by category, status, protocol, rating",
-        f"- [Submit a service]({base}/submit): List your paid API (L402 or x402 payment required)",
+        f"- [Submit a service]({base}/submit): List your paid API (L402, MPP, or x402 payment required)",
         f"- [API docs]({base}/docs): OpenAPI/Swagger interactive documentation",
         f"- [JSON API]({base}/api/v1/services): Programmatic access to the catalog",
         "",
@@ -1244,10 +1244,10 @@ async def llms_txt():
         f"- [Search]({base}/api/v1/search?q=example): GET — full-text search across names and descriptions",
         f"- [Service detail]({base}/api/v1/services/{{slug}}): GET — full service info with categories",
         f"- [Ratings]({base}/api/v1/services/{{slug}}/ratings): GET — paginated reviews for a service",
-        f"- [Submit service]({base}/api/v1/services): POST — create a new listing (L402 or x402 payment required)",
-        f"- [Submit rating]({base}/api/v1/services/{{slug}}/ratings): POST — rate a service (L402 or x402 payment required)",
-        f"- [Bulk export]({base}/api/v1/services/bulk): GET — all services as JSON (L402 or x402 payment required)",
-        f"- [Analytics]({base}/api/v1/analytics): GET — aggregate directory stats (L402 or x402 payment required)",
+        f"- [Submit service]({base}/api/v1/services): POST — create a new listing (L402, MPP, or x402 payment required)",
+        f"- [Submit rating]({base}/api/v1/services/{{slug}}/ratings): POST — rate a service (L402, MPP, or x402 payment required)",
+        f"- [Bulk export]({base}/api/v1/services/bulk): GET — all services as JSON (L402, MPP, or x402 payment required)",
+        f"- [Analytics]({base}/api/v1/analytics): GET — aggregate directory stats (L402, MPP, or x402 payment required)",
         "",
         "## Categories",
         "",

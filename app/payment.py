@@ -1,9 +1,14 @@
-"""Unified dual-protocol payment gate: L402 (Lightning) + x402 (USDC).
+"""Unified multi-protocol payment gate: L402 (Lightning) + x402 (USDC) + MPP (Lightning).
 
 Routes requests to the appropriate protocol handler based on headers.
-When both protocols are configured, a 402 challenge includes both
-WWW-Authenticate (L402) and PAYMENT-REQUIRED (x402) headers so
-clients can pick whichever they support.
+When multiple protocols are configured, a 402 challenge includes all
+applicable headers so clients can pick whichever they support.
+
+Header routing:
+  - Authorization: L402/LSAT ... -> L402 path
+  - Authorization: Payment ...   -> MPP path (Lightning via Payment auth scheme)
+  - PAYMENT-SIGNATURE header     -> x402 path (USDC via facilitator)
+  - No auth                      -> 402 with all protocol challenges
 """
 
 import logging
@@ -13,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings, payments_enabled, x402_enabled
 from app.l402 import require_l402, create_invoice, mint_macaroon, check_and_consume_payment
+from app.mpp import require_mpp, build_mpp_challenge
 from app.x402 import require_x402, build_payment_required
 
 logger = logging.getLogger("satring.payment")
@@ -25,12 +31,12 @@ async def require_payment(
     memo: str,
     db: AsyncSession | None = None,
 ) -> dict | None:
-    """Unified payment gate supporting both L402 and x402 protocols.
+    """Unified payment gate supporting L402, x402, and MPP protocols.
 
-    Returns None (L402 path or test mode) or a settlement dict (x402 path).
+    Returns None (L402/MPP path or test mode) or a settlement dict (x402 path).
     Raises HTTPException(402) with appropriate challenge headers if unpaid.
 
-    Pass `db` to enable x402 replay protection via ConsumedPayment table.
+    Pass `db` to enable replay protection via ConsumedPayment table.
     """
     # Test mode bypass
     if not payments_enabled():
@@ -38,11 +44,17 @@ async def require_payment(
 
     auth = request.headers.get("Authorization", "")
     has_l402 = auth.startswith("L402 ") or auth.startswith("LSAT ")
+    has_mpp = auth.startswith("Payment ")
     has_x402 = bool(request.headers.get("payment-signature"))
 
     # L402 auth header present: delegate to L402 handler
     if has_l402:
         await require_l402(request=request, db=db, amount_sats=amount_sats, memo=memo)
+        return None
+
+    # MPP Payment auth header present: delegate to MPP handler
+    if has_mpp:
+        await require_mpp(request=request, db=db, amount_sats=amount_sats, memo=memo)
         return None
 
     # x402 payment signature present: delegate to x402 handler
@@ -71,16 +83,24 @@ async def require_payment(
 
         return settlement
 
-    # No auth headers: return 402 challenge with both protocols
-    # Build L402 challenge
+    # No auth headers: return 402 challenge with all configured protocols
     invoice_data = await create_invoice(amount_sats, memo)
+
+    # L402 challenge
     macaroon_b64 = mint_macaroon(invoice_data["payment_hash"])
     l402_challenge = (
         f'L402 macaroon="{macaroon_b64}", '
         f'invoice="{invoice_data["payment_request"]}"'
     )
 
-    headers = {"WWW-Authenticate": l402_challenge}
+    # MPP challenge (uses same invoice, different wire format)
+    mpp_challenge = build_mpp_challenge(
+        amount_sats, invoice_data["payment_hash"],
+        invoice_data["payment_request"], memo,
+    )
+
+    # Combine L402 and MPP in WWW-Authenticate (comma-separated per RFC 9110)
+    headers = {"WWW-Authenticate": f"{l402_challenge}, {mpp_challenge}"}
 
     # Add x402 challenge if configured
     if x402_enabled():
