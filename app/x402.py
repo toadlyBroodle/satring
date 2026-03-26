@@ -97,6 +97,7 @@ def _build_bazaar_schema(method: str) -> dict:
                 "required": ["type"],
                 "properties": {
                     "type": {"type": "string", "const": "json"},
+                    "example": {"type": "object"},
                 },
             },
         },
