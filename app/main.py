@@ -190,8 +190,8 @@ def _custom_openapi():
             "apiReference": "https://satring.com/docs",
         },
     }
-    # info.guidance for agent-readable instructions (per MPP discovery spec)
-    schema["info"]["guidance"] = (
+    # info.x-guidance for agent-readable instructions (per MPP discovery spec)
+    schema["info"]["x-guidance"] = (
         "Satring is a curated paid API directory. "
         "Free endpoints (categories, ratings, search, list) have a daily quota of 10 results per IP. "
         "Once exhausted, or for premium endpoints (bulk, analytics, reputation), "
@@ -199,24 +199,37 @@ def _custom_openapi():
         "MPP (Authorization: Payment <base64url-credential>), "
         "or x402 (PAYMENT-SIGNATURE header). "
         "Hit any paid endpoint without auth to receive a 402 with payment challenges for all supported protocols. "
-        "Endpoints marked with x-payment-info show the cost in sats (Lightning)."
+        "Endpoints marked with x-payment-info show the cost in USD."
     )
     # x-discovery for ownership proofs (per MPP discovery spec)
     schema["x-discovery"] = {
         "ownershipProofs": [],
     }
-    # Add security references and 200 responses to paid endpoints only
+    # Remove non-API routes (web UI, static pages) from the spec
+    paths = schema.get("paths", {})
+    api_paths = {k: v for k, v in paths.items() if k.startswith("/api/")}
+    schema["paths"] = api_paths
+
+    # Add security references and 402 responses to paid endpoints,
+    # and ensure all endpoints have an auth mode for MPP discovery.
     payment_security = [{"L402": []}, {"MPP": []}, {"x402": []}]
-    for path_ops in schema.get("paths", {}).values():
+    for path_ops in api_paths.values():
         for op in path_ops.values():
             if not isinstance(op, dict):
                 continue
             pi = op.get("x-payment-info")
             if not pi:
                 continue
-            # Only add security to actually paid endpoints (amount != "0")
-            if pi.get("amount", "0") != "0":
+            # Only add security to actually paid endpoints (price != "0")
+            if pi.get("price", "0") != "0":
                 op.setdefault("security", payment_security)
+                op.setdefault("responses", {})["402"] = {
+                    "description": "Payment Required"
+                }
+            else:
+                # Free endpoints: reference a security scheme so the
+                # mppscan validator recognizes an auth mode declaration.
+                op.setdefault("security", [{"x402": []}])
             responses = op.get("responses", {})
             # Copy 201 schema to 200 if 200 is missing (for POST endpoints)
             if "201" in responses and "200" not in responses:

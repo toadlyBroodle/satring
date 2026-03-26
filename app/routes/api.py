@@ -33,19 +33,18 @@ router = APIRouter(tags=["API"])
 
 
 # ---------------------------------------------------------------------------
-# x-payment-info helpers (MPP discovery via OpenAPI, draft-payment-discovery-00)
+# x-payment-info helpers (MPP discovery via OpenAPI)
 # ---------------------------------------------------------------------------
 
 _402_RESPONSE = {"description": "Payment Required (L402 / MPP / x402)"}
 
-def _payment_extra(amount_sats: int | str, description: str) -> dict:
-    """Build openapi_extra with x-payment-info per draft-payment-discovery-00."""
+def _payment_extra(price_usd: str, description: str) -> dict:
+    """Build openapi_extra with x-payment-info for a paid endpoint."""
     return {
         "x-payment-info": {
-            "intent": "charge",
-            "method": "lightning",
-            "amount": str(amount_sats),
-            "currency": "sat",
+            "protocols": ["mpp", "x402"],
+            "pricingMode": "fixed",
+            "price": price_usd,
             "description": description,
         },
     }
@@ -55,22 +54,21 @@ def _free_extra() -> dict:
     """Mark an endpoint as free (no payment required)."""
     return {
         "x-payment-info": {
-            "intent": "charge",
-            "method": "lightning",
-            "amount": "0",
+            "protocols": ["mpp", "x402"],
+            "pricingMode": "fixed",
+            "price": "0",
         },
     }
 
 
-def _quota_extra(free_per_day: int, amount_sats: int | str, description: str) -> dict:
+def _quota_extra(free_per_day: int, price_usd: str, description: str) -> dict:
     """Mark an endpoint with free tier + paid fallback."""
     return {
         "x-payment-info": {
-            "intent": "charge",
-            "method": "lightning",
-            "amount": str(amount_sats),
-            "currency": "sat",
-            "description": f"Free tier: {free_per_day}/day per IP, then {amount_sats} sats per request",
+            "protocols": ["mpp", "x402"],
+            "pricingMode": "fixed",
+            "price": price_usd,
+            "description": f"Free tier: {free_per_day}/day per IP, then ${price_usd} per request",
         },
     }
 
@@ -1003,7 +1001,7 @@ async def build_service_analytics(db: AsyncSession, slug: str) -> ServiceAnalyti
 # IMPORTANT: /services/bulk BEFORE /services/{slug}
 @router.get("/services/bulk", response_model=list[ServiceOut],
              responses={402: _402_RESPONSE},
-             openapi_extra=_payment_extra(settings.AUTH_BULK_PRICE_SATS, "Bulk export all services"))
+             openapi_extra=_payment_extra(settings.AUTH_BULK_PRICE_USD, "Bulk export all services"))
 async def bulk_export(request: Request, db: AsyncSession = Depends(get_db)):
     settlement = await require_payment(
         request=request,
@@ -1038,7 +1036,7 @@ async def list_categories(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.get("/services", response_model=ServiceListOut,
              responses={402: _402_RESPONSE},
-             openapi_extra=_quota_extra(FREE_API_RESULTS_PER_DAY, settings.AUTH_PRICE_SATS, "List services"))
+             openapi_extra=_quota_extra(FREE_API_RESULTS_PER_DAY, settings.AUTH_PRICE_USD, "List services"))
 @limiter.limit(RATE_LIST_API)
 async def list_services(
     request: Request,
@@ -1062,7 +1060,7 @@ async def list_services(
 
 @router.get("/services/{slug}", response_model=ServiceOut,
              responses={402: _402_RESPONSE},
-             openapi_extra=_quota_extra(FREE_API_RESULTS_PER_DAY, settings.AUTH_PRICE_SATS, "Get service details"))
+             openapi_extra=_quota_extra(FREE_API_RESULTS_PER_DAY, settings.AUTH_PRICE_USD, "Get service details"))
 @limiter.limit(RATE_DETAIL_API)
 async def get_service(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     # Enforce daily free-result quota per IP; once exhausted, require payment
@@ -1081,7 +1079,7 @@ async def get_service(request: Request, slug: str, db: AsyncSession = Depends(ge
 
 @router.post("/services", response_model=ServiceCreateOut, status_code=201,
               responses={402: _402_RESPONSE},
-              openapi_extra=_payment_extra(settings.AUTH_SUBMIT_PRICE_SATS, "Submit a new service listing"))
+              openapi_extra=_payment_extra(settings.AUTH_SUBMIT_PRICE_USD, "Submit a new service listing"))
 async def create_service(request: Request, body: ServiceCreate = None, background_tasks: BackgroundTasks = None, db: AsyncSession = Depends(get_db)):
     # If no body and no payment headers, return 402 challenge (for protocol discovery probes)
     if body is None:
@@ -1343,7 +1341,7 @@ async def api_recover_verify(request: Request, slug: str, db: AsyncSession = Dep
 
 @router.get("/search", response_model=ServiceListOut,
              responses={402: _402_RESPONSE},
-             openapi_extra=_quota_extra(FREE_API_RESULTS_PER_DAY, settings.AUTH_PRICE_SATS, "Search services"))
+             openapi_extra=_quota_extra(FREE_API_RESULTS_PER_DAY, settings.AUTH_PRICE_USD, "Search services"))
 @limiter.limit(RATE_SEARCH_API)
 async def search_services(
     request: Request,
@@ -1388,7 +1386,7 @@ async def list_ratings(
 
 @router.post("/services/{slug}/ratings", response_model=RatingOut, status_code=201,
               responses={402: _402_RESPONSE},
-              openapi_extra=_payment_extra(settings.AUTH_REVIEW_PRICE_SATS, "Submit a rating"))
+              openapi_extra=_payment_extra(settings.AUTH_REVIEW_PRICE_USD, "Submit a rating"))
 async def create_rating(request: Request, slug: str, body: RatingCreate = None, db: AsyncSession = Depends(get_db)):
     # If no body and no payment headers, return 402 challenge (for protocol discovery probes)
     if body is None:
@@ -1432,7 +1430,7 @@ async def create_rating(request: Request, slug: str, body: RatingCreate = None, 
 
 @router.get("/analytics", response_model=AnalyticsResponse,
              responses={402: _402_RESPONSE},
-             openapi_extra=_payment_extra(settings.AUTH_ANALYTICS_PRICE_SATS, "Directory analytics"))
+             openapi_extra=_payment_extra(settings.AUTH_ANALYTICS_PRICE_USD, "Directory analytics"))
 async def analytics(request: Request, db: AsyncSession = Depends(get_db)):
     await require_payment(
         request=request,
@@ -1446,7 +1444,7 @@ async def analytics(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.get("/services/{slug}/reputation", response_model=ReputationResponse,
              responses={402: _402_RESPONSE},
-             openapi_extra=_payment_extra(settings.AUTH_REPUTATION_PRICE_SATS, "Service reputation report"))
+             openapi_extra=_payment_extra(settings.AUTH_REPUTATION_PRICE_USD, "Service reputation report"))
 async def reputation(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     await require_payment(
         request=request,
@@ -1460,7 +1458,7 @@ async def reputation(request: Request, slug: str, db: AsyncSession = Depends(get
 
 @router.get("/services/{slug}/analytics", response_model=ServiceAnalyticsResponse,
              responses={402: _402_RESPONSE},
-             openapi_extra=_payment_extra(settings.AUTH_SERVICE_ANALYTICS_PRICE_SATS, "Per-service health analytics"))
+             openapi_extra=_payment_extra(settings.AUTH_SERVICE_ANALYTICS_PRICE_USD, "Per-service health analytics"))
 async def service_analytics(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     await require_payment(
         request=request,
