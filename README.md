@@ -17,6 +17,10 @@ Satring helps AI agents and developers discover paid API services that accept pa
 
 AI agents can now [pay for APIs autonomously](https://lightning.engineering/posts/2026-02-11-ln-agent-tools/) using Lightning. But there's no good way to discover what's available. Satring is the best curated directory for L402 and x402 paid APIs.
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/toadlybroodle-satring).
+
 ## Features
 
 - Browse, search, and filter paid APIs by category, status, and protocol
