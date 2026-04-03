@@ -1,5 +1,6 @@
 db/
 .env
+CLAUDE.md
 __pycache__/
 *.pyc
 .venv/
