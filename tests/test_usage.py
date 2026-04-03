@@ -102,14 +102,17 @@ async def test_record_hit_and_flush(usage_db, monkeypatch):
 
 @pytest.mark.anyio
 async def test_exclude_static():
-    """Static and excluded paths should not be recorded."""
+    """Static and excluded paths should not be recorded (except .well-known, which is now tracked)."""
     record_hit("/static/css/theme.css", "web", "1.1.1.1")
-    record_hit("/.well-known/satring-verify", "web", "1.1.1.1")
     record_hit("/favicon.ico", "web", "1.1.1.1")
     record_hit("/openapi.json", "web", "1.1.1.1")
     record_hit("/docs", "web", "1.1.1.1")
 
     assert len(_buffer) == 0
+
+    # .well-known paths are now tracked (agent discovery signals)
+    record_hit("/.well-known/satring-verify", "web", "1.1.1.1")
+    assert len(_buffer) == 1
 
 
 @pytest.mark.anyio

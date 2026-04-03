@@ -1042,9 +1042,10 @@ async def payment_status(request: Request, payment_hash: str):
     return JSONResponse({"paid": paid})
 
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("/")
 async def stats_page(request: Request, db: AsyncSession = Depends(get_db)):
-    """Free public stats page with high-level directory metrics."""
+    """Free public stats page with high-level directory metrics.
+    Returns JSON manifest when Accept: application/json is requested."""
     from datetime import timedelta
     now = datetime.now(timezone.utc)
 
@@ -1143,6 +1144,37 @@ async def stats_page(request: Request, db: AsyncSession = Depends(get_db)):
     recently_added = (await db.execute(
         select(Service).where(Service.status != "purged").order_by(Service.created_at.desc()).limit(5)
     )).scalars().all()
+
+    # JSON content negotiation for agents
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept and "text/html" not in accept:
+        base = settings.BASE_URL.rstrip("/")
+        return JSONResponse({
+            "name": "satring",
+            "description": "Curated paid API directory for AI agents. L402, x402, and MPP services.",
+            "url": base,
+            "api": f"{base}/api/v1/",
+            "openapi": f"{base}/openapi.json",
+            "docs": f"{base}/docs",
+            "llms_txt": f"{base}/llms.txt",
+            "protocols": ["L402", "x402", "MPP"],
+            "discovery": {
+                "agent": f"{base}/.well-known/agent.json",
+                "l402": f"{base}/.well-known/l402",
+                "x402": f"{base}/.well-known/x402",
+                "mpp": f"{base}/.well-known/mpp",
+            },
+            "stats": {
+                "total_services": total,
+                "live": live_count,
+                "confirmed": confirmed_count,
+                "verified": verified_count,
+                "total_ratings": total_ratings,
+                "protocols": {p["protocol"]: p["count"] for p in by_protocol},
+                "added_7d": added_7d,
+                "added_30d": added_30d,
+            },
+        })
 
     return templates.TemplateResponse(request, "services/stats.html", {
         "stats": {
@@ -1257,3 +1289,91 @@ async def llms_txt():
 
     lines.append("")
     return PlainTextResponse("\n".join(lines), media_type="text/plain")
+
+
+# --- Well-known protocol discovery routes ---
+# These are dynamic so they stay in sync with env config.
+
+
+@router.get("/.well-known/x402")
+async def well_known_x402():
+    """x402 payment discovery endpoint."""
+    from app.config import x402_enabled
+    base = settings.BASE_URL.rstrip("/")
+    data = {
+        "protocol": "x402",
+        "version": "2",
+        "enabled": x402_enabled(),
+        "facilitator": settings.X402_FACILITATOR_URL,
+        "network": settings.X402_NETWORK,
+        "asset": settings.X402_ASSET,
+        "payTo": settings.X402_PAY_TO or None,
+        "endpoints": {
+            "submit": f"{base}/api/v1/services",
+            "bulk": f"{base}/api/v1/services/bulk",
+            "analytics": f"{base}/api/v1/analytics",
+        },
+        "pricing": {
+            "submit": settings.AUTH_SUBMIT_PRICE_USD,
+            "bulk": settings.AUTH_BULK_PRICE_USD,
+            "analytics": settings.AUTH_ANALYTICS_PRICE_USD,
+            "reputation": settings.AUTH_REPUTATION_PRICE_USD,
+        },
+        "docs": f"{base}/docs",
+    }
+    return JSONResponse(data)
+
+
+@router.get("/.well-known/l402")
+async def well_known_l402():
+    """L402 Lightning payment discovery endpoint."""
+    base = settings.BASE_URL.rstrip("/")
+    data = {
+        "protocol": "L402",
+        "description": "Lightning-native HTTP 402 payments. Pay invoice, get preimage, authenticate with macaroon.",
+        "auth_scheme": "L402",
+        "auth_header_format": "Authorization: L402 <macaroon>:<preimage>",
+        "endpoints": {
+            "submit": f"{base}/api/v1/services",
+            "bulk": f"{base}/api/v1/services/bulk",
+            "analytics": f"{base}/api/v1/analytics",
+        },
+        "pricing_sats": {
+            "submit": settings.AUTH_SUBMIT_PRICE_SATS,
+            "review": settings.AUTH_REVIEW_PRICE_SATS,
+            "bulk": settings.AUTH_BULK_PRICE_SATS,
+            "analytics": settings.AUTH_ANALYTICS_PRICE_SATS,
+            "reputation": settings.AUTH_REPUTATION_PRICE_SATS,
+        },
+        "docs": f"{base}/docs",
+    }
+    return JSONResponse(data)
+
+
+@router.get("/.well-known/mpp")
+async def well_known_mpp():
+    """MPP (Machine Payments Protocol) discovery endpoint."""
+    base = settings.BASE_URL.rstrip("/")
+    data = {
+        "protocol": "MPP",
+        "version": "draft-httpauth-payment-00",
+        "description": "Machine Payments Protocol with Lightning charge method. HMAC-bound challenges, stateless verification.",
+        "auth_scheme": "Payment",
+        "auth_header_format": "Authorization: Payment <base64url-credential>",
+        "charge_method": "lightning",
+        "currency": "BTC",
+        "endpoints": {
+            "submit": f"{base}/api/v1/services",
+            "bulk": f"{base}/api/v1/services/bulk",
+            "analytics": f"{base}/api/v1/analytics",
+        },
+        "pricing_sats": {
+            "submit": settings.AUTH_SUBMIT_PRICE_SATS,
+            "review": settings.AUTH_REVIEW_PRICE_SATS,
+            "bulk": settings.AUTH_BULK_PRICE_SATS,
+            "analytics": settings.AUTH_ANALYTICS_PRICE_SATS,
+            "reputation": settings.AUTH_REPUTATION_PRICE_SATS,
+        },
+        "docs": f"{base}/docs",
+    }
+    return JSONResponse(data)

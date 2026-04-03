@@ -111,6 +111,16 @@ class UsageDetail(Base):
     unique_ips = Column(Integer, default=0)
 
 
+class AgentUsage(Base):
+    __tablename__ = "agent_usage"
+
+    id = Column(Integer, primary_key=True)
+    agent_class = Column(String(30), nullable=False, index=True)
+    hour = Column(DateTime, nullable=False, index=True)
+    hit_count = Column(Integer, default=0)
+    unique_ips = Column(Integer, default=0)
+
+
 class Rating(Base):
     __tablename__ = "ratings"
 
