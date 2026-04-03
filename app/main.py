@@ -18,7 +18,7 @@ from app.config import settings
 from app.database import init_db, async_session
 from app.models import Category
 from app.health import start_health_task, stop_health_task
-from app.usage import record_hit, record_details, start_flush_task, stop_flush_task
+from app.usage import record_hit, record_details, record_agent, start_flush_task, stop_flush_task
 
 # SECURITY: Rate limiter to prevent abuse and DoS. Applied per-endpoint in route files.
 limiter = Limiter(key_func=get_remote_address)
@@ -52,16 +52,32 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 class UsageTrackingMiddleware(BaseHTTPMiddleware):
-    """Record endpoint hits for usage analytics. Skips 404 and 5xx responses."""
+    """Record endpoint hits for usage analytics. Tracks agent traffic and discovery signals."""
+
+    # 404s on these prefixes are tracked as "miss" source (agent demand signals)
+    _DISCOVERY_PREFIXES = ("/.well-known/", "/api/")
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        if response.status_code == 404 or response.status_code >= 500:
-            return response
-        source = "api" if request.url.path.startswith("/api/") else "web"
         client_ip = request.client.host if request.client else "unknown"
-        record_hit(request.url.path, source, client_ip)
-        record_details(request.url.path, dict(request.query_params), client_ip)
+        user_agent = request.headers.get("user-agent", "")
+        path = request.url.path
+
+        # Always record agent class (regardless of status code)
+        record_agent(user_agent, client_ip)
+
+        if response.status_code >= 500:
+            return response
+
+        # Track 404s on discovery paths as "miss" source
+        if response.status_code == 404:
+            if any(path.startswith(p) for p in self._DISCOVERY_PREFIXES):
+                record_hit(path, "miss", client_ip)
+            return response
+
+        source = "api" if path.startswith("/api/") else "web"
+        record_hit(path, source, client_ip)
+        record_details(path, dict(request.query_params), client_ip)
         return response
 
 
@@ -298,7 +314,42 @@ templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 from app.routes.web import router as web_router   # noqa: E402
 from app.routes.api import router as api_router    # noqa: E402
 
-app.mount("/.well-known", StaticFiles(directory=Path(__file__).parent / ".well-known"), name="well-known")
-app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 app.include_router(web_router)
 app.include_router(api_router, prefix="/api/v1")
+# Static mounts AFTER routers so dynamic well-known routes take priority
+app.mount("/.well-known", StaticFiles(directory=Path(__file__).parent / ".well-known"), name="well-known")
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+
+
+# --- API path redirects for common agent 404s ---
+from starlette.responses import RedirectResponse as StarletteRedirect
+
+
+@app.api_route("/api/services{path:path}", methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
+async def redirect_api_services(request: Request, path: str):
+    """Redirect /api/services... -> /api/v1/services... (agents expect no v1 prefix)."""
+    qs = str(request.url.query)
+    target = f"/api/v1/services{path}"
+    if qs:
+        target += f"?{qs}"
+    return StarletteRedirect(url=target, status_code=307)
+
+
+@app.api_route("/api/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+async def redirect_api_root(request: Request, path: str):
+    """Redirect /api/... -> /api/v1/... for bare /api/ and /api hits."""
+    qs = str(request.url.query)
+    target = f"/api/v1/{path}"
+    if qs:
+        target += f"?{qs}"
+    return StarletteRedirect(url=target, status_code=307)
+
+
+@app.get("/v1{path:path}", include_in_schema=False)
+async def redirect_v1(request: Request, path: str):
+    """Redirect /v1... -> /api/v1... ."""
+    qs = str(request.url.query)
+    target = f"/api/v1{path}"
+    if qs:
+        target += f"?{qs}"
+    return StarletteRedirect(url=target, status_code=307)

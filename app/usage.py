@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 
 from app.config import USAGE_FLUSH_INTERVAL, USAGE_RETENTION_DAYS
 from app.database import async_session
-from app.models import RouteUsage, UsageDetail
+from app.models import RouteUsage, UsageDetail, AgentUsage
 
 logger = logging.getLogger("satring.usage")
 
@@ -20,10 +20,46 @@ _ip_sets: dict[tuple[str, str, str], set[str]] = defaultdict(set)
 # Detail buffer: {(dimension, value, hour_iso): count}
 _detail_buffer: dict[tuple[str, str, str], int] = defaultdict(int)
 _detail_ip_sets: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+# Agent traffic buffer: {(agent_class, hour_iso): count}
+_agent_buffer: dict[tuple[str, str], int] = defaultdict(int)
+_agent_ip_sets: dict[tuple[str, str], set[str]] = defaultdict(set)
+
 _lock = asyncio.Lock()
 _flush_task: asyncio.Task | None = None
 
-EXCLUDED_PREFIXES = ("/static/", "/.well-known/", "/favicon", "/openapi.json", "/docs")
+EXCLUDED_PREFIXES = ("/static/", "/favicon", "/openapi.json", "/docs")
+
+# User-agent classification patterns (order: most specific first)
+_AGENT_PATTERNS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"GPTBot", re.I), "gptbot"),
+    (re.compile(r"ClaudeBot", re.I), "claudebot"),
+    (re.compile(r"Amazonbot", re.I), "amazonbot"),
+    (re.compile(r"meta-externalagent|facebookexternalhit", re.I), "meta"),
+    (re.compile(r"Applebot", re.I), "applebot"),
+    (re.compile(r"GoogleOther|Googlebot|AdsBot-Google", re.I), "google"),
+    (re.compile(r"402-indexer|402index|Open402DirectoryCrawler", re.I), "402-indexer"),
+    (re.compile(r"ClawNet", re.I), "clawnet"),
+    (re.compile(r"ShapBot", re.I), "shapbot"),
+    (re.compile(r"lnget", re.I), "lnget"),
+    (re.compile(r"^node$", re.I), "node"),
+    (re.compile(r"python-httpx|python-requests|Python-urllib|aiohttp", re.I), "python"),
+    (re.compile(r"^axios/", re.I), "axios"),
+    (re.compile(r"Go-http-client", re.I), "go-http"),
+    (re.compile(r"^curl/", re.I), "curl"),
+    (re.compile(r"Satring-Scraper", re.I), "satring-scraper"),
+    (re.compile(r"PetalBot|SERanking|DotBot|DataForSeo|Barkrowler|MJ12bot|SemrushBot|AhrefsBot", re.I), "seo-bot"),
+    (re.compile(r"Mozilla.*Chrome|Mozilla.*Safari|Mozilla.*Firefox|Mozilla.*Edg", re.I), "browser"),
+]
+
+
+def classify_agent(user_agent: str) -> str:
+    """Classify a User-Agent string into an agent class."""
+    if not user_agent or user_agent == "-":
+        return "unknown"
+    for pattern, agent_class in _AGENT_PATTERNS:
+        if pattern.search(user_agent):
+            return agent_class
+    return "other"
 
 # Max distinct keys allowed in the buffer between flushes (safety cap)
 MAX_BUFFER_KEYS = 10_000
@@ -118,6 +154,19 @@ def record_details(path: str, query_params: dict[str, str], client_ip: str) -> N
             _detail_ip_sets[key].add(client_ip)
 
 
+def record_agent(user_agent: str, client_ip: str) -> None:
+    """Record a hit classified by user-agent. Called from middleware."""
+    agent_class = classify_agent(user_agent)
+    hour = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0, tzinfo=None)
+    hour_key = hour.isoformat()
+    key = (agent_class, hour_key)
+    if key not in _agent_buffer and len(_agent_buffer) >= MAX_BUFFER_KEYS:
+        return
+    _agent_buffer[key] += 1
+    if len(_agent_ip_sets[key]) < MAX_IPS_PER_BUCKET:
+        _agent_ip_sets[key].add(client_ip)
+
+
 async def flush() -> None:
     """Snapshot buffer, upsert rows into RouteUsage, and purge old data.
 
@@ -125,17 +174,19 @@ async def flush() -> None:
     fails (e.g. database locked), data stays in the buffer for the next flush.
     """
     async with _lock:
-        has_data = bool(_buffer) or bool(_detail_buffer)
+        has_data = bool(_buffer) or bool(_detail_buffer) or bool(_agent_buffer)
         if not has_data:
             return
         snapshot = dict(_buffer)
         detail_snapshot = dict(_detail_buffer)
+        agent_snapshot = dict(_agent_buffer)
         # Snapshot IP set sizes but keep sets alive for the current hour
         current_hour = datetime.now(timezone.utc).replace(
             minute=0, second=0, microsecond=0, tzinfo=None
         ).isoformat()
         ip_counts = {k: len(v) for k, v in _ip_sets.items()}
         detail_ip_counts = {k: len(v) for k, v in _detail_ip_sets.items()}
+        agent_ip_counts = {k: len(v) for k, v in _agent_ip_sets.items()}
 
     try:
         async with async_session() as db:
@@ -183,6 +234,26 @@ async def flush() -> None:
                         hour=hour, hit_count=count, unique_ips=unique,
                     ))
 
+            # Flush agent buffer
+            for (agent_class, hour_key), count in agent_snapshot.items():
+                hour = datetime.fromisoformat(hour_key)
+                unique = agent_ip_counts.get((agent_class, hour_key), 0)
+                result = await db.execute(
+                    select(AgentUsage).where(
+                        AgentUsage.agent_class == agent_class,
+                        AgentUsage.hour == hour,
+                    )
+                )
+                row = result.scalars().first()
+                if row:
+                    row.hit_count += count
+                    row.unique_ips = unique
+                else:
+                    db.add(AgentUsage(
+                        agent_class=agent_class,
+                        hour=hour, hit_count=count, unique_ips=unique,
+                    ))
+
             # Purge old data (bulk DELETE, no loading into Python)
             cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=USAGE_RETENTION_DAYS)
             await db.execute(
@@ -190,6 +261,9 @@ async def flush() -> None:
             )
             await db.execute(
                 delete(UsageDetail).where(UsageDetail.hour < cutoff)
+            )
+            await db.execute(
+                delete(AgentUsage).where(AgentUsage.hour < cutoff)
             )
 
             await db.commit()
@@ -201,6 +275,8 @@ async def flush() -> None:
                 _buffer[key] += count
             for key, count in detail_snapshot.items():
                 _detail_buffer[key] += count
+            for key, count in agent_snapshot.items():
+                _agent_buffer[key] += count
         raise
 
     # Only clear and evict after successful commit
@@ -209,11 +285,17 @@ async def flush() -> None:
             _buffer.pop(key, None)
         for key in detail_snapshot:
             _detail_buffer.pop(key, None)
+        for key in agent_snapshot:
+            _agent_buffer.pop(key, None)
         # Evict IP sets for past hours (no longer needed)
         for sets_dict in (_ip_sets, _detail_ip_sets):
             stale = [k for k in sets_dict if k[2] != current_hour]
             for k in stale:
                 del sets_dict[k]
+        # Agent IP sets use 2-tuples (no source field)
+        stale_agent = [k for k in _agent_ip_sets if k[1] != current_hour]
+        for k in stale_agent:
+            del _agent_ip_sets[k]
 
 
 async def _flush_loop() -> None:

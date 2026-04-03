@@ -125,6 +125,28 @@ Comments prefixed `SECURITY:` mark security-critical code. Key patterns:
 - SSRF: `is_public_hostname()` blocks private/loopback IPs before any server-side HTTP fetch
 - Double-spend: `ConsumedPayment` table with unique payment_hash constraint
 
+## Public vs Private Content
+
+**CRITICAL: This repo has an open-source public component. Many directories are gitignored because they contain proprietary or security-sensitive content. Never force-add gitignored files or bypass .gitignore.**
+
+Gitignored (PRIVATE, never commit):
+- `docs/` - Internal specs, roadmaps, promo materials, market research
+- `deploy/` - Server configs, deploy scripts, infra details, wallet keys
+- `app/.well-known/*` - Nostr keys, verification hashes, discovery files with wallet addresses
+- `tests/test_paywall.py` - Payment gate test details
+- `.env`, `db/`, `.creds`, `logs/` - Secrets, databases, credentials, logs
+
+Public (tracked in git):
+- `app/` source code (except `.well-known/*`)
+- `tests/` (except `test_paywall.py`)
+- `mcp/` - MCP server code
+- `CLAUDE.md`, `README.md`, `.gitignore`
+- `.claude/skills/` - Dev cycle skill
+
+**Before every commit:** verify no gitignored paths are staged. Never use `git add -f` on gitignored files. If a new file belongs in a gitignored directory, keep it local-only.
+
+**Deploying private files:** Private files are not deployed via git. If a modified gitignored file is strictly required for VPS operations (e.g., nginx config, deploy scripts, well-known discovery files), manually `scp` it to `vps:~/Dev/satring/`. Only transfer files the VPS needs to serve requests. Never scp promo materials, market research, or local-only docs.
+
 ## Conventions
 
 - Terminal dark theme: green-on-black UI using Tailwind classes + CSS variables from `app/static/css/theme.css`

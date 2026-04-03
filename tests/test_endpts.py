@@ -238,6 +238,7 @@ class TestAnalyticsResponse:
             "generated_at", "total_services", "total_ratings", "total_categories",
             "health", "pricing", "categories", "growth",
             "top_rated", "most_reviewed", "recently_added", "usage",
+            "agent_traffic",
         }
         # health
         assert set(data["health"].keys()) == {

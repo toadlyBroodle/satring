@@ -26,7 +26,7 @@ from app.config import (
 from app.database import get_db
 from app.payment import require_payment
 from app.main import limiter
-from app.models import Service, Category, Rating, RouteUsage, ProbeHistory, service_categories
+from app.models import Service, Category, Rating, RouteUsage, AgentUsage, ProbeHistory, service_categories
 from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter, is_valid_protocol, VALID_PROTOCOLS
 
 router = APIRouter(tags=["API"])
@@ -342,6 +342,17 @@ class UsageStats(BaseModel):
     web: SourceHits
 
 
+class AgentClassStats(BaseModel):
+    agent_class: str
+    hits_30d: int
+    unique_ips_30d: int
+
+
+class AgentTrafficStats(BaseModel):
+    by_class: list[AgentClassStats]
+    missed_paths: list[RouteHitStats]
+
+
 class AnalyticsResponse(BaseModel):
     generated_at: str
     total_services: int
@@ -355,6 +366,7 @@ class AnalyticsResponse(BaseModel):
     most_reviewed: list[LeaderboardEntry]
     recently_added: list[LeaderboardEntry]
     usage: UsageStats | None = None
+    agent_traffic: AgentTrafficStats | None = None
 
 
 # --- Reputation Schemas ---
@@ -727,6 +739,43 @@ async def build_analytics_data(db: AsyncSession) -> AnalyticsResponse:
         web=await _source_hits("web"),
     )
 
+    # --- Agent Traffic ---
+    agent_rows = (await db.execute(
+        select(
+            AgentUsage.agent_class,
+            func.sum(AgentUsage.hit_count).label("total"),
+            func.sum(AgentUsage.unique_ips).label("ips"),
+        )
+        .where(AgentUsage.hour >= thirty_ago)
+        .group_by(AgentUsage.agent_class)
+        .order_by(func.sum(AgentUsage.hit_count).desc())
+    )).all()
+
+    # Top missed discovery paths (source="miss")
+    missed_rows = (await db.execute(
+        select(
+            RouteUsage.route,
+            func.sum(RouteUsage.hit_count).label("total"),
+            func.sum(RouteUsage.unique_ips).label("ips"),
+        )
+        .where(RouteUsage.source == "miss")
+        .where(RouteUsage.hour >= thirty_ago)
+        .group_by(RouteUsage.route)
+        .order_by(func.sum(RouteUsage.hit_count).desc())
+        .limit(20)
+    )).all()
+
+    agent_traffic = AgentTrafficStats(
+        by_class=[
+            AgentClassStats(agent_class=r[0], hits_30d=int(r[1]), unique_ips_30d=int(r[2]))
+            for r in agent_rows
+        ],
+        missed_paths=[
+            RouteHitStats(route=r[0], total_hits=int(r[1]), unique_ips=int(r[2]))
+            for r in missed_rows
+        ],
+    )
+
     return AnalyticsResponse(
         generated_at=now.isoformat(),
         total_services=total_services,
@@ -769,6 +818,7 @@ async def build_analytics_data(db: AsyncSession) -> AnalyticsResponse:
         most_reviewed=[_lb(s) for s in most_reviewed_rows],
         recently_added=[_lb(s) for s in recently_added_rows],
         usage=usage_stats,
+        agent_traffic=agent_traffic,
     )
 
 
