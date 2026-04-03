@@ -18,7 +18,7 @@ from app.config import (
     MAX_X402_NETWORK, MAX_X402_ASSET, MAX_X402_PAY_TO, MAX_PRICING_USD,
     MAX_MPP_METHOD, MAX_MPP_REALM, MAX_MPP_CURRENCY,
     RATE_EDIT, RATE_DELETE, RATE_RECOVER,
-    RATE_SEARCH, RATE_PAYMENT_STATUS, RATE_SITEMAP,
+    RATE_SEARCH, RATE_PAYMENT_STATUS, RATE_SITEMAP, RATE_DETAIL_API,
 )
 from app.database import get_db
 from app.l402 import create_invoice, check_payment_status, check_and_consume_payment
@@ -171,6 +171,7 @@ async def search(
 
 
 @router.get("/services/{slug}", response_class=HTMLResponse)
+@limiter.limit("30/minute")
 async def service_detail(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Service)
@@ -189,12 +190,19 @@ async def service_detail(request: Request, slug: str, db: AsyncSession = Depends
 
 
 @router.get("/services/{slug}/meta.json")
+@limiter.limit(RATE_DETAIL_API)
 async def service_meta(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     """Return sensitive service fields via JS-only endpoint.
 
-    Static HTML scrapers won't execute JS, so they never see endpoint URLs,
-    wallet addresses, or contact info. Real browsers fetch this on page load.
+    SECURITY: Referrer-gated to prevent direct scraping. Only serves data when
+    the request comes from the service detail page (JS fetch on page load).
+    Rate-limited to 15/min to throttle even legitimate requests.
     """
+    # SECURITY: Referrer gate - only serve to requests from detail pages
+    referer = request.headers.get("referer", "")
+    if f"/services/{slug}" not in referer:
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+
     result = await db.execute(
         select(Service)
         .where(Service.slug == slug)
@@ -1213,9 +1221,9 @@ async def sitemap(request: Request, db: AsyncSession = Depends(get_db)):
         f'  <url><loc>{base}/llms.txt</loc><changefreq>weekly</changefreq><priority>0.4</priority></url>',
     ]
 
-    result = await db.execute(select(Service.slug).where(Service.status != "purged"))
-    for (slug,) in result.all():
-        urls.append(f'  <url><loc>{base}/services/{slug}</loc><changefreq>daily</changefreq><priority>0.7</priority></url>')
+    # SECURITY: Individual service slugs removed from sitemap to prevent
+    # single-request enumeration of the entire catalog. Services are still
+    # discoverable via /directory page links and search engine crawling.
 
     xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
     xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
@@ -1231,6 +1239,7 @@ async def robots_txt():
         "User-agent: *\n"
         "Allow: /\n"
         "Disallow: /api/\n"
+        "Disallow: /services/*/meta.json\n"
         "Crawl-delay: 30\n"
         "\n"
         "User-agent: AhrefsBot\n"
@@ -1296,7 +1305,33 @@ async def llms_txt():
     for name, slug, description in SEED_CATEGORIES:
         lines.append(f"- [{name}]({base}/directory?category={slug}): {description}")
 
-    lines.append("")
+    lines.extend([
+        "",
+        "## How to Pay",
+        "",
+        "All paid endpoints return HTTP 402 with payment challenges in headers.",
+        "Three payment methods are supported (pick any one):",
+        "",
+        "### L402 (Lightning)",
+        "1. Hit a paid endpoint; receive 402 with `WWW-Authenticate: L402 macaroon=\"...\", invoice=\"...\"`",
+        "2. Pay the BOLT11 Lightning invoice to get the preimage",
+        "3. Retry the request with `Authorization: L402 <macaroon>:<preimage>`",
+        f"- Discovery: {base}/.well-known/l402",
+        "",
+        "### MPP (Machine Payments Protocol)",
+        "1. Hit a paid endpoint; receive 402 with `WWW-Authenticate: Payment ...`",
+        "2. Parse the challenge, pay the BOLT11 invoice to get the preimage",
+        "3. Build a credential JSON with paymentHash and preimage, base64url-encode it",
+        "4. Retry with `Authorization: Payment <base64url-credential>`",
+        f"- Discovery: {base}/.well-known/mpp",
+        "",
+        "### x402 (USDC on Base)",
+        "1. Hit a paid endpoint; receive 402 with `PAYMENT-REQUIRED` header (base64 JSON)",
+        "2. Decode to get payTo address, amount, and network (Base mainnet)",
+        "3. Send USDC, then retry with `PAYMENT-SIGNATURE` header",
+        f"- Discovery: {base}/.well-known/x402",
+        "",
+    ])
     return PlainTextResponse("\n".join(lines), media_type="text/plain")
 
 
@@ -1328,6 +1363,21 @@ async def well_known_x402():
             "analytics": settings.AUTH_ANALYTICS_PRICE_USD,
             "reputation": settings.AUTH_REPUTATION_PRICE_USD,
         },
+        "example": {
+            "description": "Fetch bulk export with x402 USDC payment (Python)",
+            "code": (
+                "import httpx, json, base64\n"
+                "# 1. Hit endpoint to get 402 with PAYMENT-REQUIRED header\n"
+                f"r = httpx.get('{base}/api/v1/services/bulk')\n"
+                "payment_info = json.loads(base64.b64decode(r.headers['PAYMENT-REQUIRED']))\n"
+                "# 2. Send USDC to payTo address on Base via your wallet/SDK\n"
+                "# 3. Get signature from x402 facilitator or build PAYMENT-SIGNATURE\n"
+                "# 4. Retry with signature header\n"
+                f"r = httpx.get('{base}/api/v1/services/bulk',\n"
+                "    headers={{'PAYMENT-SIGNATURE': signature_b64}}\n"
+                ")"
+            ),
+        },
         "docs": f"{base}/docs",
     }
     return JSONResponse(data)
@@ -1353,6 +1403,24 @@ async def well_known_l402():
             "bulk": settings.AUTH_BULK_PRICE_SATS,
             "analytics": settings.AUTH_ANALYTICS_PRICE_SATS,
             "reputation": settings.AUTH_REPUTATION_PRICE_SATS,
+        },
+        "example": {
+            "description": "Fetch bulk export with L402 payment (Python)",
+            "code": (
+                "import httpx, hashlib\n"
+                "# 1. Hit endpoint to get 402 challenge\n"
+                f"r = httpx.get('{base}/api/v1/services/bulk')\n"
+                "www_auth = r.headers['WWW-Authenticate']\n"
+                "macaroon = www_auth.split('macaroon=\"')[1].split('\"')[0]\n"
+                "invoice = www_auth.split('invoice=\"')[1].split('\"')[0]\n"
+                "# 2. Pay invoice via your Lightning wallet, get preimage\n"
+                "preimage = pay_invoice(invoice)  # your wallet SDK\n"
+                "# 3. Retry with L402 auth\n"
+                f"r = httpx.get('{base}/api/v1/services/bulk',\n"
+                "    headers={{'Authorization': f'L402 {{macaroon}}:{{preimage}}'}}\n"
+                ")\n"
+                "services = r.json()  # full catalog with URLs"
+            ),
         },
         "docs": f"{base}/docs",
     }
@@ -1382,6 +1450,25 @@ async def well_known_mpp():
             "bulk": settings.AUTH_BULK_PRICE_SATS,
             "analytics": settings.AUTH_ANALYTICS_PRICE_SATS,
             "reputation": settings.AUTH_REPUTATION_PRICE_SATS,
+        },
+        "example": {
+            "description": "Fetch bulk export with MPP payment (Python)",
+            "code": (
+                "import httpx, json, base64\n"
+                "# 1. Hit endpoint to get 402 with Payment challenge\n"
+                f"r = httpx.get('{base}/api/v1/services/bulk')\n"
+                "# 2. Parse Payment challenge from WWW-Authenticate\n"
+                "# 3. Pay the BOLT11 invoice, get preimage\n"
+                "preimage = pay_invoice(invoice)  # your wallet SDK\n"
+                "# 4. Build credential: {{\"paymentHash\": ..., \"preimage\": ...}}\n"
+                "cred = base64.urlsafe_b64encode(json.dumps(\n"
+                "    {{'paymentHash': payment_hash, 'preimage': preimage}}\n"
+                ").encode()).decode()\n"
+                "# 5. Retry with Payment auth\n"
+                f"r = httpx.get('{base}/api/v1/services/bulk',\n"
+                "    headers={{'Authorization': f'Payment {{cred}}'}}\n"
+                ")"
+            ),
         },
         "docs": f"{base}/docs",
     }

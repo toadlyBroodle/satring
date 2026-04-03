@@ -529,7 +529,7 @@ class TestL402ChallengeFormat:
 
     @pytest.mark.asyncio
     async def test_402_body_is_json(self, client: AsyncClient):
-        """The JSON body should say Payment Required even though the real data is in headers."""
+        """The 402 body should include detail, price, and how_to_pay instructions."""
         with patch.object(settings, "AUTH_ROOT_KEY", "real-key"), \
              patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv:
             mock_inv.return_value = {
@@ -538,7 +538,15 @@ class TestL402ChallengeFormat:
             }
             resp = await client.get("/api/v1/services/bulk")
             assert resp.status_code == 402
-            assert resp.json()["detail"] == "Payment Required"
+            body = resp.json()["detail"]
+            assert body["detail"] == "Payment Required"
+            assert "price" in body
+            assert "sats" in body["price"]
+            assert "usd" in body["price"]
+            assert "how_to_pay" in body
+            assert "L402" in body["how_to_pay"]
+            assert "MPP" in body["how_to_pay"]
+            assert "steps" in body["how_to_pay"]["L402"]
 
 
 # ---------------------------------------------------------------------------

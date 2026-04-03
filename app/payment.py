@@ -128,8 +128,42 @@ async def require_payment(
         x402_challenge = build_payment_required(price_usd, memo, resource_url, request.method)
         headers["PAYMENT-REQUIRED"] = x402_challenge
 
+    base = settings.BASE_URL.rstrip("/")
+    body = {
+        "detail": "Payment Required",
+        "price": {"sats": amount_sats, "usd": price_usd},
+        "how_to_pay": {
+            "L402": {
+                "steps": [
+                    "1. Extract macaroon and invoice from WWW-Authenticate header",
+                    "2. Pay the BOLT11 Lightning invoice",
+                    "3. Retry with header: Authorization: L402 <macaroon>:<preimage>",
+                ],
+                "docs": f"{base}/.well-known/l402",
+            },
+            "MPP": {
+                "steps": [
+                    "1. Extract Payment challenge from WWW-Authenticate header",
+                    "2. Pay the BOLT11 invoice in the challenge request field",
+                    "3. Build credential with paymentHash and preimage",
+                    "4. Retry with header: Authorization: Payment <base64url-credential>",
+                ],
+                "docs": f"{base}/.well-known/mpp",
+            },
+        },
+    }
+    if x402_enabled():
+        body["how_to_pay"]["x402"] = {
+            "steps": [
+                "1. Decode base64 PAYMENT-REQUIRED header to get payment details",
+                "2. Send USDC to the payTo address on Base (eip155:8453)",
+                "3. Retry with header: PAYMENT-SIGNATURE <base64-signed-payload>",
+            ],
+            "docs": f"{base}/.well-known/x402",
+        }
+
     raise HTTPException(
         status_code=402,
-        detail="Payment Required",
+        detail=body,
         headers=headers,
     )

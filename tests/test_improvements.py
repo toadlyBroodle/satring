@@ -247,11 +247,12 @@ class TestSitemap:
         assert "/docs</loc>" in resp.text
 
     @pytest.mark.asyncio
-    async def test_sitemap_includes_service_pages(self, client: AsyncClient, sample_service: Service):
-        """Sitemap includes individual service listing pages."""
+    async def test_sitemap_excludes_service_slugs(self, client: AsyncClient, sample_service: Service):
+        """Sitemap no longer includes individual service pages (anti-scrape)."""
         resp = await client.get("/sitemap.xml")
-        assert f"/services/{sample_service.slug}" in resp.text
+        assert f"/services/{sample_service.slug}" not in resp.text
         assert "/api/" not in resp.text
+        assert "/directory" in resp.text
 
 
 class TestRobotsTxt:
