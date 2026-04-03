@@ -209,9 +209,11 @@ def _custom_openapi():
     # info.x-guidance for agent-readable instructions (per MPP discovery spec)
     schema["info"]["x-guidance"] = (
         "Satring is a curated paid API directory. "
-        "Free endpoints (categories, ratings, search, list) have a daily quota of 10 results per IP. "
-        "Once exhausted, or for premium endpoints (bulk, analytics, reputation), "
-        "payment is required via L402 (Authorization: L402 <macaroon>:<preimage>), "
+        "Free endpoints (list, search, detail) return thin summaries (name, protocol, price, rating) "
+        "with a daily quota of 5 results per IP. Summaries do NOT include service URLs, descriptions, "
+        "or payment config. To get full service metadata including endpoint URLs, pay via bulk export "
+        "or exhaust the free quota to unlock full details. "
+        "Payment methods: L402 (Authorization: L402 <macaroon>:<preimage>), "
         "MPP (Authorization: Payment <base64url-credential>), "
         "or x402 (PAYMENT-SIGNATURE header). "
         "Hit any paid endpoint without auth to receive a 402 with payment challenges for all supported protocols. "

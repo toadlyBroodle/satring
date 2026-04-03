@@ -166,6 +166,30 @@ class ServiceListOut(BaseModel):
     page_size: int
 
 
+class ServiceSummary(BaseModel):
+    """Thin service view for free tier. Shows what exists but not where/how to connect."""
+    name: str
+    slug: str
+    protocol: str
+    pricing_model: str
+    pricing_sats: int
+    pricing_usd: str | None = None
+    avg_rating: float
+    rating_count: int
+    domain_verified: bool
+    categories: list[CategoryOut]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ServiceListSummary(BaseModel):
+    services: list[ServiceSummary]
+    total: int
+    page: int
+    page_size: int
+
+
 class ServiceCreate(BaseModel):
     # SECURITY: max_length limits prevent DB bloat and memory exhaustion (constants in config.py)
     name: str = Field(min_length=1, max_length=MAX_NAME)
@@ -458,7 +482,7 @@ class ReputationResponse(BaseModel):
 async def paginated_services(
     db: AsyncSession, query, page: int, page_size: int,
     request: Request | None = None,
-) -> ServiceListOut:
+) -> ServiceListSummary | ServiceListOut:
     count_q = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_q)).scalar() or 0
 
@@ -470,6 +494,7 @@ async def paginated_services(
     services = results.scalars().all()
 
     # Enforce daily free-result quota per IP; once exhausted, require payment
+    paid = False
     if request is not None and services:
         ip = request.client.host if request.client else "unknown"
         granted = _check_and_consume_quota(ip, len(services))
@@ -483,10 +508,17 @@ async def paginated_services(
             )
             # Payment accepted; return full results
             granted = len(services)
+            paid = True
         services = services[:granted]
 
-    return ServiceListOut(
-        services=[ServiceOut.model_validate(s) for s in services],
+    # Paid users get full ServiceOut; free tier gets thin ServiceSummary
+    if paid or not payments_enabled():
+        return ServiceListOut(
+            services=[ServiceOut.model_validate(s) for s in services],
+            total=total, page=page, page_size=page_size,
+        )
+    return ServiceListSummary(
+        services=[ServiceSummary.model_validate(s) for s in services],
         total=total, page=page, page_size=page_size,
     )
 
@@ -1084,9 +1116,9 @@ async def list_categories(request: Request, db: AsyncSession = Depends(get_db)):
     return [CategoryOut.model_validate(c) for c in result.scalars().all()]
 
 
-@router.get("/services", response_model=ServiceListOut,
+@router.get("/services", response_model=ServiceListSummary | ServiceListOut,
              responses={402: _402_RESPONSE},
-             openapi_extra=_quota_extra(FREE_API_RESULTS_PER_DAY, settings.AUTH_PRICE_USD, "List services"))
+             openapi_extra=_quota_extra(FREE_API_RESULTS_PER_DAY, settings.AUTH_PRICE_USD, "List services (summaries; pay for full details)"))
 @limiter.limit(RATE_LIST_API)
 async def list_services(
     request: Request,
@@ -1108,12 +1140,14 @@ async def list_services(
     return await paginated_services(db, query, page, page_size, request=request)
 
 
-@router.get("/services/{slug}", response_model=ServiceOut,
+@router.get("/services/{slug}", response_model=ServiceSummary | ServiceOut,
              responses={402: _402_RESPONSE},
-             openapi_extra=_quota_extra(FREE_API_RESULTS_PER_DAY, settings.AUTH_PRICE_USD, "Get service details"))
+             openapi_extra=_quota_extra(FREE_API_RESULTS_PER_DAY, settings.AUTH_PRICE_USD, "Get service summary (pay for full details with URL)"))
 @limiter.limit(RATE_DETAIL_API)
 async def get_service(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
+    service = await get_service_or_404(db, slug)
     # Enforce daily free-result quota per IP; once exhausted, require payment
+    paid = False
     if payments_enabled():
         ip = request.client.host if request.client else "unknown"
         if _check_and_consume_quota(ip, 1) == 0:
@@ -1124,7 +1158,11 @@ async def get_service(request: Request, slug: str, db: AsyncSession = Depends(ge
                 memo=f"satring.com API access (free tier: {FREE_API_RESULTS_PER_DAY}/day)",
                 db=db,
             )
-    return ServiceOut.model_validate(await get_service_or_404(db, slug))
+            paid = True
+    # Paid users get full ServiceOut; free tier gets thin ServiceSummary
+    if paid or not payments_enabled():
+        return ServiceOut.model_validate(service)
+    return ServiceSummary.model_validate(service)
 
 
 @router.post("/services", response_model=ServiceCreateOut, status_code=201,
@@ -1389,9 +1427,9 @@ async def api_recover_verify(request: Request, slug: str, db: AsyncSession = Dep
     }
 
 
-@router.get("/search", response_model=ServiceListOut,
+@router.get("/search", response_model=ServiceListSummary | ServiceListOut,
              responses={402: _402_RESPONSE},
-             openapi_extra=_quota_extra(FREE_API_RESULTS_PER_DAY, settings.AUTH_PRICE_USD, "Search services"))
+             openapi_extra=_quota_extra(FREE_API_RESULTS_PER_DAY, settings.AUTH_PRICE_USD, "Search services (summaries; pay for full details)"))
 @limiter.limit(RATE_SEARCH_API)
 async def search_services(
     request: Request,
@@ -1399,7 +1437,7 @@ async def search_services(
     status: str | None = None,
     protocol: str | None = None,
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=20),
     db: AsyncSession = Depends(get_db),
 ):
     protocol = normalize_protocol(protocol)
