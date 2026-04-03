@@ -631,6 +631,67 @@ class TestFreeEndpoints:
 
 
 # ---------------------------------------------------------------------------
+# Free tier returns ServiceSummary (no URL, description, payment config)
+# ---------------------------------------------------------------------------
+
+SUMMARY_FIELDS = {
+    "name", "slug", "protocol", "pricing_model", "pricing_sats", "pricing_usd",
+    "avg_rating", "rating_count", "domain_verified", "categories", "created_at",
+}
+WITHHELD_FIELDS = {
+    "url", "description", "owner_name", "logo_url", "id",
+    "x402_network", "x402_asset", "x402_pay_to",
+    "mpp_method", "mpp_realm", "mpp_currency",
+}
+
+
+class TestFreeTierThinSummaries:
+    """With payments enabled, free endpoints return ServiceSummary (no URL/description)."""
+
+    @pytest.mark.asyncio
+    async def test_list_returns_summary(self, client: AsyncClient, sample_service: Service):
+        with patch.object(settings, "AUTH_ROOT_KEY", "real-key"):
+            resp = await client.get("/api/v1/services")
+            assert resp.status_code == 200
+            data = resp.json()
+            svc = data["services"][0]
+            assert set(svc.keys()) == SUMMARY_FIELDS
+            for field in WITHHELD_FIELDS:
+                assert field not in svc, f"Leaked field: {field}"
+
+    @pytest.mark.asyncio
+    async def test_search_returns_summary(self, client: AsyncClient, sample_service: Service):
+        with patch.object(settings, "AUTH_ROOT_KEY", "real-key"):
+            resp = await client.get("/api/v1/search?q=Test")
+            assert resp.status_code == 200
+            data = resp.json()
+            svc = data["services"][0]
+            assert set(svc.keys()) == SUMMARY_FIELDS
+            for field in WITHHELD_FIELDS:
+                assert field not in svc, f"Leaked field: {field}"
+
+    @pytest.mark.asyncio
+    async def test_detail_returns_summary(self, client: AsyncClient, sample_service: Service):
+        with patch.object(settings, "AUTH_ROOT_KEY", "real-key"):
+            resp = await client.get("/api/v1/services/test-api")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert set(data.keys()) == SUMMARY_FIELDS
+            for field in WITHHELD_FIELDS:
+                assert field not in data, f"Leaked field: {field}"
+
+    @pytest.mark.asyncio
+    async def test_search_page_size_capped_at_20(self, client: AsyncClient):
+        resp = await client.get("/api/v1/search?q=test&page_size=100")
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_search_page_size_20_accepted(self, client: AsyncClient):
+        resp = await client.get("/api/v1/search?q=test&page_size=20")
+        assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
 # Token never exposed in any listing endpoint
 # ---------------------------------------------------------------------------
 
