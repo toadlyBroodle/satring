@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -339,7 +339,10 @@ async def redirect_api_services(request: Request, path: str):
 
 @app.api_route("/api/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
 async def redirect_api_root(request: Request, path: str):
-    """Redirect /api/... -> /api/v1/... for bare /api/ and /api hits."""
+    """Redirect /api/... -> /api/v1/... for bare /api/ and /api hits.
+    Skip paths that already contain v1/ to prevent redirect loops."""
+    if path.startswith("v1/") or path == "v1":
+        raise HTTPException(status_code=404, detail="Not found")
     qs = str(request.url.query)
     target = f"/api/v1/{path}"
     if qs:
