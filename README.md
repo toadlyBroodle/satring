@@ -316,7 +316,7 @@ Tools: `discover_services`, `list_services`, `get_service`, `get_ratings`, `list
 - **SQLAlchemy** (async) + **SQLite**: simple, no external DB needed
 - **L402 / Macaroons**: Lightning-native authentication via [pymacaroons](https://github.com/ecordell/pymacaroons)
 - **x402 / USDC on Base**: stablecoin payments via [xpay.sh](https://xpay.sh) facilitator
-- **MPP**: Machine Payments Protocol Lightning payments via the [Payment HTTP auth scheme](https://paymentauth.org/) (uses same Lightning wallet wallet as L402)
+- **MPP**: Machine Payments Protocol Lightning payments via the [Payment HTTP auth scheme](https://paymentauth.org/)
 - **Tailwind CSS** (browser CDN): terminal-themed green-on-black UI
 
 ## Contributing

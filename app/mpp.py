@@ -12,7 +12,7 @@ Challenge flow:
   4. Server verifies the HMAC-bound challenge ID, then checks
      SHA256(preimage) == paymentHash.
 
-Uses the same Lightning wallet wallet as L402 for invoice creation.
+Uses the same Lightning wallet as L402 for invoice creation.
 """
 
 import base64
