@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Privacy Policy{% endblock %}
+{% block meta_description %}Privacy policy for satring.com, a curated paid API directory for AI agents.{% endblock %}
+{% block content %}
+
+<div class="mb-4">
+  <h1 class="text-xl">Privacy Policy</h1>
+  <p class="text-green-700 text-sm">Last updated: April 2026</p>
+</div>
+
+<div class="space-y-6 text-sm" style="color: var(--text)">
+
+<div>
+  <h2 class="text-lg mb-2" style="color: var(--accent)">What We Collect</h2>
+  <p class="mb-2">Satring collects the minimum data necessary to operate the directory and provide analytics to service owners.</p>
+  <ul class="list-disc ml-6 space-y-1" style="color: var(--dim)">
+    <li><strong style="color: var(--text)">IP addresses:</strong> Logged by nginx for rate limiting, abuse detection, and aggregate traffic analytics. IP addresses are not stored permanently in our database; they exist only in server access logs which are rotated regularly.</li>
+    <li><strong style="color: var(--text)">Usage data:</strong> Page views and API requests are aggregated hourly (hit counts and unique IP counts per route). Individual request details are not retained after aggregation.</li>
+    <li><strong style="color: var(--text)">User-agent strings:</strong> Classified into agent categories (e.g., "browser", "GPTBot", "ClaudeBot") for traffic analytics. Raw user-agent strings are not stored in the database.</li>
+    <li><strong style="color: var(--text)">Service submissions:</strong> Name, URL, description, pricing, protocol, owner name, and contact information you provide when listing a service.</li>
+    <li><strong style="color: var(--text)">Ratings:</strong> Score, comment, and reviewer name you provide when rating a service.</li>
+    <li><strong style="color: var(--text)">Payment data:</strong> Lightning invoice payment hashes are recorded to prevent double-spend. We do not store wallet addresses, private keys, or payment amounts beyond what is needed for verification.</li>
+  </ul>
+</div>
+
+<div>
+  <h2 class="text-lg mb-2" style="color: var(--accent)">IP Geolocation</h2>
+  <p class="mb-2">Paid audience analytics endpoints resolve visitor IP addresses to approximate geographic locations (country, region, city) using the MaxMind GeoLite2 database. This processing occurs:</p>
+  <ul class="list-disc ml-6 space-y-1" style="color: var(--dim)">
+    <li>Only on-demand when a service owner purchases an audience analytics report</li>
+    <li>Using a locally hosted database (no IP addresses are sent to third-party geolocation services)</li>
+    <li>At the aggregate level only (reports show country/region/city distribution counts, not individual visitor identities)</li>
+  </ul>
+  <p class="mt-2">This product includes GeoLite2 data created by MaxMind, available from <a href="https://www.maxmind.com" style="color: var(--accent)">maxmind.com</a>.</p>
+</div>
+
+<div>
+  <h2 class="text-lg mb-2" style="color: var(--accent)">How We Use Data</h2>
+  <ul class="list-disc ml-6 space-y-1" style="color: var(--dim)">
+    <li><strong style="color: var(--text)">Service health monitoring:</strong> We probe listed service URLs periodically to detect liveness and protocol support.</li>
+    <li><strong style="color: var(--text)">Abuse prevention:</strong> IP-based rate limiting, scraper detection, and automated blocking of abusive traffic patterns.</li>
+    <li><strong style="color: var(--text)">Analytics for service owners:</strong> Aggregated traffic data (hit counts, unique visitors, geographic distribution, agent classification) is available to verified domain owners.</li>
+    <li><strong style="color: var(--text)">Directory quality:</strong> Usage data informs popularity rankings and service discovery.</li>
+  </ul>
+</div>
+
+<div>
+  <h2 class="text-lg mb-2" style="color: var(--accent)">Data Retention</h2>
+  <ul class="list-disc ml-6 space-y-1" style="color: var(--dim)">
+    <li><strong style="color: var(--text)">Usage analytics:</strong> Aggregated hourly data retained for 90 days, then automatically purged.</li>
+    <li><strong style="color: var(--text)">Nginx access logs:</strong> Rotated by the operating system log rotation policy (typically 14 days).</li>
+    <li><strong style="color: var(--text)">Service listings:</strong> Retained until deleted by the owner or purged for inactivity.</li>
+    <li><strong style="color: var(--text)">Payment hashes:</strong> Retained indefinitely for replay protection.</li>
+  </ul>
+</div>
+
+<div>
+  <h2 class="text-lg mb-2" style="color: var(--accent)">No Accounts, No Tracking</h2>
+  <p>Satring does not require user accounts, does not use cookies for tracking, and does not employ third-party analytics services. There are no advertising trackers, no social media pixels, and no fingerprinting.</p>
+</div>
+
+<div>
+  <h2 class="text-lg mb-2" style="color: var(--accent)">Third-Party Services</h2>
+  <ul class="list-disc ml-6 space-y-1" style="color: var(--dim)">
+    <li><strong style="color: var(--text)">Lightning wallet:</strong> Lightning invoice creation and payment verification (self-hosted).</li>
+    <li><strong style="color: var(--text)">xpay.sh:</strong> x402 USDC payment facilitation (Coinbase).</li>
+    <li><strong style="color: var(--text)">MaxMind GeoLite2:</strong> Offline IP geolocation database (no data sent to MaxMind).</li>
+    <li><strong style="color: var(--text)">Tailwind CSS / htmx:</strong> Frontend libraries loaded from CDN.</li>
+  </ul>
+</div>
+
+<div>
+  <h2 class="text-lg mb-2" style="color: var(--accent)">Contact</h2>
+  <p>For privacy questions or data removal requests: <a href="https://botlab.dev/#contact" style="color: var(--accent)">botlab.dev/contact</a></p>
+</div>
+
+</div>
+
+{% endblock %}

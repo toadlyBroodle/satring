@@ -1311,6 +1311,11 @@ async def sitemap(request: Request, db: AsyncSession = Depends(get_db)):
     return Response(content=xml, media_type="application/xml")
 
 
+@router.get("/privacy", response_class=HTMLResponse)
+async def privacy_page(request: Request):
+    return templates.TemplateResponse(request, "privacy.html")
+
+
 @router.get("/robots.txt")
 async def robots_txt():
     base = settings.BASE_URL.rstrip("/")
