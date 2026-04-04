@@ -1625,6 +1625,38 @@ async def service_analytics(request: Request, slug: str, db: AsyncSession = Depe
     return await build_service_analytics(db, slug)
 
 
+@router.get("/services/{slug}/audience",
+             responses={402: _402_RESPONSE},
+             openapi_extra=_payment_extra(settings.AUTH_OWNER_AUDIENCE_PRICE_USD,
+                                         "Per-service audience analytics (geo, agent breakdown)"))
+async def service_audience(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
+    """Audience analytics for a single service: geo distribution, agent vs human, source split."""
+    service = await get_service_or_404(db, slug)
+    await require_payment(
+        request=request,
+        amount_sats=settings.AUTH_OWNER_AUDIENCE_PRICE_SATS,
+        price_usd=settings.AUTH_OWNER_AUDIENCE_PRICE_USD,
+        memo=f"satring.com audience analytics ({slug})",
+        db=db,
+    )
+
+    from app.audience import extract_audience_for_slugs, batch_geolocate, build_geo_summary
+
+    audience = extract_audience_for_slugs([slug], days=30)
+    top_ips = [ip for ip, _ in audience["ip_hit_counts"].most_common(200)]
+    geo_results = await batch_geolocate(top_ips)
+    geo_summary = build_geo_summary(geo_results)
+
+    return {
+        "generated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+        "service": {"slug": service.slug, "name": service.name},
+        "unique_ips_30d": len(audience["unique_ips"]),
+        "agent_breakdown": audience["agent_breakdown"],
+        "source_breakdown": audience["source_breakdown"],
+        "geo": geo_summary,
+    }
+
+
 # --- Owner Analytics Endpoints ---
 
 
@@ -1653,8 +1685,10 @@ class OwnerAudienceResponse(BaseModel):
     domain: str
     services: list[dict]
     source_breakdown: dict
+    agent_breakdown: dict | None = None
     top_routes_30d: list[dict]
     daily_unique_ips_30d: list[dict]
+    geo: dict | None = None
 
 
 async def _verify_owner_token(request: Request, services: list) -> None:
@@ -1807,11 +1841,21 @@ async def owner_audience(
         .order_by(func.date(UsageDetail.hour))
     )).all()
 
+    # On-demand geo + agent analysis from nginx logs
+    from app.audience import extract_audience_for_slugs, batch_geolocate, build_geo_summary
+
+    audience = extract_audience_for_slugs(slugs, days=30)
+    top_ips = [ip for ip, _ in audience["ip_hit_counts"].most_common(200)]
+    geo_results = await batch_geolocate(top_ips)
+    geo_summary = build_geo_summary(geo_results)
+
     return OwnerAudienceResponse(
         generated_at=now.isoformat(),
         domain=domain,
         services=[{"slug": s.slug, "name": s.name} for s in services],
         source_breakdown=source_breakdown,
+        agent_breakdown=audience["agent_breakdown"],
         top_routes_30d=[{"route": r[0], "hits": int(r[1])} for r in top_routes],
         daily_unique_ips_30d=[{"date": str(r[0]), "ips": int(r[1])} for r in daily_ips],
+        geo=geo_summary,
     )

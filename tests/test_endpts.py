@@ -304,6 +304,26 @@ class TestServiceAnalyticsTraffic:
 
 
 # ---------------------------------------------------------------------------
+# GET /api/v1/services/{slug}/audience
+# ---------------------------------------------------------------------------
+
+class TestServiceAudienceResponse:
+    @pytest.mark.asyncio
+    async def test_audience_returns_200(self, client: AsyncClient, sample_service: Service):
+        """Service audience should return 200 in test mode."""
+        resp = await client.get("/api/v1/services/test-api/audience")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "service" in data
+        assert data["service"]["slug"] == "test-api"
+        assert "unique_ips_30d" in data
+        assert "agent_breakdown" in data
+        assert "source_breakdown" in data
+        assert "geo" in data
+        assert isinstance(data["geo"], dict)
+
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/services/{slug}/reputation
 # ---------------------------------------------------------------------------
 

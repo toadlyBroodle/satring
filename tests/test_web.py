@@ -227,6 +227,8 @@ class TestOwnerDashboard:
         assert "source_breakdown" in data
         assert "top_routes_30d" in data
         assert "daily_unique_ips_30d" in data
+        assert "agent_breakdown" in data
+        assert "geo" in data
 
     @pytest.mark.asyncio
     async def test_owner_traffic_requires_token_when_payments_enabled(self, client: AsyncClient, sample_service: Service):
