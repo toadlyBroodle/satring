@@ -1,6 +1,7 @@
 db/
 .env
 CLAUDE.md
+.claude/
 __pycache__/
 *.pyc
 .venv/
