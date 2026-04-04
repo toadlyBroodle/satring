@@ -5,13 +5,14 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
-_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+_db_url = settings.database_url
+_is_sqlite = _db_url.startswith("sqlite")
 
 _engine_kwargs: dict = {"echo": False}
 if _is_sqlite:
     _engine_kwargs["connect_args"] = {"timeout": 30}  # SQLite busy_timeout
 
-engine = create_async_engine(settings.DATABASE_URL, **_engine_kwargs)
+engine = create_async_engine(_db_url, **_engine_kwargs)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

@@ -5,7 +5,21 @@ load_dotenv()
 
 
 class Settings:
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://satring@localhost/satring")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./db/sr.db")
+    DATABASE_PASSWORD: str = os.getenv("DATABASE_PASSWORD", "")
+
+    @property
+    def database_url(self) -> str:
+        """Build DATABASE_URL with password injected if set separately."""
+        url = self.DATABASE_URL
+        pw = self.DATABASE_PASSWORD
+        if pw and "://" in url:
+            # Insert password into URL: scheme://user@host -> scheme://user:pw@host
+            scheme_rest = url.split("://", 1)
+            if "@" in scheme_rest[1] and ":" not in scheme_rest[1].split("@")[0]:
+                user_host = scheme_rest[1].split("@", 1)
+                return f"{scheme_rest[0]}://{user_host[0]}:{pw}@{user_host[1]}"
+        return url
     PAYMENT_URL: str = os.getenv("PAYMENT_URL", "")
     PAYMENT_KEY: str = os.getenv("PAYMENT_KEY", "")
     AUTH_ROOT_KEY: str = os.getenv("AUTH_ROOT_KEY", "")

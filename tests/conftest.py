@@ -15,7 +15,7 @@ from app.main import app, limiter, SEED_CATEGORIES
 settings.AUTH_ROOT_KEY = "test-mode"
 
 # Tests use in-memory SQLite by default for speed. Set TEST_DATABASE_URL to
-# run against PostgreSQL (e.g., for CI or migration verification).
+# run against a different database (e.g., for CI or migration verification).
 _TEST_DB_URL = os.getenv("TEST_DATABASE_URL", "sqlite+aiosqlite://")
 
 
