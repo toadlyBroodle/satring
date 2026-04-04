@@ -5,20 +5,24 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
-engine = create_async_engine(
-    settings.DATABASE_URL, echo=False,
-    connect_args={"timeout": 30},  # SQLite busy_timeout: wait up to 30s for locks
-)
+_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+
+_engine_kwargs: dict = {"echo": False}
+if _is_sqlite:
+    _engine_kwargs["connect_args"] = {"timeout": 30}  # SQLite busy_timeout
+
+engine = create_async_engine(settings.DATABASE_URL, **_engine_kwargs)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
-@event.listens_for(engine.sync_engine, "connect")
-def _set_sqlite_pragma(dbapi_conn, connection_record):
-    """Enable WAL mode for concurrent reads during writes, and NORMAL sync for performance."""
-    cursor = dbapi_conn.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA synchronous=NORMAL")
-    cursor.close()
+if _is_sqlite:
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_sqlite_pragma(dbapi_conn, connection_record):
+        """Enable WAL mode for concurrent reads during writes."""
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
 
 
 class Base(DeclarativeBase):
@@ -34,10 +38,17 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # Migrate: add x402 columns to existing services table if missing
+    # Migrate: add columns to existing services table if missing
     async with engine.begin() as conn:
-        result = await conn.execute(sqlalchemy.text("PRAGMA table_info(services)"))
-        existing_cols = {row[1] for row in result.fetchall()}
+        if _is_sqlite:
+            result = await conn.execute(sqlalchemy.text("PRAGMA table_info(services)"))
+            existing_cols = {row[1] for row in result.fetchall()}
+        else:
+            result = await conn.execute(sqlalchemy.text(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = 'services'"
+            ))
+            existing_cols = {row[0] for row in result.fetchall()}
+
         migrations = [
             ("x402_network", "VARCHAR(50)"),
             ("x402_asset", "VARCHAR(100)"),
@@ -55,14 +66,23 @@ async def init_db():
         ]
         for col_name, col_type in migrations:
             if col_name not in existing_cols:
-                await conn.execute(
-                    sqlalchemy.text(f"ALTER TABLE services ADD COLUMN {col_name} {col_type}")
-                )
+                if _is_sqlite:
+                    await conn.execute(
+                        sqlalchemy.text(f"ALTER TABLE services ADD COLUMN {col_name} {col_type}")
+                    )
+                else:
+                    await conn.execute(
+                        sqlalchemy.text(f"ALTER TABLE services ADD COLUMN IF NOT EXISTS {col_name} {col_type}")
+                    )
 
         # Rename status 'dead' -> 'down'
         await conn.execute(
             sqlalchemy.text("UPDATE services SET status = 'down' WHERE status = 'dead'")
         )
-        await conn.execute(
-            sqlalchemy.text("UPDATE probe_history SET status = 'down' WHERE status = 'dead'")
-        )
+        # probe_history may not exist on fresh DB
+        try:
+            await conn.execute(
+                sqlalchemy.text("UPDATE probe_history SET status = 'down' WHERE status = 'dead'")
+            )
+        except Exception:
+            pass

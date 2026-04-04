@@ -1,3 +1,5 @@
+import os
+
 import pytest
 import pytest_asyncio
 from datetime import datetime, timedelta, timezone
@@ -14,9 +16,11 @@ from app.usage import record_hit, record_details, flush, _buffer, _ip_sets, _det
 
 settings.AUTH_ROOT_KEY = "test-mode"
 
+_TEST_DB_URL = os.getenv("TEST_DATABASE_URL", "sqlite+aiosqlite://")
+
 
 async def _make_db():
-    engine = create_async_engine("sqlite+aiosqlite://", echo=False)
+    engine = create_async_engine(_TEST_DB_URL, echo=False)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

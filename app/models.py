@@ -63,8 +63,8 @@ class Service(Base):
     hit_count_total = Column(Integer, default=0)    # lifetime views (denormalized from UsageDetail)
     hit_count_7d = Column(Integer, default=0)       # rolling 7-day views
     hit_count_30d = Column(Integer, default=0)      # rolling 30-day views
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     categories = relationship("Category", secondary=service_categories, back_populates="services")
     ratings = relationship("Rating", back_populates="service", cascade="all, delete-orphan")
@@ -88,8 +88,8 @@ class ProbeHistory(Base):
 class ConsumedPayment(Base):
     __tablename__ = "consumed_payments"
 
-    payment_hash = Column(String(64), primary_key=True)
-    consumed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    payment_hash = Column(String(128), primary_key=True)
+    consumed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class RouteUsage(Base):
@@ -136,7 +136,7 @@ class Rating(Base):
     score = Column(Integer, nullable=False)
     comment = Column(Text, default="")
     reviewer_name = Column(String(200), default="Anonymous")
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     service = relationship("Service", back_populates="ratings")
 

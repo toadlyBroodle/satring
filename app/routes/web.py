@@ -1057,7 +1057,7 @@ async def stats_page(request: Request, db: AsyncSession = Depends(get_db)):
     """Free public stats page with high-level directory metrics.
     Returns JSON manifest when Accept: application/json is requested."""
     from datetime import timedelta
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # Total services (non-purged)
     total = (await db.execute(

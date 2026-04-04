@@ -1,3 +1,5 @@
+import os
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -12,6 +14,10 @@ from app.main import app, limiter, SEED_CATEGORIES
 # Bypass L402 paywall in tests
 settings.AUTH_ROOT_KEY = "test-mode"
 
+# Tests use in-memory SQLite by default for speed. Set TEST_DATABASE_URL to
+# run against PostgreSQL (e.g., for CI or migration verification).
+_TEST_DB_URL = os.getenv("TEST_DATABASE_URL", "sqlite+aiosqlite://")
+
 
 @pytest.fixture(scope="session")
 def anyio_backend():
@@ -20,7 +26,7 @@ def anyio_backend():
 
 async def _make_db():
     """Create a fresh in-memory DB engine + seeded session."""
-    engine = create_async_engine("sqlite+aiosqlite://", echo=False)
+    engine = create_async_engine(_TEST_DB_URL, echo=False)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with engine.begin() as conn:
