@@ -68,7 +68,7 @@ async def directory(
         "most-reviewed": Service.rating_count.desc(),
         "popular": Service.hit_count_30d.desc(),
     }
-    query = query.order_by(sort_map.get(sort, Service.created_at.desc()))
+    query = query.order_by(sort_map.get(sort, Service.hit_count_30d.desc()))
 
     # Count total for pagination
     count_q = select(func.count()).select_from(query.subquery())
@@ -140,7 +140,7 @@ async def search(
         "most-reviewed": Service.rating_count.desc(),
         "popular": Service.hit_count_30d.desc(),
     }
-    query = query.order_by(sort_map.get(sort, Service.created_at.desc()))
+    query = query.order_by(sort_map.get(sort, Service.hit_count_30d.desc()))
 
     # Count total for pagination
     count_q = select(func.count()).select_from(query.subquery())
