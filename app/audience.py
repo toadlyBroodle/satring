@@ -1,7 +1,7 @@
 """On-demand audience analytics from nginx access logs.
 
 Parses nginx logs for specific service slugs, extracts unique IPs and
-user-agents, and optionally resolves IPs to geo data via ip-api.com.
+user-agents, and resolves IPs to geo data via MaxMind GeoLite2 local database.
 
 Called only during paid analytics requests, not continuously.
 """
@@ -12,8 +12,6 @@ import re
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-
-import httpx
 
 from app.config import settings
 from app.usage import classify_agent
@@ -132,34 +130,55 @@ def extract_audience_for_slugs(
     }
 
 
-async def batch_geolocate(ips: list[str], max_ips: int = 200) -> list[dict]:
-    """Resolve IPs to geo data via ip-api.com batch endpoint.
+_GEOLITE2_PATH = os.getenv(
+    "GEOLITE2_CITY_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "GeoLite2-City.mmdb"),
+)
 
-    Free tier: 45 req/min, 100 IPs per batch request.
-    Only called on-demand per paid analytics request.
+
+def geolocate_ips(ips: list[str], max_ips: int = 200) -> list[dict]:
+    """Resolve IPs to geo data via MaxMind GeoLite2 local database.
+
+    Uses the offline .mmdb file for fast lookups with no external API calls.
+    Called on-demand per paid analytics request only.
     """
     if not ips:
         return []
 
-    # Limit to top N IPs by frequency (caller should sort)
     ips = ips[:max_ips]
-    results = []
 
-    async with httpx.AsyncClient(timeout=15) as client:
-        # ip-api.com batch: POST http://ip-api.com/batch with JSON array
-        for i in range(0, len(ips), 100):
-            batch = [{"query": ip, "fields": "query,country,regionName,city,isp"}
-                     for ip in ips[i : i + 100]]
+    if not os.path.exists(_GEOLITE2_PATH):
+        logger.warning(f"GeoLite2 database not found: {_GEOLITE2_PATH}")
+        return []
+
+    try:
+        import geoip2.database
+    except ImportError:
+        logger.warning("geoip2 package not installed")
+        return []
+
+    results = []
+    with geoip2.database.Reader(_GEOLITE2_PATH) as reader:
+        for ip in ips:
             try:
-                resp = await client.post("http://ip-api.com/batch", json=batch)
-                if resp.status_code == 200:
-                    results.extend(resp.json())
-                else:
-                    logger.warning(f"ip-api.com batch returned {resp.status_code}")
-            except Exception as e:
-                logger.warning(f"ip-api.com batch failed: {e}")
+                r = reader.city(ip)
+                results.append({
+                    "query": ip,
+                    "country": r.country.name or "Unknown",
+                    "regionName": (r.subdivisions.most_specific.name
+                                   if r.subdivisions else "Unknown"),
+                    "city": r.city.name or "Unknown",
+                })
+            except Exception:
+                results.append({"query": ip, "status": "fail"})
 
     return results
+
+
+# Keep async signature for backward compatibility with callers using await
+async def batch_geolocate(ips: list[str], max_ips: int = 200) -> list[dict]:
+    """Async wrapper around geolocate_ips for compatibility."""
+    return geolocate_ips(ips, max_ips)
 
 
 def build_geo_summary(geo_results: list[dict]) -> dict:

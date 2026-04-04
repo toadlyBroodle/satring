@@ -13,3 +13,4 @@ python-multipart
 pytest
 pytest-asyncio
 matplotlib
+geoip2
