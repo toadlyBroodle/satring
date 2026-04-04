@@ -105,6 +105,33 @@ class TestListServices:
         data = resp.json()
         assert len(data["services"]) == 0
 
+    @pytest.mark.asyncio
+    async def test_sort_popular(self, client: AsyncClient, sample_service: Service):
+        """sort=popular should return 200 and order by hit_count_30d."""
+        resp = await client.get("/api/v1/services?sort=popular")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_sort_newest(self, client: AsyncClient, sample_service: Service):
+        resp = await client.get("/api/v1/services?sort=newest")
+        assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_sort_top_rated(self, client: AsyncClient, sample_service: Service):
+        resp = await client.get("/api/v1/services?sort=top-rated")
+        assert resp.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_hit_count_in_response(self, client: AsyncClient, sample_service: Service):
+        """hit_count_30d should be present in service list responses."""
+        resp = await client.get("/api/v1/services")
+        data = resp.json()
+        svc = data["services"][0]
+        assert "hit_count_30d" in svc
+        assert isinstance(svc["hit_count_30d"], int)
+
 
 class TestGetService:
     @pytest.mark.asyncio

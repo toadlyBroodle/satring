@@ -20,6 +20,19 @@ class TestDirectory:
         assert "Test API" in resp.text
 
     @pytest.mark.asyncio
+    async def test_default_sort_is_popular(self, client: AsyncClient, sample_service: Service):
+        """Directory default sort should be popular (hit_count_30d desc)."""
+        resp = await client.get("/directory")
+        assert resp.status_code == 200
+        # Popular button should be active by default (no sort param)
+        assert 'active">[popular]' in resp.text or 'active"><span class="bracket">[</span>popular' in resp.text
+
+    @pytest.mark.asyncio
+    async def test_sort_popular(self, client: AsyncClient, sample_service: Service):
+        resp = await client.get("/directory?sort=popular")
+        assert resp.status_code == 200
+
+    @pytest.mark.asyncio
     async def test_category_filter(self, client: AsyncClient, sample_service: Service):
         resp = await client.get("/directory?category=ai-ml")
         assert resp.status_code == 200

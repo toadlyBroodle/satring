@@ -274,6 +274,33 @@ class TestAnalyticsResponse:
         assert len(data["recently_added"]) >= 1
         entry = data["recently_added"][0]
         assert set(entry.keys()) == {"name", "slug", "avg_rating", "rating_count", "pricing_sats"}
+        # popularity
+        assert "popularity" in data
+        assert "most_viewed_30d" in data["popularity"]
+        assert "total_service_hits_30d" in data["popularity"]
+        assert isinstance(data["popularity"]["most_viewed_30d"], list)
+        assert isinstance(data["popularity"]["total_service_hits_30d"], int)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/services/{slug}/analytics — service-level analytics
+# ---------------------------------------------------------------------------
+
+class TestServiceAnalyticsTraffic:
+    @pytest.mark.asyncio
+    async def test_traffic_section_present(self, client: AsyncClient, sample_service: Service):
+        resp = await client.get("/api/v1/services/test-api/analytics")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "traffic" in data
+        traffic = data["traffic"]
+        assert "total_hits" in traffic
+        assert "hits_7d" in traffic
+        assert "hits_30d" in traffic
+        assert "unique_ips_30d" in traffic
+        assert "daily_hits_30d" in traffic
+        assert isinstance(traffic["daily_hits_30d"], list)
+        assert isinstance(traffic["total_hits"], int)
 
 
 # ---------------------------------------------------------------------------
