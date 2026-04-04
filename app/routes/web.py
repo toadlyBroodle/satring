@@ -66,6 +66,7 @@ async def directory(
         "top-rated": Service.avg_rating.desc(),
         "cheapest": Service.pricing_sats.asc(),
         "most-reviewed": Service.rating_count.desc(),
+        "popular": Service.hit_count_30d.desc(),
     }
     query = query.order_by(sort_map.get(sort, Service.created_at.desc()))
 
@@ -137,6 +138,7 @@ async def search(
         "top-rated": Service.avg_rating.desc(),
         "cheapest": Service.pricing_sats.asc(),
         "most-reviewed": Service.rating_count.desc(),
+        "popular": Service.hit_count_30d.desc(),
     }
     query = query.order_by(sort_map.get(sort, Service.created_at.desc()))
 

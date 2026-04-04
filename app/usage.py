@@ -4,6 +4,7 @@ import re
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
+import sqlalchemy
 from sqlalchemy import delete, select
 
 from app.config import USAGE_FLUSH_INTERVAL, USAGE_RETENTION_DAYS
@@ -296,6 +297,44 @@ async def flush() -> None:
         stale_agent = [k for k in _agent_ip_sets if k[1] != current_hour]
         for k in stale_agent:
             del _agent_ip_sets[k]
+
+    # Update denormalized hit counts on Service (best-effort, non-blocking)
+    try:
+        await _update_service_hit_counts()
+    except Exception:
+        logger.exception("Service hit count update failed")
+
+
+async def _update_service_hit_counts() -> None:
+    """Bulk-update denormalized hit counts on Service from UsageDetail aggregation.
+
+    Uses a single SQL UPDATE with correlated subqueries for efficiency.
+    Runs after each flush cycle to keep counts fresh.
+    """
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    seven_ago = now - timedelta(days=7)
+    thirty_ago = now - timedelta(days=30)
+
+    async with async_session() as db:
+        await db.execute(sqlalchemy.text("""
+            UPDATE services SET
+                hit_count_total = COALESCE((
+                    SELECT SUM(hit_count) FROM usage_detail
+                    WHERE dimension = 'slug' AND value = services.slug
+                ), 0),
+                hit_count_7d = COALESCE((
+                    SELECT SUM(hit_count) FROM usage_detail
+                    WHERE dimension = 'slug' AND value = services.slug
+                    AND hour >= :seven_ago
+                ), 0),
+                hit_count_30d = COALESCE((
+                    SELECT SUM(hit_count) FROM usage_detail
+                    WHERE dimension = 'slug' AND value = services.slug
+                    AND hour >= :thirty_ago
+                ), 0)
+            WHERE status != 'purged'
+        """), {"seven_ago": seven_ago, "thirty_ago": thirty_ago})
+        await db.commit()
 
 
 async def _flush_loop() -> None:

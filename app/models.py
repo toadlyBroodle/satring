@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Boolean, Column, Integer, String, Text, Float, DateTime, ForeignKey, Table
+    Boolean, Column, Integer, String, Text, Float, DateTime, ForeignKey, Index, Table
 )
 from sqlalchemy.orm import relationship
 
@@ -60,6 +60,9 @@ class Service(Base):
     avg_latency_ms = Column(Float, nullable=True)       # rolling 7-day average
     total_checks = Column(Integer, default=0)
     successful_checks = Column(Integer, default=0)
+    hit_count_total = Column(Integer, default=0)    # lifetime views (denormalized from UsageDetail)
+    hit_count_7d = Column(Integer, default=0)       # rolling 7-day views
+    hit_count_30d = Column(Integer, default=0)      # rolling 30-day views
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -109,6 +112,10 @@ class UsageDetail(Base):
     hour = Column(DateTime, nullable=False, index=True)
     hit_count = Column(Integer, default=0)
     unique_ips = Column(Integer, default=0)
+
+    __table_args__ = (
+        Index("ix_usage_detail_dim_val_hour", "dimension", "value", "hour"),
+    )
 
 
 class AgentUsage(Base):

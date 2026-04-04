@@ -66,7 +66,7 @@
 <!-- Sort Options -->
 <div class="mb-4 flex flex-wrap gap-1 text-sm">
   <span style="color: var(--accent)">sort&gt;</span>
-  {% for sort_key, sort_label in [('newest', 'newest'), ('top-rated', 'top-rated'), ('cheapest', 'cheapest'), ('most-reviewed', 'most-reviewed')] %}
+  {% for sort_key, sort_label in [('newest', 'newest'), ('popular', 'popular'), ('top-rated', 'top-rated'), ('cheapest', 'cheapest'), ('most-reviewed', 'most-reviewed')] %}
   <a href="/directory?{{ qs_q_amp }}{{ qs_cat_filter }}{{ ('&' if qs_cat_filter else '') }}sort={{ sort_key }}" class="filter-sort {% if active_sort == sort_key or (sort_key == 'newest' and not active_sort) %}active{% endif %}"><span class="bracket">[</span>{{ sort_label }}<span class="bracket">]</span></a>
   {% endfor %}
 </div>

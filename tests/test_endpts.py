@@ -54,7 +54,8 @@ class TestListServicesResponse:
             "pricing_model", "protocol", "owner_name", "logo_url",
             "x402_network", "x402_asset", "x402_pay_to", "pricing_usd",
             "mpp_method", "mpp_realm", "mpp_currency",
-            "avg_rating", "rating_count", "domain_verified", "categories", "created_at",
+            "avg_rating", "rating_count", "hit_count_30d",
+            "domain_verified", "categories", "created_at",
         }
         assert set(svc.keys()) == expected_fields
         assert "edit_token" not in svc
@@ -238,7 +239,7 @@ class TestAnalyticsResponse:
             "generated_at", "total_services", "total_ratings", "total_categories",
             "health", "pricing", "categories", "growth",
             "top_rated", "most_reviewed", "recently_added", "usage",
-            "agent_traffic",
+            "agent_traffic", "popularity",
         }
         # health
         assert set(data["health"].keys()) == {
@@ -644,7 +645,8 @@ class TestFreeEndpoints:
 
 SUMMARY_FIELDS = {
     "name", "slug", "protocol", "pricing_model", "pricing_sats", "pricing_usd",
-    "avg_rating", "rating_count", "domain_verified", "categories", "created_at",
+    "avg_rating", "rating_count", "hit_count_30d",
+    "domain_verified", "categories", "created_at",
 }
 WITHHELD_FIELDS = {
     "url", "description", "owner_name", "logo_url", "id",

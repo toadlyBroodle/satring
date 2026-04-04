@@ -1,4 +1,5 @@
 import sqlalchemy
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
@@ -9,6 +10,15 @@ engine = create_async_engine(
     connect_args={"timeout": 30},  # SQLite busy_timeout: wait up to 30s for locks
 )
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+@event.listens_for(engine.sync_engine, "connect")
+def _set_sqlite_pragma(dbapi_conn, connection_record):
+    """Enable WAL mode for concurrent reads during writes, and NORMAL sync for performance."""
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
 
 
 class Base(DeclarativeBase):
@@ -39,6 +49,9 @@ async def init_db():
             ("mpp_method", "VARCHAR(50)"),
             ("mpp_realm", "VARCHAR(200)"),
             ("mpp_currency", "VARCHAR(50)"),
+            ("hit_count_total", "INTEGER DEFAULT 0"),
+            ("hit_count_7d", "INTEGER DEFAULT 0"),
+            ("hit_count_30d", "INTEGER DEFAULT 0"),
         ]
         for col_name, col_type in migrations:
             if col_name not in existing_cols:

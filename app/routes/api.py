@@ -26,7 +26,7 @@ from app.config import (
 from app.database import get_db
 from app.payment import require_payment
 from app.main import limiter
-from app.models import Service, Category, Rating, RouteUsage, AgentUsage, ProbeHistory, service_categories
+from app.models import Service, Category, Rating, RouteUsage, UsageDetail, AgentUsage, ProbeHistory, service_categories
 from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter, is_valid_protocol, VALID_PROTOCOLS
 
 router = APIRouter(tags=["API"])
@@ -152,6 +152,7 @@ class ServiceOut(BaseModel):
     mpp_currency: str | None = None
     avg_rating: float
     rating_count: int
+    hit_count_30d: int = 0
     domain_verified: bool
     categories: list[CategoryOut]
     created_at: datetime
@@ -176,6 +177,7 @@ class ServiceSummary(BaseModel):
     pricing_usd: str | None = None
     avg_rating: float
     rating_count: int
+    hit_count_30d: int = 0
     domain_verified: bool
     categories: list[CategoryOut]
     created_at: datetime
@@ -391,6 +393,7 @@ class AnalyticsResponse(BaseModel):
     recently_added: list[LeaderboardEntry]
     usage: UsageStats | None = None
     agent_traffic: AgentTrafficStats | None = None
+    popularity: dict | None = None
 
 
 # --- Reputation Schemas ---
@@ -851,6 +854,19 @@ async def build_analytics_data(db: AsyncSession) -> AnalyticsResponse:
         recently_added=[_lb(s) for s in recently_added_rows],
         usage=usage_stats,
         agent_traffic=agent_traffic,
+        popularity={
+            "most_viewed_30d": [
+                {"slug": s.slug, "name": s.name, "hits_30d": s.hit_count_30d}
+                for s in (await db.execute(
+                    select(Service).where(Service.status != "purged", Service.hit_count_30d > 0)
+                    .order_by(Service.hit_count_30d.desc()).limit(10)
+                )).scalars().all()
+            ],
+            "total_service_hits_30d": (await db.execute(
+                select(func.coalesce(func.sum(Service.hit_count_30d), 0))
+                .where(Service.status != "purged")
+            )).scalar(),
+        },
     )
 
 
@@ -1026,6 +1042,7 @@ class ServiceAnalyticsResponse(BaseModel):
     health: dict
     probe_history: list
     pricing: dict
+    traffic: dict | None = None
 
 
 async def build_service_analytics(db: AsyncSession, slug: str) -> ServiceAnalyticsResponse:
@@ -1044,6 +1061,39 @@ async def build_service_analytics(db: AsyncSession, slug: str) -> ServiceAnalyti
         .limit(20)
     )
     history_rows = history_result.scalars().all()
+
+    # Traffic data from UsageDetail
+    thirty_ago = now - timedelta(days=30)
+    seven_ago = now - timedelta(days=7)
+    traffic_total = (await db.execute(
+        select(func.coalesce(func.sum(UsageDetail.hit_count), 0))
+        .where(UsageDetail.dimension == "slug", UsageDetail.value == service.slug)
+    )).scalar()
+    traffic_7d = (await db.execute(
+        select(func.coalesce(func.sum(UsageDetail.hit_count), 0))
+        .where(UsageDetail.dimension == "slug", UsageDetail.value == service.slug,
+               UsageDetail.hour >= seven_ago)
+    )).scalar()
+    traffic_30d = (await db.execute(
+        select(func.coalesce(func.sum(UsageDetail.hit_count), 0))
+        .where(UsageDetail.dimension == "slug", UsageDetail.value == service.slug,
+               UsageDetail.hour >= thirty_ago)
+    )).scalar()
+    unique_ips_30d = (await db.execute(
+        select(func.coalesce(func.sum(UsageDetail.unique_ips), 0))
+        .where(UsageDetail.dimension == "slug", UsageDetail.value == service.slug,
+               UsageDetail.hour >= thirty_ago)
+    )).scalar()
+    daily_rows = (await db.execute(
+        select(
+            func.date(UsageDetail.hour).label("day"),
+            func.sum(UsageDetail.hit_count).label("hits"),
+        )
+        .where(UsageDetail.dimension == "slug", UsageDetail.value == service.slug,
+               UsageDetail.hour >= thirty_ago)
+        .group_by(func.date(UsageDetail.hour))
+        .order_by(func.date(UsageDetail.hour))
+    )).all()
 
     return ServiceAnalyticsResponse(
         generated_at=now.isoformat(),
@@ -1074,6 +1124,15 @@ async def build_service_analytics(db: AsyncSession, slug: str) -> ServiceAnalyti
             "pricing_sats": service.pricing_sats,
             "pricing_usd": service.pricing_usd,
             "pricing_model": service.pricing_model,
+        },
+        traffic={
+            "total_hits": int(traffic_total),
+            "hits_7d": int(traffic_7d),
+            "hits_30d": int(traffic_30d),
+            "unique_ips_30d": int(unique_ips_30d),
+            "daily_hits_30d": [
+                {"date": str(r[0]), "hits": int(r[1])} for r in daily_rows
+            ],
         },
     )
 
@@ -1125,12 +1184,20 @@ async def list_services(
     category: str | None = None,
     status: str | None = None,
     protocol: str | None = None,
+    sort: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=20),
     db: AsyncSession = Depends(get_db),
 ):
     protocol = normalize_protocol(protocol)
-    query = select(Service).where(Service.status != "purged").order_by(Service.created_at.desc())
+    sort_map = {
+        "top-rated": Service.avg_rating.desc(),
+        "cheapest": Service.pricing_sats.asc(),
+        "most-reviewed": Service.rating_count.desc(),
+        "popular": Service.hit_count_30d.desc(),
+    }
+    order = sort_map.get(sort, Service.created_at.desc())
+    query = select(Service).where(Service.status != "purged").order_by(order)
     if category:
         query = query.join(service_categories).join(Category).where(Category.slug == category)
     if status and status in ("unverified", "confirmed", "live", "down"):
