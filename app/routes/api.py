@@ -10,7 +10,7 @@ logger = logging.getLogger("satring.api")
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
-from sqlalchemy import case, select, func
+from sqlalchemy import case, or_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1623,3 +1623,195 @@ async def service_analytics(request: Request, slug: str, db: AsyncSession = Depe
         db=db,
     )
     return await build_service_analytics(db, slug)
+
+
+# --- Owner Analytics Endpoints ---
+
+
+class OwnerServiceHits(BaseModel):
+    slug: str
+    name: str
+    hit_count_30d: int
+    hit_count_7d: int
+    status: str
+
+
+class OwnerTrafficResponse(BaseModel):
+    generated_at: str
+    domain: str
+    service_count: int
+    total_hits: int
+    hits_7d: int
+    hits_30d: int
+    unique_ips_30d: int
+    services: list[OwnerServiceHits]
+    daily_hits_30d: list[dict]
+
+
+class OwnerAudienceResponse(BaseModel):
+    generated_at: str
+    domain: str
+    services: list[dict]
+    source_breakdown: dict
+    top_routes_30d: list[dict]
+    daily_unique_ips_30d: list[dict]
+
+
+async def _verify_owner_token(request: Request, services: list) -> None:
+    """Verify X-Edit-Token matches any service on this domain. Skipped in test mode."""
+    if not payments_enabled():
+        return
+    token = request.headers.get("X-Edit-Token", "")
+    if not token:
+        raise HTTPException(403, "X-Edit-Token header required for owner analytics")
+    verified = any(
+        s.edit_token_hash and verify_edit_token(token, s.edit_token_hash)
+        for s in services
+    )
+    if not verified:
+        raise HTTPException(403, "Invalid X-Edit-Token for this domain")
+
+
+@router.get("/owner/{domain}/traffic", response_model=OwnerTrafficResponse,
+             openapi_extra=_free_extra())
+@limiter.limit("6/minute")
+async def owner_traffic(
+    request: Request,
+    domain: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregated traffic across all services for a domain. Requires owner X-Edit-Token."""
+    services = await get_same_domain_services(db, f"https://{domain}")
+    if not services:
+        raise HTTPException(404, "No services found for this domain")
+
+    await _verify_owner_token(request, services)
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    seven_ago = now - timedelta(days=7)
+    thirty_ago = now - timedelta(days=30)
+    slugs = [s.slug for s in services]
+
+    total_hits = (await db.execute(
+        select(func.coalesce(func.sum(UsageDetail.hit_count), 0))
+        .where(UsageDetail.dimension == "slug", UsageDetail.value.in_(slugs))
+    )).scalar()
+    hits_7d = (await db.execute(
+        select(func.coalesce(func.sum(UsageDetail.hit_count), 0))
+        .where(UsageDetail.dimension == "slug", UsageDetail.value.in_(slugs),
+               UsageDetail.hour >= seven_ago)
+    )).scalar()
+    hits_30d = (await db.execute(
+        select(func.coalesce(func.sum(UsageDetail.hit_count), 0))
+        .where(UsageDetail.dimension == "slug", UsageDetail.value.in_(slugs),
+               UsageDetail.hour >= thirty_ago)
+    )).scalar()
+    unique_ips_30d = (await db.execute(
+        select(func.coalesce(func.sum(UsageDetail.unique_ips), 0))
+        .where(UsageDetail.dimension == "slug", UsageDetail.value.in_(slugs),
+               UsageDetail.hour >= thirty_ago)
+    )).scalar()
+
+    daily_rows = (await db.execute(
+        select(
+            func.date(UsageDetail.hour).label("day"),
+            func.sum(UsageDetail.hit_count).label("hits"),
+        )
+        .where(UsageDetail.dimension == "slug", UsageDetail.value.in_(slugs),
+               UsageDetail.hour >= thirty_ago)
+        .group_by(func.date(UsageDetail.hour))
+        .order_by(func.date(UsageDetail.hour))
+    )).all()
+
+    return OwnerTrafficResponse(
+        generated_at=now.isoformat(),
+        domain=domain,
+        service_count=len(services),
+        total_hits=int(total_hits),
+        hits_7d=int(hits_7d),
+        hits_30d=int(hits_30d),
+        unique_ips_30d=int(unique_ips_30d),
+        services=[
+            OwnerServiceHits(
+                slug=s.slug, name=s.name,
+                hit_count_30d=s.hit_count_30d or 0,
+                hit_count_7d=s.hit_count_7d or 0,
+                status=s.status,
+            ) for s in services
+        ],
+        daily_hits_30d=[{"date": str(r[0]), "hits": int(r[1])} for r in daily_rows],
+    )
+
+
+@router.get("/owner/{domain}/audience", response_model=OwnerAudienceResponse,
+             responses={402: _402_RESPONSE},
+             openapi_extra=_payment_extra(settings.AUTH_OWNER_AUDIENCE_PRICE_USD,
+                                         "Owner audience analytics (requires X-Edit-Token)"))
+@limiter.limit("6/minute")
+async def owner_audience(
+    request: Request,
+    domain: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Detailed audience analytics for a domain's services. Requires owner token + payment."""
+    services = await get_same_domain_services(db, f"https://{domain}")
+    if not services:
+        raise HTTPException(404, "No services found for this domain")
+
+    await _verify_owner_token(request, services)
+    await require_payment(
+        request=request,
+        amount_sats=settings.AUTH_OWNER_AUDIENCE_PRICE_SATS,
+        price_usd=settings.AUTH_OWNER_AUDIENCE_PRICE_USD,
+        memo=f"satring.com owner audience analytics ({domain})",
+        db=db,
+    )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    thirty_ago = now - timedelta(days=30)
+    slugs = [s.slug for s in services]
+
+    # Source breakdown from RouteUsage (api vs web vs miss)
+    source_rows = (await db.execute(
+        select(RouteUsage.source, func.sum(RouteUsage.hit_count))
+        .where(RouteUsage.hour >= thirty_ago)
+        .where(func.lower(RouteUsage.route).in_(
+            [f"/api/v1/services/{sl}" for sl in slugs]
+            + [f"/services/{{slug}}" for sl in slugs]  # normalized form
+            + [f"/services/{sl}" for sl in slugs]
+        ))
+        .group_by(RouteUsage.source)
+    )).all()
+    source_breakdown = {r[0]: int(r[1]) for r in source_rows}
+
+    # Top routes for this domain's services
+    route_patterns = [f"%{sl}%" for sl in slugs]
+    top_routes = (await db.execute(
+        select(RouteUsage.route, func.sum(RouteUsage.hit_count).label("total"))
+        .where(RouteUsage.hour >= thirty_ago)
+        .where(or_(*[RouteUsage.route.ilike(p) for p in route_patterns]))
+        .group_by(RouteUsage.route)
+        .order_by(func.sum(RouteUsage.hit_count).desc())
+        .limit(20)
+    )).all()
+
+    # Daily unique IPs
+    daily_ips = (await db.execute(
+        select(
+            func.date(UsageDetail.hour).label("day"),
+            func.sum(UsageDetail.unique_ips).label("ips"),
+        )
+        .where(UsageDetail.dimension == "slug", UsageDetail.value.in_(slugs),
+               UsageDetail.hour >= thirty_ago)
+        .group_by(func.date(UsageDetail.hour))
+        .order_by(func.date(UsageDetail.hour))
+    )).all()
+
+    return OwnerAudienceResponse(
+        generated_at=now.isoformat(),
+        domain=domain,
+        services=[{"slug": s.slug, "name": s.name} for s in services],
+        source_breakdown=source_breakdown,
+        top_routes_30d=[{"route": r[0], "hits": int(r[1])} for r in top_routes],
+        daily_unique_ips_30d=[{"date": str(r[0]), "ips": int(r[1])} for r in daily_ips],
+    )

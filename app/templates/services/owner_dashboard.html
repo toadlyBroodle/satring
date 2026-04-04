@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ domain }} | Owner Dashboard{% endblock %}
+{% block meta_description %}Traffic analytics for {{ domain }} services on satring.{% endblock %}
+{% block content %}
+
+<div class="mb-4">
+  <a href="/directory" style="color: var(--dim)">&lt; back to directory</a>
+</div>
+
+<div class="mb-4">
+  <h1 class="text-xl">{{ domain }}</h1>
+  <p class="text-green-700 text-sm">Owner traffic dashboard &middot; {{ service_count }} service{{ 's' if service_count != 1 else '' }}</p>
+</div>
+
+<!-- Summary Cards -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+  <div class="p-3 rounded" style="background: var(--bg-alt); border: 1px solid var(--border)">
+    <div class="text-2xl font-bold" style="color: var(--accent)">{{ total_hits | default(0) }}</div>
+    <div class="text-xs" style="color: var(--dim)">total hits</div>
+  </div>
+  <div class="p-3 rounded" style="background: var(--bg-alt); border: 1px solid var(--border)">
+    <div class="text-2xl font-bold" style="color: var(--accent)">{{ hits_30d | default(0) }}</div>
+    <div class="text-xs" style="color: var(--dim)">last 30 days</div>
+  </div>
+  <div class="p-3 rounded" style="background: var(--bg-alt); border: 1px solid var(--border)">
+    <div class="text-2xl font-bold" style="color: var(--accent)">{{ hits_7d | default(0) }}</div>
+    <div class="text-xs" style="color: var(--dim)">last 7 days</div>
+  </div>
+  <div class="p-3 rounded" style="background: var(--bg-alt); border: 1px solid var(--border)">
+    <div class="text-2xl font-bold" style="color: var(--accent)">{{ unique_ips_30d | default(0) }}</div>
+    <div class="text-xs" style="color: var(--dim)">unique IPs (30d)</div>
+  </div>
+</div>
+
+<!-- Per-Service Table -->
+<div class="mb-6">
+  <h2 class="text-lg mb-2">Services</h2>
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm" style="border-collapse: collapse">
+      <thead>
+        <tr style="border-bottom: 1px solid var(--border)">
+          <th class="text-left py-1 px-2">service</th>
+          <th class="text-right py-1 px-2">30d hits</th>
+          <th class="text-right py-1 px-2">7d hits</th>
+          <th class="text-right py-1 px-2">status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for svc in services %}
+        <tr style="border-bottom: 1px solid var(--border)">
+          <td class="py-1 px-2">
+            <a href="/services/{{ svc.slug }}" style="color: var(--accent)">{{ svc.name }}</a>
+          </td>
+          <td class="text-right py-1 px-2 font-mono">{{ svc.hit_count_30d }}</td>
+          <td class="text-right py-1 px-2 font-mono">{{ svc.hit_count_7d }}</td>
+          <td class="text-right py-1 px-2">
+            <span class="{% if svc.status == 'live' %}text-green-400{% elif svc.status == 'confirmed' %}text-yellow-400{% else %}text-red-400{% endif %}">{{ svc.status }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Daily Hits Chart (CSS bar chart) -->
+{% if daily_hits %}
+<div class="mb-6">
+  <h2 class="text-lg mb-2">Daily Hits (30 days)</h2>
+  <div class="flex items-end gap-px" style="height: 120px">
+    {% set max_hits = daily_hits | map(attribute='hits') | max %}
+    {% for day in daily_hits %}
+    <div style="flex: 1; background: var(--accent); min-width: 4px;
+                height: {{ (day.hits / max_hits * 100) if max_hits > 0 else 0 }}%"
+         title="{{ day.date }}: {{ day.hits }} hits"></div>
+    {% endfor %}
+  </div>
+  <div class="flex justify-between text-xs mt-1" style="color: var(--dim)">
+    <span>{{ daily_hits[0].date if daily_hits else '' }}</span>
+    <span>{{ daily_hits[-1].date if daily_hits else '' }}</span>
+  </div>
+</div>
+{% endif %}
+
+<div class="mt-4 text-xs" style="color: var(--dim)">
+  <p>API endpoint: <code style="color: var(--accent)">GET /api/v1/owner/{{ domain }}/traffic</code> (with X-Edit-Token header)</p>
+  <p>Detailed audience analytics: <code style="color: var(--accent)">GET /api/v1/owner/{{ domain }}/audience</code> (paid, {{ audience_price_sats }} sats)</p>
+</div>
+
+{% endblock %}

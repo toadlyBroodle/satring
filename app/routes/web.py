@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 logger = logging.getLogger("satring.web")
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Request, Depends, Form, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Depends, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -169,6 +169,83 @@ async def search(
         "page": page,
         "total_pages": total_pages,
         "qs_base": qs_base,
+    })
+
+
+@router.get("/owner/{domain}", response_class=HTMLResponse)
+@limiter.limit("6/minute")
+async def owner_dashboard(
+    request: Request,
+    domain: str,
+    token: str = "",
+    db: AsyncSession = Depends(get_db),
+):
+    """Owner traffic dashboard. Requires edit token via ?token= query param."""
+    from app.utils import get_same_domain_services, verify_edit_token, extract_domain
+    from app.models import UsageDetail
+
+    services = await get_same_domain_services(db, f"https://{domain}")
+    if not services:
+        raise HTTPException(status_code=404, detail="No services found for this domain")
+
+    # Verify ownership via token query param
+    if payments_enabled():
+        if not token:
+            raise HTTPException(status_code=403, detail="Token required: /owner/{domain}?token=YOUR_EDIT_TOKEN")
+        verified = any(
+            s.edit_token_hash and verify_edit_token(token, s.edit_token_hash)
+            for s in services
+        )
+        if not verified:
+            raise HTTPException(status_code=403, detail="Invalid token for this domain")
+
+    from datetime import timedelta
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    seven_ago = now - timedelta(days=7)
+    thirty_ago = now - timedelta(days=30)
+    slugs = [s.slug for s in services]
+
+    total_hits = (await db.execute(
+        select(func.coalesce(func.sum(UsageDetail.hit_count), 0))
+        .where(UsageDetail.dimension == "slug", UsageDetail.value.in_(slugs))
+    )).scalar()
+    hits_7d = (await db.execute(
+        select(func.coalesce(func.sum(UsageDetail.hit_count), 0))
+        .where(UsageDetail.dimension == "slug", UsageDetail.value.in_(slugs),
+               UsageDetail.hour >= seven_ago)
+    )).scalar()
+    hits_30d = (await db.execute(
+        select(func.coalesce(func.sum(UsageDetail.hit_count), 0))
+        .where(UsageDetail.dimension == "slug", UsageDetail.value.in_(slugs),
+               UsageDetail.hour >= thirty_ago)
+    )).scalar()
+    unique_ips_30d = (await db.execute(
+        select(func.coalesce(func.sum(UsageDetail.unique_ips), 0))
+        .where(UsageDetail.dimension == "slug", UsageDetail.value.in_(slugs),
+               UsageDetail.hour >= thirty_ago)
+    )).scalar()
+    daily_rows = (await db.execute(
+        select(
+            func.date(UsageDetail.hour).label("day"),
+            func.sum(UsageDetail.hit_count).label("hits"),
+        )
+        .where(UsageDetail.dimension == "slug", UsageDetail.value.in_(slugs),
+               UsageDetail.hour >= thirty_ago)
+        .group_by(func.date(UsageDetail.hour))
+        .order_by(func.date(UsageDetail.hour))
+    )).all()
+
+    return templates.TemplateResponse(request, "services/owner_dashboard.html", {
+        "domain": domain,
+        "service_count": len(services),
+        "total_hits": int(total_hits),
+        "hits_7d": int(hits_7d),
+        "hits_30d": int(hits_30d),
+        "unique_ips_30d": int(unique_ips_30d),
+        "services": [{"slug": s.slug, "name": s.name, "hit_count_30d": s.hit_count_30d or 0,
+                       "hit_count_7d": s.hit_count_7d or 0, "status": s.status} for s in services],
+        "daily_hits": [{"date": str(r[0]), "hits": int(r[1])} for r in daily_rows],
+        "audience_price_sats": settings.AUTH_OWNER_AUDIENCE_PRICE_SATS,
     })
 
 
@@ -1300,6 +1377,13 @@ async def llms_txt():
         f"- [Submit rating]({base}/api/v1/services/{{slug}}/ratings): POST — rate a service",
         f"- [Analytics]({base}/api/v1/analytics): GET — aggregate directory stats",
         f"- [Reputation]({base}/api/v1/services/{{slug}}/reputation): GET — detailed service reputation report",
+        "",
+        "### Owner endpoints (requires X-Edit-Token header)",
+        "Service owners can view aggregated traffic for their domain's listings.",
+        "",
+        f"- [Owner traffic]({base}/api/v1/owner/{{domain}}/traffic): GET — free, aggregated hits across all domain services",
+        f"- [Owner audience]({base}/api/v1/owner/{{domain}}/audience): GET — paid, detailed audience analytics",
+        f"- [Owner dashboard]({base}/owner/{{domain}}?token=YOUR_TOKEN): Web UI dashboard",
         "",
         "## Categories",
         "",

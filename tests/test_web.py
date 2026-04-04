@@ -184,6 +184,60 @@ class TestServiceDetail:
         assert data["x402_network"] == "eip155:8453"
 
 
+class TestOwnerDashboard:
+    @pytest.mark.asyncio
+    async def test_owner_dashboard_renders(self, client: AsyncClient, sample_service: Service):
+        """Owner dashboard should render in test mode (no token required)."""
+        resp = await client.get("/owner/api.test.com")
+        assert resp.status_code == 200
+        assert "Owner Dashboard" in resp.text or "api.test.com" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_owner_dashboard_404_unknown_domain(self, client: AsyncClient):
+        resp = await client.get("/owner/nonexistent.example.com")
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_owner_traffic_api(self, client: AsyncClient, sample_service: Service):
+        """Owner traffic API should return aggregated data in test mode."""
+        resp = await client.get("/api/v1/owner/api.test.com/traffic")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["domain"] == "api.test.com"
+        assert data["service_count"] >= 1
+        assert "total_hits" in data
+        assert "hits_7d" in data
+        assert "hits_30d" in data
+        assert "unique_ips_30d" in data
+        assert "services" in data
+        assert "daily_hits_30d" in data
+
+    @pytest.mark.asyncio
+    async def test_owner_traffic_api_404(self, client: AsyncClient):
+        resp = await client.get("/api/v1/owner/nonexistent.example.com/traffic")
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_owner_audience_api(self, client: AsyncClient, sample_service: Service):
+        """Owner audience should return 200 in test mode (payment bypassed)."""
+        resp = await client.get("/api/v1/owner/api.test.com/audience")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["domain"] == "api.test.com"
+        assert "source_breakdown" in data
+        assert "top_routes_30d" in data
+        assert "daily_unique_ips_30d" in data
+
+    @pytest.mark.asyncio
+    async def test_owner_traffic_requires_token_when_payments_enabled(self, client: AsyncClient, sample_service: Service):
+        """With payments enabled, owner traffic should require X-Edit-Token."""
+        from unittest.mock import patch
+        from app.config import settings
+        with patch.object(settings, "AUTH_ROOT_KEY", "real-key"):
+            resp = await client.get("/api/v1/owner/api.test.com/traffic")
+            assert resp.status_code == 403
+
+
 class TestSubmitService:
     @pytest.mark.asyncio
     async def test_submit_form_renders(self, client: AsyncClient):
