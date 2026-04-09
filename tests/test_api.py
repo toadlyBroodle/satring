@@ -1,9 +1,13 @@
+from datetime import timezone
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Service, Rating
+from sqlalchemy import DateTime
+
+from app.models import Service, Rating, ConsumedPayment
 
 
 class TestListServices:
@@ -482,3 +486,45 @@ class TestSlugify:
         slug2 = resp2.json()["slug"]
         assert slug1 != slug2
         assert slug2.startswith("duplicate-name-")
+
+
+class TestDatetimeTimezoneConsistency:
+    """All model datetime defaults must produce timezone-aware (UTC) values.
+
+    PostgreSQL TIMESTAMPTZ rejects naive datetimes mixed with aware ones.
+    This caused GitHub issue #9: 500 errors on service creation.
+
+    Note: SQLite strips tzinfo on round-trip, so we test the defaults
+    before DB persistence and verify the column type declarations.
+    """
+
+    def test_service_created_at_default_is_aware(self):
+        col = Service.__table__.c.created_at
+        val = col.default.arg(None)
+        assert val.tzinfo is not None, "created_at default must be timezone-aware"
+
+    def test_service_updated_at_default_is_aware(self):
+        col = Service.__table__.c.updated_at
+        assert col.default.arg(None).tzinfo is not None, "updated_at default must be timezone-aware"
+        assert col.onupdate.arg(None).tzinfo is not None, "updated_at onupdate must be timezone-aware"
+
+    def test_consumed_payment_default_is_aware(self):
+        col = ConsumedPayment.__table__.c.consumed_at
+        val = col.default.arg(None)
+        assert val.tzinfo is not None, "consumed_at default must be timezone-aware"
+
+    def test_rating_default_is_aware(self):
+        col = Rating.__table__.c.created_at
+        val = col.default.arg(None)
+        assert val.tzinfo is not None, "rating created_at default must be timezone-aware"
+
+    def test_all_datetime_columns_use_timezone_true(self):
+        """Verify DateTime(timezone=True) is set on all DateTime columns."""
+        from sqlalchemy import inspect as sa_inspect
+        for model in [Service, ConsumedPayment, Rating]:
+            mapper = sa_inspect(model)
+            for col in mapper.columns:
+                if hasattr(col.type, 'timezone') and isinstance(col.type, DateTime):
+                    assert col.type.timezone, (
+                        f"{model.__tablename__}.{col.name} must use DateTime(timezone=True)"
+                    )

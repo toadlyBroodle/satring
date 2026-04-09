@@ -43,7 +43,7 @@ class Service(Base):
     logo_url = Column(String(500), default="")
     edit_token_hash = Column(String(64), nullable=True, index=True)
     domain_challenge = Column(String(64), nullable=True)
-    domain_challenge_expires_at = Column(DateTime, nullable=True)
+    domain_challenge_expires_at = Column(DateTime(timezone=True), nullable=True)
     domain_verified = Column(Boolean, default=False)
     x402_network = Column(String(50), nullable=True)     # "eip155:8453"
     x402_asset = Column(String(100), nullable=True)       # USDC contract address
@@ -55,16 +55,16 @@ class Service(Base):
     avg_rating = Column(Float, default=0.0)
     rating_count = Column(Integer, default=0)
     status = Column(String(20), default="unverified")  # unverified | confirmed | live | down | purged
-    last_probed_at = Column(DateTime, nullable=True)
-    dead_since = Column(DateTime, nullable=True)
+    last_probed_at = Column(DateTime(timezone=True), nullable=True)
+    dead_since = Column(DateTime(timezone=True), nullable=True)
     avg_latency_ms = Column(Float, nullable=True)       # rolling 7-day average
     total_checks = Column(Integer, default=0)
     successful_checks = Column(Integer, default=0)
     hit_count_total = Column(Integer, default=0)    # lifetime views (denormalized from UsageDetail)
     hit_count_7d = Column(Integer, default=0)       # rolling 7-day views
     hit_count_30d = Column(Integer, default=0)      # rolling 30-day views
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     categories = relationship("Category", secondary=service_categories, back_populates="services")
     ratings = relationship("Rating", back_populates="service", cascade="all, delete-orphan")
@@ -75,7 +75,7 @@ class ProbeHistory(Base):
 
     id = Column(Integer, primary_key=True)
     service_id = Column(Integer, ForeignKey("services.id", ondelete="CASCADE"), nullable=False, index=True)
-    probed_at = Column(DateTime, nullable=False)
+    probed_at = Column(DateTime(timezone=True), nullable=False)
     status = Column(String(20), nullable=False)        # live | confirmed | down
     response_time_ms = Column(Float, nullable=True)
     detected_protocol = Column(String(20), nullable=True)
@@ -89,7 +89,7 @@ class ConsumedPayment(Base):
     __tablename__ = "consumed_payments"
 
     payment_hash = Column(String(128), primary_key=True)
-    consumed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    consumed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class RouteUsage(Base):
@@ -98,7 +98,7 @@ class RouteUsage(Base):
     id = Column(Integer, primary_key=True)
     route = Column(String(200), nullable=False, index=True)
     source = Column(String(10), nullable=False, index=True)  # "api" or "web"
-    hour = Column(DateTime, nullable=False, index=True)
+    hour = Column(DateTime(timezone=True), nullable=False, index=True)
     hit_count = Column(Integer, default=0)
     unique_ips = Column(Integer, default=0)
 
@@ -109,7 +109,7 @@ class UsageDetail(Base):
     id = Column(Integer, primary_key=True)
     dimension = Column(String(20), nullable=False, index=True)  # "query", "category", "slug"
     value = Column(String(200), nullable=False)
-    hour = Column(DateTime, nullable=False, index=True)
+    hour = Column(DateTime(timezone=True), nullable=False, index=True)
     hit_count = Column(Integer, default=0)
     unique_ips = Column(Integer, default=0)
 
@@ -123,7 +123,7 @@ class AgentUsage(Base):
 
     id = Column(Integer, primary_key=True)
     agent_class = Column(String(30), nullable=False, index=True)
-    hour = Column(DateTime, nullable=False, index=True)
+    hour = Column(DateTime(timezone=True), nullable=False, index=True)
     hit_count = Column(Integer, default=0)
     unique_ips = Column(Integer, default=0)
 
@@ -136,7 +136,7 @@ class Rating(Base):
     score = Column(Integer, nullable=False)
     comment = Column(Text, default="")
     reviewer_name = Column(String(200), default="Anonymous")
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     service = relationship("Service", back_populates="ratings")
 

@@ -7,7 +7,7 @@ Records probe history for uptime/latency tracking.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import httpx
 from sqlalchemy import delete, func, select
@@ -15,7 +15,7 @@ from sqlalchemy import delete, func, select
 from app.config import settings
 from app.database import async_session
 from app.models import ProbeHistory, Service
-from app.utils import extract_domain, is_public_hostname
+from app.utils import extract_domain, is_public_hostname, utc_now
 
 logger = logging.getLogger("satring.health")
 
@@ -90,7 +90,7 @@ async def probe_all():
     """Probe all non-purged services and update their status."""
     semaphore = asyncio.Semaphore(settings.HEALTH_PROBE_CONCURRENCY)
     timeout = settings.HEALTH_PROBE_TIMEOUT
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now()
 
     async with async_session() as db:
         result = await db.execute(
@@ -151,7 +151,7 @@ async def probe_all():
 
 async def _cleanup_old_history(db) -> int:
     """Delete probe_history rows older than the retention period. Returns count deleted."""
-    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=_HISTORY_RETENTION_DAYS)
+    cutoff = utc_now() - timedelta(days=_HISTORY_RETENTION_DAYS)
     result = await db.execute(
         delete(ProbeHistory).where(ProbeHistory.probed_at < cutoff)
     )

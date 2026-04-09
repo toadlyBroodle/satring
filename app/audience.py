@@ -10,11 +10,12 @@ import logging
 import os
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import Optional
 
 from app.config import settings
 from app.usage import classify_agent
+from app.utils import utc_now
 
 logger = logging.getLogger("satring.audience")
 
@@ -78,7 +79,7 @@ def extract_audience_for_slugs(
         }
     """
     slug_set = set(slugs)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = utc_now() - timedelta(days=days)
 
     unique_ips: set[str] = set()
     agent_counts: Counter = Counter()

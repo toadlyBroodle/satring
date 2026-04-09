@@ -14,9 +14,10 @@ from app.main import app, limiter, SEED_CATEGORIES
 # Bypass L402 paywall in tests
 settings.AUTH_ROOT_KEY = "test-mode"
 
-# Tests use in-memory SQLite by default for speed. Set TEST_DATABASE_URL to
-# run against a different database (e.g., for CI or migration verification).
-_TEST_DB_URL = os.getenv("TEST_DATABASE_URL", "sqlite+aiosqlite://")
+_TEST_DB_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://satring:cYBv_gUZY0QgsnzD2a0Fr2jm_1_aU00jlohHQVGE_wo@localhost/satring_test",
+)
 
 
 @pytest.fixture(scope="session")
@@ -25,11 +26,12 @@ def anyio_backend():
 
 
 async def _make_db():
-    """Create a fresh in-memory DB engine + seeded session."""
+    """Create a fresh DB engine + seeded session."""
     engine = create_async_engine(_TEST_DB_URL, echo=False)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
     session = session_factory()

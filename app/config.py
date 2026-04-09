@@ -5,7 +5,7 @@ load_dotenv()
 
 
 class Settings:
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./db/sr.db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://satring@localhost/satring")
     DATABASE_PASSWORD: str = os.getenv("DATABASE_PASSWORD", "")
 
     @property

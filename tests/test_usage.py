@@ -16,13 +16,17 @@ from app.usage import record_hit, record_details, flush, _buffer, _ip_sets, _det
 
 settings.AUTH_ROOT_KEY = "test-mode"
 
-_TEST_DB_URL = os.getenv("TEST_DATABASE_URL", "sqlite+aiosqlite://")
+_TEST_DB_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://satring:cYBv_gUZY0QgsnzD2a0Fr2jm_1_aU00jlohHQVGE_wo@localhost/satring_test",
+)
 
 
 async def _make_db():
     engine = create_async_engine(_TEST_DB_URL, echo=False)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     session = session_factory()
     for name, slug, description in SEED_CATEGORIES:

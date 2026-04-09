@@ -27,7 +27,7 @@ from app.database import get_db
 from app.payment import require_payment
 from app.main import limiter
 from app.models import Service, Category, Rating, RouteUsage, UsageDetail, AgentUsage, ProbeHistory, service_categories
-from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter, is_valid_protocol, VALID_PROTOCOLS
+from app.utils import generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter, is_valid_protocol, VALID_PROTOCOLS, utc_now
 
 router = APIRouter(tags=["API"])
 
@@ -577,7 +577,7 @@ def sentiment_label(avg: float, count: int) -> str:
 
 
 async def build_analytics_data(db: AsyncSession) -> AnalyticsResponse:
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now()
 
     # --- Totals ---
     total_services = (await db.execute(
@@ -872,10 +872,12 @@ async def build_analytics_data(db: AsyncSession) -> AnalyticsResponse:
 
 async def build_reputation_data(db: AsyncSession, slug: str) -> ReputationResponse:
     service = await get_service_or_404(db, slug)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now()
 
     # --- Service detail ---
-    created = service.created_at.replace(tzinfo=None) if service.created_at else now
+    created = service.created_at if service.created_at else now
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
     age_days = (now - created).days
     service_detail = ServiceDetail(
         name=service.name, slug=service.slug, url=service.url,
@@ -916,16 +918,17 @@ async def build_reputation_data(db: AsyncSession, slug: str) -> ReputationRespon
         sentiment_label=sentiment_label(service.avg_rating, service.rating_count),
     )
 
-    # --- Monthly trend (SQLite strftime) ---
+    # --- Monthly trend ---
+    month_expr = func.to_char(Rating.created_at, 'YYYY-MM')
     trend_rows = (await db.execute(
         select(
-            func.strftime('%Y-%m', Rating.created_at),
+            month_expr,
             func.count(Rating.id),
             func.avg(Rating.score),
         )
         .where(Rating.service_id == service.id)
-        .group_by(func.strftime('%Y-%m', Rating.created_at))
-        .order_by(func.strftime('%Y-%m', Rating.created_at))
+        .group_by(month_expr)
+        .order_by(month_expr)
     )).all()
     rating_trend = [
         MonthlyTrend(month=r[0], count=r[1], avg_score=round(float(r[2]), 1))
@@ -1008,7 +1011,7 @@ async def build_reputation_data(db: AsyncSession, slug: str) -> ReputationRespon
     review_activity = ReviewActivity(
         first_review_at=first_review,
         latest_review_at=latest_review,
-        days_since_last_review=(now - latest_review).days if latest_review else None,
+        days_since_last_review=(now - (latest_review.replace(tzinfo=timezone.utc) if latest_review.tzinfo is None else latest_review)).days if latest_review else None,
         unique_reviewers=unique_reviewers,
         anonymous_count=anon_count,
         avg_comment_length=avg_comment_len,
@@ -1047,7 +1050,7 @@ class ServiceAnalyticsResponse(BaseModel):
 
 async def build_service_analytics(db: AsyncSession, slug: str) -> ServiceAnalyticsResponse:
     service = await get_service_or_404(db, slug)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now()
 
     total = service.total_checks or 0
     successful = service.successful_checks or 0
@@ -1440,7 +1443,7 @@ async def api_recover_generate(request: Request, slug: str, db: AsyncSession = D
     service = await get_service_or_404(db, slug)
     challenge = secrets.token_hex(32)
     service.domain_challenge = challenge
-    service.domain_challenge_expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=30)
+    service.domain_challenge_expires_at = utc_now() + timedelta(minutes=30)
     await db.commit()
     return {
         "challenge": challenge,
@@ -1457,7 +1460,7 @@ async def api_recover_verify(request: Request, slug: str, db: AsyncSession = Dep
     if (
         not service.domain_challenge
         or not service.domain_challenge_expires_at
-        or service.domain_challenge_expires_at <= datetime.now(timezone.utc).replace(tzinfo=None)
+        or service.domain_challenge_expires_at <= utc_now()
     ):
         raise HTTPException(status_code=400, detail="No active challenge or challenge expired")
 
@@ -1648,7 +1651,7 @@ async def service_audience(request: Request, slug: str, db: AsyncSession = Depen
     geo_summary = build_geo_summary(geo_results)
 
     return {
-        "generated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+        "generated_at": utc_now().isoformat(),
         "service": {"slug": service.slug, "name": service.name},
         "unique_ips_30d": len(audience["unique_ips"]),
         "agent_breakdown": audience["agent_breakdown"],
@@ -1721,7 +1724,7 @@ async def owner_traffic(
 
     await _verify_owner_token(request, services)
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now()
     seven_ago = now - timedelta(days=7)
     thirty_ago = now - timedelta(days=30)
     slugs = [s.slug for s in services]
@@ -1801,7 +1804,7 @@ async def owner_audience(
         db=db,
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now()
     thirty_ago = now - timedelta(days=30)
     slugs = [s.slug for s in services]
 

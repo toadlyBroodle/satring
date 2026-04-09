@@ -1,6 +1,6 @@
 import logging
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from urllib.parse import urlparse
 
 logger = logging.getLogger("satring.web")
@@ -25,7 +25,7 @@ from app.l402 import create_invoice, check_payment_status, check_and_consume_pay
 from app.main import templates, limiter
 from app.models import Service, Category, Rating, service_categories
 from app.routes.api import build_reputation_data, build_analytics_data, build_service_analytics
-from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter, is_valid_protocol, BASE_PROTOCOLS
+from app.utils import unique_slug, generate_edit_token, hash_token, verify_edit_token, get_same_domain_services, domain_root, extract_domain, is_public_hostname, extract_email, send_verify_email, find_purged_service, find_existing_service, normalize_url, overwrite_purged_service, escape_like, normalize_protocol, protocol_filter, is_valid_protocol, BASE_PROTOCOLS, utc_now
 
 router = APIRouter(include_in_schema=False)
 
@@ -200,7 +200,7 @@ async def owner_dashboard(
             raise HTTPException(status_code=403, detail="Invalid token for this domain")
 
     from datetime import timedelta
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now()
     seven_ago = now - timedelta(days=7)
     thirty_ago = now - timedelta(days=30)
     slugs = [s.slug for s in services]
@@ -827,7 +827,7 @@ async def recover_form(
     challenge_active = (
         service.domain_challenge is not None
         and service.domain_challenge_expires_at is not None
-        and service.domain_challenge_expires_at > datetime.now(timezone.utc).replace(tzinfo=None)
+        and service.domain_challenge_expires_at > utc_now()
     )
     return templates.TemplateResponse(request, "services/recover.html", {
         "service": service,
@@ -857,7 +857,7 @@ async def recover_service(
         import secrets
         challenge = secrets.token_hex(32)
         service.domain_challenge = challenge
-        service.domain_challenge_expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=30)
+        service.domain_challenge_expires_at = utc_now() + timedelta(minutes=30)
         await db.commit()
         return templates.TemplateResponse(request, "services/recover.html", {
             "service": service,
@@ -869,7 +869,7 @@ async def recover_service(
         if (
             not service.domain_challenge
             or not service.domain_challenge_expires_at
-            or service.domain_challenge_expires_at <= datetime.now(timezone.utc).replace(tzinfo=None)
+            or service.domain_challenge_expires_at <= utc_now()
         ):
             return templates.TemplateResponse(request, "services/recover.html", {
                 "service": service,
@@ -1134,7 +1134,7 @@ async def stats_page(request: Request, db: AsyncSession = Depends(get_db)):
     """Free public stats page with high-level directory metrics.
     Returns JSON manifest when Accept: application/json is requested."""
     from datetime import timedelta
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now()
 
     # Total services (non-purged)
     total = (await db.execute(

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import hashlib
 import hmac
 import ipaddress
@@ -15,6 +17,11 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Service, Category, Rating
+
+
+def utc_now() -> datetime:
+    """Return the current UTC time as a timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 BASE_PROTOCOLS = ("L402", "x402", "MPP")

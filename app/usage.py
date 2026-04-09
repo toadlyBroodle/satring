@@ -2,7 +2,9 @@ import asyncio
 import logging
 import re
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+
+from app.utils import utc_now
 
 import sqlalchemy
 from sqlalchemy import delete, select
@@ -102,7 +104,7 @@ def record_hit(route: str, source: str, client_ip: str) -> None:
     route = _normalize_path(route)
 
     # Safety: cap buffer size to prevent memory exhaustion from novel paths
-    hour = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0, tzinfo=None)
+    hour = utc_now().replace(minute=0, second=0, microsecond=0)
     hour_key = hour.isoformat()
     key = (route, source, hour_key)
     if key not in _buffer and len(_buffer) >= MAX_BUFFER_KEYS:
@@ -121,7 +123,7 @@ _SLUG_PATTERNS = [
 
 def record_details(path: str, query_params: dict[str, str], client_ip: str) -> None:
     """Record search queries, category filters, and viewed service slugs."""
-    hour = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0, tzinfo=None)
+    hour = utc_now().replace(minute=0, second=0, microsecond=0)
     hour_key = hour.isoformat()
 
     details: list[tuple[str, str]] = []
@@ -158,7 +160,7 @@ def record_details(path: str, query_params: dict[str, str], client_ip: str) -> N
 def record_agent(user_agent: str, client_ip: str) -> None:
     """Record a hit classified by user-agent. Called from middleware."""
     agent_class = classify_agent(user_agent)
-    hour = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0, tzinfo=None)
+    hour = utc_now().replace(minute=0, second=0, microsecond=0)
     hour_key = hour.isoformat()
     key = (agent_class, hour_key)
     if key not in _agent_buffer and len(_agent_buffer) >= MAX_BUFFER_KEYS:
@@ -182,8 +184,8 @@ async def flush() -> None:
         detail_snapshot = dict(_detail_buffer)
         agent_snapshot = dict(_agent_buffer)
         # Snapshot IP set sizes but keep sets alive for the current hour
-        current_hour = datetime.now(timezone.utc).replace(
-            minute=0, second=0, microsecond=0, tzinfo=None
+        current_hour = utc_now().replace(
+            minute=0, second=0, microsecond=0
         ).isoformat()
         ip_counts = {k: len(v) for k, v in _ip_sets.items()}
         detail_ip_counts = {k: len(v) for k, v in _detail_ip_sets.items()}
@@ -256,7 +258,7 @@ async def flush() -> None:
                     ))
 
             # Purge old data (bulk DELETE, no loading into Python)
-            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=USAGE_RETENTION_DAYS)
+            cutoff = utc_now() - timedelta(days=USAGE_RETENTION_DAYS)
             await db.execute(
                 delete(RouteUsage).where(RouteUsage.hour < cutoff)
             )
@@ -311,7 +313,7 @@ async def _update_service_hit_counts() -> None:
     Uses a single SQL UPDATE with correlated subqueries for efficiency.
     Runs after each flush cycle to keep counts fresh.
     """
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now()
     seven_ago = now - timedelta(days=7)
     thirty_ago = now - timedelta(days=30)
 
