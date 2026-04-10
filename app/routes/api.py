@@ -248,8 +248,8 @@ class ServiceCreate(BaseModel):
         if "MPP" in parts:
             if not self.mpp_method:
                 raise ValueError("mpp_method is required when protocol includes MPP")
-        # Clear sat pricing when no L402 component
-        if "L402" not in parts:
+        # Clear sat pricing only when no Lightning-based protocol (L402 or MPP)
+        if "L402" not in parts and "MPP" not in parts:
             self.pricing_sats = 0
             self.pricing_model = "per-request"
         return self
@@ -1400,8 +1400,8 @@ async def update_service(
         if not service.mpp_method:
             raise HTTPException(status_code=422, detail="mpp_method is required when protocol includes MPP")
 
-    # Clear sat pricing when no L402 component
-    if "L402" not in parts:
+    # Clear sat pricing only when no Lightning-based protocol (L402 or MPP)
+    if "L402" not in parts and "MPP" not in parts:
         service.pricing_sats = 0
         service.pricing_model = "per-request"
 
