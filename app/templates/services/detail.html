@@ -107,7 +107,7 @@ function loadReport(url, targetId) {
 </script>
 <script>
 (function() {
-  fetch('/services/{{ service.slug }}/meta.json')
+  fetch('/services/{{ service.slug }}/meta.json?t={{ meta_token }}')
     .then(function(r) { return r.json(); })
     .then(function(d) {
       var urlEl = document.getElementById('meta-url');

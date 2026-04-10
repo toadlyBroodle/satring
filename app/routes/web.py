@@ -265,21 +265,34 @@ async def service_detail(request: Request, slug: str, db: AsyncSession = Depends
         "service": service,
         "reputation_price_sats": settings.AUTH_REPUTATION_PRICE_SATS,
         "analytics_price_sats": settings.AUTH_SERVICE_ANALYTICS_PRICE_SATS,
+        "meta_token": _meta_token(service.slug),
     })
+
+
+def _meta_token(slug: str) -> str:
+    """Generate a short-lived HMAC token for meta.json access.
+
+    Valid for the current 10-minute window. The token is embedded in the
+    server-rendered detail page so only real page loads can fetch meta data.
+    """
+    import hmac, hashlib, time
+    window = str(int(time.time()) // 600)  # 10-minute window
+    secret = settings.AUTH_ROOT_KEY or "fallback"
+    return hmac.new(f"meta:{secret}".encode(), f"{slug}:{window}".encode(), hashlib.sha256).hexdigest()[:16]
 
 
 @router.get("/services/{slug}/meta.json")
 @limiter.limit(RATE_DETAIL_API)
 async def service_meta(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
-    """Return sensitive service fields via JS-only endpoint.
+    """Return sensitive service fields via token-gated endpoint.
 
-    SECURITY: Referrer-gated to prevent direct scraping. Only serves data when
-    the request comes from the service detail page (JS fetch on page load).
-    Rate-limited to 15/min to throttle even legitimate requests.
+    SECURITY: Requires a server-generated HMAC token (embedded in the detail
+    page template) to prevent direct scraping. Token rotates every 10 minutes.
     """
-    # SECURITY: Referrer gate - only serve to requests from detail pages
-    referer = request.headers.get("referer", "")
-    if f"/services/{slug}" not in referer:
+    token = request.query_params.get("t", "")
+    expected = _meta_token(slug)
+    import hmac as _hmac
+    if not token or not _hmac.compare_digest(token, expected):
         return JSONResponse({"error": "forbidden"}, status_code=403)
 
     result = await db.execute(

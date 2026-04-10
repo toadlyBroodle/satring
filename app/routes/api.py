@@ -1146,6 +1146,7 @@ async def build_service_analytics(db: AsyncSession, slug: str) -> ServiceAnalyti
 @router.get("/services/bulk", response_model=list[ServiceOut],
              responses={402: _402_RESPONSE},
              openapi_extra=_payment_extra(settings.AUTH_BULK_PRICE_USD, "Bulk export all services"))
+@limiter.limit("3/minute")
 async def bulk_export(request: Request, db: AsyncSession = Depends(get_db)):
     settlement = await require_payment(
         request=request,
