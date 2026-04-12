@@ -1,6 +1,6 @@
 import logging
 import math
-from datetime import timedelta
+from datetime import timedelta, timezone
 from urllib.parse import urlparse
 
 logger = logging.getLogger("satring.web")
@@ -837,10 +837,13 @@ async def recover_form(
     if not service:
         return HTMLResponse("<h1>Not Found</h1>", status_code=404)
 
+    expires = service.domain_challenge_expires_at
+    if expires is not None and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
     challenge_active = (
         service.domain_challenge is not None
-        and service.domain_challenge_expires_at is not None
-        and service.domain_challenge_expires_at > utc_now()
+        and expires is not None
+        and expires > utc_now()
     )
     return templates.TemplateResponse(request, "services/recover.html", {
         "service": service,
@@ -879,10 +882,13 @@ async def recover_service(
         })
 
     elif action == "verify":
+        v_expires = service.domain_challenge_expires_at
+        if v_expires is not None and v_expires.tzinfo is None:
+            v_expires = v_expires.replace(tzinfo=timezone.utc)
         if (
             not service.domain_challenge
-            or not service.domain_challenge_expires_at
-            or service.domain_challenge_expires_at <= utc_now()
+            or not v_expires
+            or v_expires <= utc_now()
         ):
             return templates.TemplateResponse(request, "services/recover.html", {
                 "service": service,
