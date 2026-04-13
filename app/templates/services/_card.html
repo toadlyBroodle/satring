@@ -1,6 +1,6 @@
 <a href="/services/{{ service.slug }}" class="block border border-green-800 p-3 hover:border-green-400 transition-colors">
   <div class="flex items-center gap-2 text-sm min-w-0">
-    {% if service.logo_url %}<img src="{{ service.logo_url }}" alt="" class="h-5 w-5 shrink-0 object-contain">{% endif %}
+    <img src="{{ service.logo_url or '/static/img/default-service-logo.jpg' }}" alt="" class="h-5 w-5 shrink-0 object-contain" onerror="this.onerror=null;this.src='/static/img/default-service-logo.jpg'">
     <span class="text-green-400 truncate">{{ service.name }}</span>
   </div>
   <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm mt-1">

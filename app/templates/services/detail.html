@@ -38,7 +38,7 @@
 
 <div class="mb-4">
   <div class="text-amber-400 text-sm mb-1">₿ satring info {{ service.slug }}</div>
-  <h1 class="text-xl flex items-center gap-2">{% if service.logo_url %}<img src="{{ service.logo_url }}" alt="" class="h-6 w-6 object-contain">{% endif %}{{ service.name }}</h1>
+  <h1 class="text-xl flex items-center gap-2"><img src="{{ service.logo_url or '/static/img/default-service-logo.jpg' }}" alt="" class="h-6 w-6 object-contain" onerror="this.onerror=null;this.src='/static/img/default-service-logo.jpg'">{{ service.name }}</h1>
   <div class="flex items-center gap-2 mt-1 text-sm">
     <span class="text-amber-400">[{{ service.protocol }}]</span>
     {% for cat in service.categories %}
