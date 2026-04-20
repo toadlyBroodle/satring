@@ -16,6 +16,18 @@
     </div>
   </div>
 
+  <!-- Payment hash (for recovery if page times out) -->
+  <div class="mb-3">
+    <label class="text-green-700 text-xs block mb-1">payment hash&gt;</label>
+    <div class="flex gap-2 items-start">
+      <code id="pay-hash-str" class="bg-black text-green-400 border border-green-800 px-2 py-1 text-xs break-all block flex-1">{{ payment_hash }}</code>
+      <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('pay-hash-str').textContent);this.textContent='[COPIED]';setTimeout(()=>this.textContent='[COPY]',1500)" class="btn-action px-2 py-1 text-xs whitespace-nowrap">[COPY]</button>
+    </div>
+    {% if show_recovery_hint %}
+    <p class="text-green-900 text-xs mt-1">Save this hash. If the page times out after you pay, visit <a href="/submit/recover" class="text-amber-400 underline">/submit/recover</a> to complete your listing.</p>
+    {% endif %}
+  </div>
+
   <!-- Status -->
   <div id="payment-status" class="text-sm">
     <span class="text-green-700">status&gt;</span>
@@ -47,12 +59,14 @@
         return values;
       }
 
-      // Poll for payment (stop after 10 minutes)
+      // Poll for payment (stop after 30 minutes; LNBits invoice typically expires at 1h)
       var pollErrors = 0;
       var pollInterval = setInterval(function() {
-        if (pollErrors > 120) {
+        if (pollErrors > 360) {
           clearInterval(pollInterval);
-          document.getElementById('status-text').textContent = 'invoice expired. please refresh and try again.';
+          document.getElementById('status-text').innerHTML = htmxMode
+            ? 'poll stopped. if you paid, please refresh the page.'
+            : 'poll stopped. if you paid, use <a href="/submit/recover" class="underline">/submit/recover</a> with your payment hash.';
           document.getElementById('status-text').className = 'text-red-400';
           return;
         }

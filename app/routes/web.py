@@ -67,8 +67,11 @@ async def directory(
         "cheapest": Service.pricing_sats.asc(),
         "most-reviewed": Service.rating_count.desc(),
         "popular": Service.hit_count_30d.desc(),
+        "newest": Service.created_at.desc(),
     }
-    query = query.order_by(sort_map.get(sort, Service.hit_count_30d.desc()))
+    # id.desc() tiebreak keeps ordering deterministic when primary keys collide
+    # (e.g. seed imports share a created_at, ratings share a count).
+    query = query.order_by(sort_map.get(sort, Service.hit_count_30d.desc()), Service.id.desc())
 
     # Count total for pagination
     count_q = select(func.count()).select_from(query.subquery())
@@ -90,7 +93,7 @@ async def directory(
         qs_parts.append(f"status={status}")
     if protocol:
         qs_parts.append(f"protocol={protocol.replace('+', '%2B')}")
-    if sort and sort != "newest":
+    if sort:
         qs_parts.append(f"sort={sort}")
     qs_base = "&".join(qs_parts)
 
@@ -139,8 +142,11 @@ async def search(
         "cheapest": Service.pricing_sats.asc(),
         "most-reviewed": Service.rating_count.desc(),
         "popular": Service.hit_count_30d.desc(),
+        "newest": Service.created_at.desc(),
     }
-    query = query.order_by(sort_map.get(sort, Service.hit_count_30d.desc()))
+    # id.desc() tiebreak keeps ordering deterministic when primary keys collide
+    # (e.g. seed imports share a created_at, ratings share a count).
+    query = query.order_by(sort_map.get(sort, Service.hit_count_30d.desc()), Service.id.desc())
 
     # Count total for pagination
     count_q = select(func.count()).select_from(query.subquery())
@@ -160,7 +166,7 @@ async def search(
         qs_parts.append("verified=true")
     elif status:
         qs_parts.append(f"status={status}")
-    if sort and sort != "newest":
+    if sort:
         qs_parts.append(f"sort={sort}")
     qs_base = "&".join(qs_parts)
 
@@ -330,6 +336,15 @@ async def submit_form(request: Request, db: AsyncSession = Depends(get_db)):
     })
 
 
+@router.get("/submit/recover", response_class=HTMLResponse)
+async def submit_recover_form(request: Request, db: AsyncSession = Depends(get_db)):
+    categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
+    return templates.TemplateResponse(request, "services/submit.html", {
+        "categories": categories,
+        "recovery_mode": True,
+    })
+
+
 @router.post("/submit")
 async def submit_service(
     request: Request,
@@ -356,12 +371,16 @@ async def submit_service(
     form_data = await request.form()
     category_ids = [int(v) for k, v in form_data.multi_items() if k == "categories"]
 
-    # Validate category count (1–2 required)
-    if len(category_ids) < 1 or len(category_ids) > 2:
-        categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
+    # Recovery flow: payment_hash arrives in query (normal re-POST from payment page)
+    # or in form body (user re-submitting via /submit/recover after UI timeout).
+    payment_hash_form = form_data.get("payment_hash") or request.query_params.get("payment_hash") or ""
+    recovery_mode = bool(form_data.get("payment_hash"))
+
+    async def _render_error(msg: str, status_code: int = 422, **extra):
+        cats = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
         return templates.TemplateResponse(request, "services/submit.html", {
-            "categories": categories,
-            "error": "Select 1–2 categories.",
+            "categories": cats,
+            "error": msg,
             "form": {
                 "name": name, "url": url, "description": description,
                 "protocol": protocol, "pricing_sats": pricing_sats,
@@ -371,9 +390,16 @@ async def submit_service(
                 "x402_network": x402_network, "x402_asset": x402_asset,
                 "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
                 "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
+                "payment_hash": payment_hash_form,
             },
             "selected_category_ids": category_ids,
-        }, status_code=422)
+            "recovery_mode": recovery_mode,
+            **extra,
+        }, status_code=status_code)
+
+    # Validate category count (1–2 required)
+    if len(category_ids) < 1 or len(category_ids) > 2:
+        return await _render_error("Select 1–2 categories.")
 
     # SECURITY: Server-side length limits prevent DB bloat and memory exhaustion.
     # HTML maxlength is client-side only and trivially bypassed. Constants in config.py.
@@ -389,22 +415,7 @@ async def submit_service(
     for field_name, max_len in LENGTH_LIMITS.items():
         val = locals()[field_name]
         if len(val) > max_len:
-            categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
-            return templates.TemplateResponse(request, "services/submit.html", {
-                "categories": categories,
-                "error": f"{field_name} exceeds maximum length of {max_len} characters.",
-                "form": {
-                    "name": name, "url": url, "description": description,
-                    "protocol": protocol, "pricing_sats": pricing_sats,
-                    "pricing_model": pricing_model, "owner_name": owner_name,
-                    "owner_contact": owner_contact, "logo_url": logo_url,
-                    "existing_edit_token": existing_edit_token,
-                    "x402_network": x402_network, "x402_asset": x402_asset,
-                    "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
-                "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
-                },
-                "selected_category_ids": category_ids,
-            }, status_code=422)
+            return await _render_error(f"{field_name} exceeds maximum length of {max_len} characters.")
 
     # SECURITY: Reject non-http(s) schemes to prevent stored XSS via javascript:/data: URIs
     parsed_url = urlparse(url)
@@ -412,22 +423,7 @@ async def submit_service(
     if parsed_url.scheme not in ("http", "https") or (
         parsed_logo and parsed_logo.scheme not in ("http", "https")
     ):
-        categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
-        return templates.TemplateResponse(request, "services/submit.html", {
-            "categories": categories,
-            "error": "URL and logo URL must start with http:// or https://",
-            "form": {
-                "name": name, "url": url, "description": description,
-                "protocol": protocol, "pricing_sats": pricing_sats,
-                "pricing_model": pricing_model, "owner_name": owner_name,
-                "owner_contact": owner_contact, "logo_url": logo_url,
-                "existing_edit_token": existing_edit_token,
-                "x402_network": x402_network, "x402_asset": x402_asset,
-                "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
-                "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
-            },
-            "selected_category_ids": category_ids,
-        }, status_code=422)
+        return await _render_error("URL and logo URL must start with http:// or https://")
 
     proto_parts = protocol.split("+")
     # Clear sat pricing when no L402 component
@@ -443,76 +439,34 @@ async def submit_service(
         if not pricing_usd:
             missing.append("USD price")
         if missing:
-            categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
-            return templates.TemplateResponse(request, "services/submit.html", {
-                "categories": categories,
-                "error": f"{', '.join(missing)} required for x402 protocol.",
-                "form": {
-                    "name": name, "url": url, "description": description,
-                    "protocol": protocol, "pricing_sats": pricing_sats,
-                    "pricing_model": pricing_model, "owner_name": owner_name,
-                    "owner_contact": owner_contact, "logo_url": logo_url,
-                    "existing_edit_token": existing_edit_token,
-                    "x402_network": x402_network, "x402_asset": x402_asset,
-                    "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
-                "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
-                },
-                "selected_category_ids": category_ids,
-            }, status_code=422)
+            return await _render_error(f"{', '.join(missing)} required for x402 protocol.")
 
     # Validate MPP fields before payment gate
     if "MPP" in proto_parts:
         if not mpp_method:
-            categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
-            return templates.TemplateResponse(request, "services/submit.html", {
-                "categories": categories,
-                "error": "Payment method required for MPP protocol.",
-                "form": {
-                    "name": name, "url": url, "description": description,
-                    "protocol": protocol, "pricing_sats": pricing_sats,
-                    "pricing_model": pricing_model, "owner_name": owner_name,
-                    "owner_contact": owner_contact, "logo_url": logo_url,
-                    "existing_edit_token": existing_edit_token,
-                    "x402_network": x402_network, "x402_asset": x402_asset,
-                    "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
-                    "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
-                },
-                "selected_category_ids": category_ids,
-            }, status_code=422)
+            return await _render_error("Payment method required for MPP protocol.")
 
     url = normalize_url(url)
     client_ip = request.client.host if request.client else "unknown"
     logger.info(
         "SUBMIT name=%r url=%r protocol=%s categories=%s "
-        "pricing_sats=%s pricing_model=%s owner=%r contact=%r ip=%s",
+        "pricing_sats=%s pricing_model=%s owner=%r contact=%r ip=%s recovery=%s",
         name, url, protocol, category_ids,
-        pricing_sats, pricing_model, owner_name, owner_contact, client_ip,
+        pricing_sats, pricing_model, owner_name, owner_contact, client_ip, recovery_mode,
     )
 
     # Reject duplicate URLs before payment gate so users don't pay for a rejected submission
     existing = await find_existing_service(db, url)
     if existing:
-        categories = (await db.execute(select(Category).order_by(Category.name))).scalars().all()
-        return templates.TemplateResponse(request, "services/submit.html", {
-            "categories": categories,
-            "error": f"A service with this URL already exists: {existing.name}",
-            "form": {
-                "name": name, "url": url, "description": description,
-                "protocol": protocol, "pricing_sats": pricing_sats,
-                "pricing_model": pricing_model, "owner_name": owner_name,
-                "owner_contact": owner_contact, "logo_url": logo_url,
-                "existing_edit_token": existing_edit_token,
-                "x402_network": x402_network, "x402_asset": x402_asset,
-                "x402_pay_to": x402_pay_to, "pricing_usd": pricing_usd,
-                "mpp_method": mpp_method, "mpp_realm": mpp_realm, "mpp_currency": mpp_currency,
-            },
-            "selected_category_ids": category_ids,
-            "existing_slug": existing.slug,
-        }, status_code=409)
+        return await _render_error(
+            f"A service with this URL already exists: {existing.name}",
+            status_code=409,
+            existing_slug=existing.slug,
+        )
 
     # Payment gate (skipped in test mode)
     if payments_enabled():
-        payment_hash = request.query_params.get("payment_hash")
+        payment_hash = payment_hash_form or None
         if not payment_hash:
             # Create invoice and show payment page
             invoice = await create_invoice(
@@ -540,11 +494,17 @@ async def submit_service(
                 "category_ids": category_ids,
             })
 
-        # Verify payment
-        paid = await check_payment_status(payment_hash)
-        if not paid or not await check_and_consume_payment(payment_hash, db):
+        # Verify payment. SECURITY: also verify amount matches the submission
+        # price so a hash from a cheaper endpoint can't be replayed here.
+        paid, paid_sats = await check_payment_status(payment_hash)
+        if not paid or paid_sats < settings.AUTH_SUBMIT_PRICE_SATS:
             return HTMLResponse(
-                "<h1>Payment not verified</h1><p>Invoice not paid or already used.</p>",
+                f"<h1>Payment not verified</h1><p>Invoice not paid or insufficient amount (need {settings.AUTH_SUBMIT_PRICE_SATS} sats).</p>",
+                status_code=402,
+            )
+        if not await check_and_consume_payment(payment_hash, db):
+            return HTMLResponse(
+                "<h1>Payment already used</h1><p>This payment has already been consumed.</p>",
                 status_code=402,
             )
 
@@ -998,10 +958,15 @@ async def rate_service(
             html.headers["HX-Reswap"] = "innerHTML"
             return html
 
-        paid = await check_payment_status(payment_hash)
-        if not paid or not await check_and_consume_payment(payment_hash, db):
+        paid, paid_sats = await check_payment_status(payment_hash)
+        if not paid or paid_sats < settings.AUTH_REVIEW_PRICE_SATS:
             return HTMLResponse(
-                '<div class="text-red-400 text-sm">Payment not verified or already used.</div>',
+                f'<div class="text-red-400 text-sm">Payment not verified or insufficient (need {settings.AUTH_REVIEW_PRICE_SATS} sats).</div>',
+                status_code=402,
+            )
+        if not await check_and_consume_payment(payment_hash, db):
+            return HTMLResponse(
+                '<div class="text-red-400 text-sm">Payment already used.</div>',
                 status_code=402,
             )
 
@@ -1060,9 +1025,14 @@ async def reputation_result(request: Request, slug: str, payment_hash: str = "",
     if payments_enabled():
         if not payment_hash:
             return HTMLResponse("Payment required", status_code=402)
-        paid = await check_payment_status(payment_hash)
-        if not paid or not await check_and_consume_payment(payment_hash, db):
-            return HTMLResponse("Payment not verified or already used.", status_code=402)
+        paid, paid_sats = await check_payment_status(payment_hash)
+        if not paid or paid_sats < settings.AUTH_REPUTATION_PRICE_SATS:
+            return HTMLResponse(
+                f"Payment not verified or insufficient (need {settings.AUTH_REPUTATION_PRICE_SATS} sats).",
+                status_code=402,
+            )
+        if not await check_and_consume_payment(payment_hash, db):
+            return HTMLResponse("Payment already used.", status_code=402)
 
     data = await build_reputation_data(db, slug)
     return templates.TemplateResponse(request, "services/_reputation_result.html", {"data": data})
@@ -1099,9 +1069,14 @@ async def service_analytics_result(request: Request, slug: str, payment_hash: st
     if payments_enabled():
         if not payment_hash:
             return HTMLResponse("Payment required", status_code=402)
-        paid = await check_payment_status(payment_hash)
-        if not paid or not await check_and_consume_payment(payment_hash, db):
-            return HTMLResponse("Payment not verified or already used.", status_code=402)
+        paid, paid_sats = await check_payment_status(payment_hash)
+        if not paid or paid_sats < settings.AUTH_SERVICE_ANALYTICS_PRICE_SATS:
+            return HTMLResponse(
+                f"Payment not verified or insufficient (need {settings.AUTH_SERVICE_ANALYTICS_PRICE_SATS} sats).",
+                status_code=402,
+            )
+        if not await check_and_consume_payment(payment_hash, db):
+            return HTMLResponse("Payment already used.", status_code=402)
 
     data = await build_service_analytics(db, slug)
     return templates.TemplateResponse(request, "services/_service_analytics_result.html", {"data": data})
@@ -1131,9 +1106,14 @@ async def analytics_result(request: Request, payment_hash: str = "", db: AsyncSe
     if payments_enabled():
         if not payment_hash:
             return HTMLResponse("Payment required", status_code=402)
-        paid = await check_payment_status(payment_hash)
-        if not paid or not await check_and_consume_payment(payment_hash, db):
-            return HTMLResponse("Payment not verified or already used.", status_code=402)
+        paid, paid_sats = await check_payment_status(payment_hash)
+        if not paid or paid_sats < settings.AUTH_ANALYTICS_PRICE_SATS:
+            return HTMLResponse(
+                f"Payment not verified or insufficient (need {settings.AUTH_ANALYTICS_PRICE_SATS} sats).",
+                status_code=402,
+            )
+        if not await check_and_consume_payment(payment_hash, db):
+            return HTMLResponse("Payment already used.", status_code=402)
 
     data = await build_analytics_data(db)
     return templates.TemplateResponse(request, "services/_analytics_result.html", {"data": data})
@@ -1144,7 +1124,7 @@ async def analytics_result(request: Request, payment_hash: str = "", db: AsyncSe
 async def payment_status(request: Request, payment_hash: str):
     if not payments_enabled():
         return JSONResponse({"paid": True})
-    paid = await check_payment_status(payment_hash)
+    paid, _ = await check_payment_status(payment_hash)
     return JSONResponse({"paid": paid})
 
 

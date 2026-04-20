@@ -130,8 +130,11 @@ class TestRequireL402:
         root_key = "test-root-key-for-verify"
 
         with patch("app.l402.payments_enabled", return_value=True), \
-             patch("app.l402.settings") as mock_settings:
+             patch("app.l402.settings") as mock_settings, \
+             patch("app.l402.check_payment_status", new_callable=AsyncMock) as mock_status:
             mock_settings.AUTH_ROOT_KEY = root_key
+            mock_settings.AUTH_PRICE_SATS = 100
+            mock_status.return_value = (True, 100)
 
             mac_b64 = mint_macaroon(payment_hash)
 
@@ -210,8 +213,11 @@ class TestRequireL402:
         root_key = "lsat-root-key"
 
         with patch("app.l402.payments_enabled", return_value=True), \
-             patch("app.l402.settings") as mock_settings:
+             patch("app.l402.settings") as mock_settings, \
+             patch("app.l402.check_payment_status", new_callable=AsyncMock) as mock_status:
             mock_settings.AUTH_ROOT_KEY = root_key
+            mock_settings.AUTH_PRICE_SATS = 100
+            mock_status.return_value = (True, 100)
 
             mac_b64 = mint_macaroon(payment_hash)
 
@@ -227,3 +233,116 @@ class TestRequireL402:
             request = Request(scope)
             result = await require_l402(request=request)
             assert result is None
+
+
+class TestL402AmountCheck:
+    """Prevent cross-endpoint payment reuse: a client who paid a cheap invoice
+    at endpoint A must not be able to replay the same macaroon+preimage at
+    expensive endpoint B. Since macaroon caveats don't bind the amount, the
+    server looks up the settled amount on LNBits and rejects underpayment."""
+
+    @pytest.mark.asyncio
+    async def test_underpaid_l402_rejected_with_402(self):
+        from fastapi import HTTPException
+        from starlette.requests import Request
+
+        preimage = b"cheap-invoice-preimage"
+        preimage_hex = preimage.hex()
+        payment_hash = hashlib.sha256(preimage).hexdigest()
+
+        with patch("app.l402.payments_enabled", return_value=True), \
+             patch("app.l402.settings") as mock_settings, \
+             patch("app.l402.check_payment_status", new_callable=AsyncMock) as mock_status, \
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_invoice:
+            mock_settings.AUTH_ROOT_KEY = "cross-endpoint-key"
+            mock_settings.AUTH_PRICE_SATS = 100
+            # Simulate: paid invoice exists but amount is only 10 sats
+            mock_status.return_value = (True, 10)
+            mock_invoice.return_value = {
+                "payment_hash": "aa" * 32,
+                "payment_request": "lnbc1000n1fresh",
+            }
+
+            mac_b64 = mint_macaroon(payment_hash)
+            scope = {
+                "type": "http",
+                "method": "GET",
+                "path": "/test",
+                "headers": [
+                    (b"authorization", f"L402 {mac_b64}:{preimage_hex}".encode()),
+                ],
+            }
+            request = Request(scope)
+
+            with pytest.raises(HTTPException) as exc_info:
+                await require_l402(request=request, amount_sats=1000)
+
+            assert exc_info.value.status_code == 402
+            assert "amount mismatch" in exc_info.value.detail.lower()
+            assert "WWW-Authenticate" in exc_info.value.headers
+
+    @pytest.mark.asyncio
+    async def test_overpaid_l402_accepted(self):
+        """Overpayment is fine; only underpayment is rejected."""
+        from starlette.requests import Request
+
+        preimage = b"overpaid-invoice-preimage"
+        preimage_hex = preimage.hex()
+        payment_hash = hashlib.sha256(preimage).hexdigest()
+
+        with patch("app.l402.payments_enabled", return_value=True), \
+             patch("app.l402.settings") as mock_settings, \
+             patch("app.l402.check_payment_status", new_callable=AsyncMock) as mock_status:
+            mock_settings.AUTH_ROOT_KEY = "overpay-key"
+            mock_settings.AUTH_PRICE_SATS = 100
+            mock_status.return_value = (True, 5000)  # generous tipper
+
+            mac_b64 = mint_macaroon(payment_hash)
+            scope = {
+                "type": "http",
+                "method": "GET",
+                "path": "/test",
+                "headers": [
+                    (b"authorization", f"L402 {mac_b64}:{preimage_hex}".encode()),
+                ],
+            }
+            request = Request(scope)
+            result = await require_l402(request=request, amount_sats=100)
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_unpaid_l402_rejected(self):
+        """If LNBits says not paid, reject even though the preimage hashes correctly
+        (edge case: preimage leaked but invoice itself unsettled/cancelled)."""
+        from fastapi import HTTPException
+        from starlette.requests import Request
+
+        preimage = b"unpaid-preimage"
+        preimage_hex = preimage.hex()
+        payment_hash = hashlib.sha256(preimage).hexdigest()
+
+        with patch("app.l402.payments_enabled", return_value=True), \
+             patch("app.l402.settings") as mock_settings, \
+             patch("app.l402.check_payment_status", new_callable=AsyncMock) as mock_status, \
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_invoice:
+            mock_settings.AUTH_ROOT_KEY = "unpaid-key"
+            mock_settings.AUTH_PRICE_SATS = 100
+            mock_status.return_value = (False, 0)
+            mock_invoice.return_value = {
+                "payment_hash": "bb" * 32,
+                "payment_request": "lnbc1000n1fresh2",
+            }
+
+            mac_b64 = mint_macaroon(payment_hash)
+            scope = {
+                "type": "http",
+                "method": "GET",
+                "path": "/test",
+                "headers": [
+                    (b"authorization", f"L402 {mac_b64}:{preimage_hex}".encode()),
+                ],
+            }
+            request = Request(scope)
+            with pytest.raises(HTTPException) as exc_info:
+                await require_l402(request=request, amount_sats=100)
+            assert exc_info.value.status_code == 402

@@ -16,11 +16,11 @@
 <!-- Query string helpers -->
 {% set qs_q = 'q=' ~ active_q if active_q else '' %}
 {% set qs_q_amp = qs_q ~ '&' if qs_q else '' %}
-{% set qs_sort = '&sort=' ~ active_sort if active_sort and active_sort != 'newest' else '' %}
+{% set qs_sort = '&sort=' ~ active_sort if active_sort else '' %}
 {% set qs_cat = '&category=' ~ active_category if active_category else '' %}
 {% set qs_filter = '&verified=true' if active_verified == 'true' else ('&status=' ~ active_status if active_status else '') %}
 {% set qs_cat_filter = ('category=' ~ active_category if active_category else '') ~ (('&' if active_category else '') ~ qs_filter[1:] if qs_filter else '') %}
-{% set qs_base_filters = qs_cat_filter ~ (('&' if qs_cat_filter else '') ~ 'sort=' ~ active_sort if active_sort and active_sort != 'newest' else '') %}
+{% set qs_base_filters = qs_cat_filter ~ (('&' if qs_cat_filter else '') ~ 'sort=' ~ active_sort if active_sort else '') %}
 
 <!-- Search -->
 <div class="mb-4">

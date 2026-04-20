@@ -33,6 +33,58 @@ class TestDirectory:
         assert resp.status_code == 200
 
     @pytest.mark.asyncio
+    async def test_sort_newest_orders_by_created_at_desc(
+        self, client: AsyncClient, db: AsyncSession,
+    ):
+        """Regression: `sort=newest` used to silently fall through to popular
+        because `newest` was not in sort_map. A three-service fixture with
+        ascending hit counts and descending creation times verifies the new
+        ordering is by created_at, not hit_count_30d."""
+        from datetime import datetime, timezone, timedelta
+
+        # Three services: created in order A, B, C. Popularity inverse: C highest.
+        now = datetime.now(timezone.utc)
+        services = []
+        for i, (name, slug, hit_30d, minutes_ago) in enumerate([
+            ("Alpha Oldest", "alpha-oldest", 300, 30),
+            ("Bravo Middle", "bravo-middle", 200, 20),
+            ("Charlie Newest", "charlie-newest", 100, 10),
+        ]):
+            svc = Service(
+                name=name, slug=slug, url=f"https://{slug}.test",
+                protocol="L402", pricing_sats=10, pricing_model="per-request",
+                hit_count_30d=hit_30d,
+                created_at=now - timedelta(minutes=minutes_ago),
+            )
+            db.add(svc)
+            services.append(svc)
+        await db.commit()
+
+        resp = await client.get("/directory?sort=newest")
+        assert resp.status_code == 200
+        # Newest first: Charlie before Bravo before Alpha
+        charlie_pos = resp.text.find("Charlie Newest")
+        bravo_pos = resp.text.find("Bravo Middle")
+        alpha_pos = resp.text.find("Alpha Oldest")
+        assert charlie_pos != -1 and bravo_pos != -1 and alpha_pos != -1
+        assert charlie_pos < bravo_pos < alpha_pos, (
+            f"Expected newest-first order, got positions "
+            f"charlie={charlie_pos} bravo={bravo_pos} alpha={alpha_pos}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_sort_newest_preserved_across_category_filter(
+        self, client: AsyncClient, sample_service: Service,
+    ):
+        """Regression: clicking a category filter while sort=newest was active
+        used to drop the sort param (template stripped `sort=newest`), silently
+        reverting to popular."""
+        resp = await client.get("/directory?sort=newest")
+        assert resp.status_code == 200
+        # Category links must preserve sort=newest
+        assert "sort=newest" in resp.text
+
+    @pytest.mark.asyncio
     async def test_category_filter(self, client: AsyncClient, sample_service: Service):
         resp = await client.get("/directory?category=ai-ml")
         assert resp.status_code == 200

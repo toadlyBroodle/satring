@@ -1,10 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Submit a Service{% endblock %}
+{% block title %}{% if recovery_mode %}Recover Submission{% else %}Submit a Service{% endif %}{% endblock %}
 {% block content %}
 
 <div class="max-w-2xl">
-  <div class="text-amber-400 text-sm mb-1">₿ satring submit --new</div>
-  <h1 class="text-xl mb-4">Submit a Service</h1>
+  <div class="text-amber-400 text-sm mb-1">₿ satring submit {% if recovery_mode %}--recover{% else %}--new{% endif %}</div>
+  <h1 class="text-xl mb-4">{% if recovery_mode %}Recover a Timed-Out Submission{% else %}Submit a Service{% endif %}</h1>
+
+  {% if recovery_mode %}
+  <div class="border border-amber-400 p-3 mb-4 text-sm text-amber-400">
+    Paid for a submission but the page timed out before the listing was created? Paste your payment hash below and re-enter the form. The payment will be consumed once (no double-charge).
+  </div>
+  {% endif %}
 
   {% if error %}
   <div class="border border-red-500 text-red-400 p-3 mb-4 text-sm">{{ error }}</div>
@@ -12,6 +18,16 @@
 
   {# SECURITY: maxlength values must match constants in app/config.py (server enforces the real limits) #}
   <form method="post" action="/submit" class="space-y-4 text-sm">
+    {% if recovery_mode %}
+    <div>
+      <label for="payment_hash" class="text-green-700 block mb-1 cursor-pointer">payment hash&gt; <span class="text-green-900">*</span></label>
+      <input type="text" id="payment_hash" name="payment_hash" required pattern="[0-9a-fA-F]{64}" maxlength="64" minlength="64" placeholder="64-hex-char payment hash from your paid invoice" value="{{ form.payment_hash if form else '' }}"
+        class="bg-black text-amber-400 border border-amber-800 rounded-none px-2 py-1.5 w-full outline-none focus:border-amber-400 placeholder-green-900 font-mono" />
+    </div>
+    {% elif form and form.payment_hash %}
+    <input type="hidden" name="payment_hash" value="{{ form.payment_hash }}" />
+    {% endif %}
+
     <div>
       <label for="name" class="text-green-700 block mb-1 cursor-pointer">name&gt; <span class="text-green-900">*</span></label>
       <input type="text" id="name" name="name" required maxlength="200" placeholder="My Lightning API" value="{{ form.name if form else '' }}"

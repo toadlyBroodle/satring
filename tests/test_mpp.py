@@ -279,6 +279,7 @@ class TestRequireMpp:
         with patch("app.mpp.payments_enabled", return_value=True), \
              patch("app.mpp.settings") as mock_settings:
             mock_settings.AUTH_ROOT_KEY = root_key
+            mock_settings.AUTH_PRICE_SATS = 100
 
             # Build a valid credential
             expires = str(int(time.time()) + 600)
@@ -356,3 +357,74 @@ class TestRequireMpp:
             assert exc_info.value.status_code == 402
             detail = exc_info.value.detail
             assert detail["type"] == "https://paymentauth.org/problems/verification-failed"
+
+
+class TestMppAmountCheck:
+    """Prevent cross-endpoint payment reuse at MPP level. The HMAC binds the
+    amount into the challenge, so once verify_mpp_credential passes we trust
+    the echoed amount. But we must still compare it to THIS endpoint's price:
+    a client could otherwise reuse a legitimately-issued cheap challenge at
+    an expensive endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_underpaid_mpp_rejected_with_amount_mismatch(self):
+        from fastapi import HTTPException
+
+        preimage = b"cheap-mpp-preimage!"
+        payment_hash = hashlib.sha256(preimage).hexdigest()
+
+        with patch("app.mpp.payments_enabled", return_value=True), \
+             patch("app.mpp.settings") as mock_settings, \
+             patch("app.mpp.create_invoice", new_callable=AsyncMock) as mock_invoice:
+            mock_settings.AUTH_ROOT_KEY = "mpp-xep-key"
+            mock_settings.AUTH_PRICE_SATS = 100
+            mock_invoice.return_value = {
+                "payment_hash": "cc" * 32,
+                "payment_request": "lnbc1000n1fresh-mpp",
+            }
+
+            # Build a legitimate challenge for 10 sats (cheap endpoint).
+            expires = str(int(time.time()) + 600)
+            request_obj = {
+                "amount": "10",  # cheap
+                "currency": "BTC",
+                "methodDetails": {
+                    "invoice": "lnbc100n1mock",
+                    "paymentHash": payment_hash,
+                    "network": "mainnet",
+                },
+            }
+            request_b64 = _b64url_encode(json.dumps(request_obj, separators=(",", ":")).encode())
+            challenge_id = _compute_challenge_id(
+                _MPP_REALM, _MPP_METHOD, _MPP_INTENT, request_b64, expires,
+            )
+            cred_obj = {
+                "challenge": {
+                    "id": challenge_id,
+                    "realm": _MPP_REALM,
+                    "method": _MPP_METHOD,
+                    "intent": _MPP_INTENT,
+                    "request": request_b64,
+                    "expires": expires,
+                },
+                "payload": {"preimage": preimage.hex()},
+            }
+            token = _b64url_encode(json.dumps(cred_obj).encode())
+
+            scope = {
+                "type": "http",
+                "method": "POST",
+                "path": "/expensive",
+                "headers": [
+                    (b"authorization", f"Payment {token}".encode()),
+                ],
+            }
+            request = Request(scope)
+
+            # Replay the cheap (10-sat) challenge at an endpoint that costs 1000 sats.
+            with pytest.raises(HTTPException) as exc_info:
+                await require_mpp(request=request, amount_sats=1000)
+
+            assert exc_info.value.status_code == 402
+            detail = exc_info.value.detail
+            assert detail["type"] == "https://paymentauth.org/problems/amount-mismatch"

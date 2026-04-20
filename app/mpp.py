@@ -228,6 +228,21 @@ def _extract_payment_hash_from_credential(credential: dict) -> str | None:
         return None
 
 
+def _extract_amount_from_credential(credential: dict) -> int:
+    """Extract the amount (sats) from an MPP credential's echoed challenge.
+
+    Returns 0 if the amount cannot be parsed. The challenge HMAC binds this
+    value, so once verify_mpp_credential has validated the HMAC the amount
+    is trustworthy.
+    """
+    try:
+        request_b64 = credential.get("challenge", {}).get("request", "")
+        request_json = json.loads(_b64url_decode(request_b64))
+        return int(request_json.get("amount", 0))
+    except Exception:
+        return 0
+
+
 # ---------------------------------------------------------------------------
 # Build Payment-Receipt header
 # ---------------------------------------------------------------------------
@@ -283,6 +298,21 @@ async def require_mpp(
             )
 
         if verify_mpp_credential(credential):
+            # SECURITY: Verify the challenge amount matches this endpoint's price.
+            # The HMAC binds the amount to the challenge, so we trust it once
+            # verify_mpp_credential has validated the HMAC. Without this check,
+            # a client could reuse a cheap-endpoint challenge+preimage at an
+            # expensive endpoint.
+            challenge_amount = _extract_amount_from_credential(credential)
+            if challenge_amount < price:
+                logger.warning(
+                    f"MPP amount mismatch: expected={price} challenge={challenge_amount}"
+                )
+                await _raise_402_problem(
+                    "amount-mismatch", "Payment Amount Mismatch",
+                    f"This resource requires {price} sats; credential amount is {challenge_amount}.",
+                    price, inv_memo,
+                )
             payment_hash = _extract_payment_hash_from_credential(credential)
             # SECURITY: Replay protection via ConsumedPayment table
             if db is not None and payment_hash:
