@@ -1457,10 +1457,13 @@ async def api_recover_generate(request: Request, slug: str, db: AsyncSession = D
 @limiter.limit(RATE_RECOVER)
 async def api_recover_verify(request: Request, slug: str, db: AsyncSession = Depends(get_db)):
     service = await get_service_or_404(db, slug)
+    expires = service.domain_challenge_expires_at
+    if expires is not None and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
     if (
         not service.domain_challenge
-        or not service.domain_challenge_expires_at
-        or service.domain_challenge_expires_at <= utc_now()
+        or not expires
+        or expires <= utc_now()
     ):
         raise HTTPException(status_code=400, detail="No active challenge or challenge expired")
 
