@@ -286,6 +286,30 @@ def send_verify_email(email: str, slug: str, domain: str) -> None:
     if not payments_enabled():
         return
 
+    # Skip if the email domain has no MX records (bots/typos/fake addresses).
+    # Cheaper than letting postfix bounce, and avoids feeding our reputation
+    # to spam filters with a stream of undeliverables.
+    try:
+        import dns.resolver
+        import dns.exception
+        try:
+            email_domain = email.split("@", 1)[1]
+        except IndexError:
+            _log.info(f"Skipping verification email: malformed address {email!r}")
+            return
+        resolver = dns.resolver.Resolver()
+        resolver.timeout = 3
+        resolver.lifetime = 5
+        try:
+            resolver.resolve(email_domain, "MX")
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN,
+                dns.resolver.NoNameservers, dns.exception.Timeout):
+            _log.info(f"Skipping verification email: no MX for {email_domain} ({email})")
+            return
+    except ImportError:
+        # dnspython missing — log but don't block the send (degrade open).
+        _log.warning("dnspython not installed; skipping MX precheck for verification email")
+
     try:
         template = _VERIFY_EMAIL_TEMPLATE.read_text(encoding="utf-8")
     except FileNotFoundError:

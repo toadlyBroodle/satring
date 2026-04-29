@@ -12,6 +12,19 @@ from app.utils import extract_email, send_verify_email
 # skipped in test mode. This decorator stacks with the SMTP mock.
 _enable_payments = patch("app.config.payments_enabled", return_value=True)
 
+# send_verify_email runs an MX precheck against the recipient domain to
+# block bots/typos before hitting SMTP. The integration-test fixtures below
+# use intentionally fake subdomains (emailtest.example.com, embedded...,
+# webmail...) with no MX records, so this fixture stubs the resolver to
+# always succeed. The point of those tests is the wiring (extract → send),
+# not DNS behavior.
+@pytest.fixture
+def _mx_ok():
+    fake_resolver = MagicMock()
+    fake_resolver.resolve = MagicMock(return_value=[MagicMock()])
+    with patch("dns.resolver.Resolver", return_value=fake_resolver):
+        yield
+
 
 # ---------------------------------------------------------------------------
 # Unit: extract_email
@@ -101,7 +114,7 @@ class TestAPICreateServiceEmail:
     @pytest.mark.asyncio
     @_enable_payments
     @patch("app.utils.smtplib.SMTP")
-    async def test_email_sent_when_contact_has_email(self, mock_smtp_cls, _, client: AsyncClient):
+    async def test_email_sent_when_contact_has_email(self, mock_smtp_cls, _, _mx_ok, client: AsyncClient):
         mock_srv = MagicMock()
         mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_srv)
         mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
@@ -121,7 +134,7 @@ class TestAPICreateServiceEmail:
     @pytest.mark.asyncio
     @_enable_payments
     @patch("app.utils.smtplib.SMTP")
-    async def test_email_sent_when_contact_contains_email(self, mock_smtp_cls, _, client: AsyncClient):
+    async def test_email_sent_when_contact_contains_email(self, mock_smtp_cls, _, _mx_ok, client: AsyncClient):
         mock_srv = MagicMock()
         mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_srv)
         mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
@@ -175,7 +188,7 @@ class TestWebSubmitServiceEmail:
     @pytest.mark.asyncio
     @_enable_payments
     @patch("app.utils.smtplib.SMTP")
-    async def test_web_submit_sends_email(self, mock_smtp_cls, _, client: AsyncClient):
+    async def test_web_submit_sends_email(self, mock_smtp_cls, _, _mx_ok, client: AsyncClient):
         mock_srv = MagicMock()
         mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_srv)
         mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)

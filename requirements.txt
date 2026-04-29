@@ -14,3 +14,4 @@ pytest
 pytest-asyncio
 matplotlib
 geoip2
+dnspython
