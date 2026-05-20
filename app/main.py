@@ -5,7 +5,7 @@ from logging.handlers import RotatingFileHandler
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from slowapi import Limiter
@@ -101,6 +101,43 @@ class OriginCheckMiddleware(BaseHTTPMiddleware):
                         )
                     return HTMLResponse("Cross-origin request blocked", status_code=403)
         return await call_next(request)
+
+class ApiCorsMiddleware(BaseHTTPMiddleware):
+    """Permissive CORS for /api/ routes so browser-based agents can read x402/L402
+    payment challenges and send payment headers cross-origin.
+
+    Scoped to /api/. Advertises GET only, so cross-origin writes stay blocked by
+    OriginCheckMiddleware: CORS and the CSRF defense agree. Web (HTML) routes are
+    untouched, and server-side clients (the main audience) are unaffected since
+    CORS is browser-enforced only. This is not an access control: free endpoints
+    already gate scraping via thin summaries + per-IP quota + the payment gate."""
+
+    # Request headers a paying client sends (x402 + L402/MPP).
+    _ALLOW_HEADERS = "Authorization, Content-Type, PAYMENT-SIGNATURE"
+    # Response headers a client must read; none are CORS-safelisted by default.
+    _EXPOSE_HEADERS = "PAYMENT-REQUIRED, PAYMENT-RESPONSE, WWW-Authenticate"
+
+    async def dispatch(self, request: Request, call_next):
+        if not request.url.path.startswith("/api/"):
+            return await call_next(request)
+
+        # Answer the CORS preflight here; API routes define no OPTIONS handler.
+        if request.method == "OPTIONS":
+            return Response(
+                status_code=204,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, OPTIONS",
+                    "Access-Control-Allow-Headers": self._ALLOW_HEADERS,
+                    "Access-Control-Max-Age": "600",
+                },
+            )
+
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Expose-Headers"] = self._EXPOSE_HEADERS
+        return response
+
 
 SEED_CATEGORIES = [
     ("ai/ml", "ai-ml", "Machine learning and AI inference APIs"),
@@ -279,6 +316,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 app.add_middleware(OriginCheckMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(UsageTrackingMiddleware)
+app.add_middleware(ApiCorsMiddleware)
 
 
 @app.get("/docs", include_in_schema=False)
