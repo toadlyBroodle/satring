@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Service, Rating
+from app.routes.web import _meta_token
 
 
 class TestDirectory:
@@ -169,34 +170,27 @@ class TestServiceDetail:
         assert "https://api.test.com" not in resp.text
 
     @pytest.mark.asyncio
-    async def test_meta_json_returns_url_with_referer(self, client: AsyncClient, sample_service: Service):
-        resp = await client.get(
-            "/services/test-api/meta.json",
-            headers={"Referer": "https://satring.com/services/test-api"},
-        )
+    async def test_meta_json_returns_url_with_token(self, client: AsyncClient, sample_service: Service):
+        resp = await client.get(f"/services/test-api/meta.json?t={_meta_token('test-api')}")
         assert resp.status_code == 200
         data = resp.json()
         assert data["url"] == "https://api.test.com"
 
     @pytest.mark.asyncio
-    async def test_meta_json_blocked_without_referer(self, client: AsyncClient, sample_service: Service):
-        """Direct meta.json requests without valid Referer should be blocked."""
+    async def test_meta_json_blocked_without_token(self, client: AsyncClient, sample_service: Service):
+        """Direct meta.json requests without a valid token should be blocked."""
         resp = await client.get("/services/test-api/meta.json")
         assert resp.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_meta_json_blocked_with_wrong_referer(self, client: AsyncClient, sample_service: Service):
-        resp = await client.get(
-            "/services/test-api/meta.json",
-            headers={"Referer": "https://evil.com/scrape"},
-        )
+    async def test_meta_json_blocked_with_wrong_token(self, client: AsyncClient, sample_service: Service):
+        resp = await client.get("/services/test-api/meta.json?t=deadbeefdeadbeef")
         assert resp.status_code == 403
 
     @pytest.mark.asyncio
     async def test_meta_json_404_for_missing(self, client: AsyncClient):
         resp = await client.get(
-            "/services/no-such-service/meta.json",
-            headers={"Referer": "https://satring.com/services/no-such-service"},
+            f"/services/no-such-service/meta.json?t={_meta_token('no-such-service')}"
         )
         assert resp.status_code == 404
 
@@ -226,10 +220,9 @@ class TestServiceDetail:
         assert "L402+x402" in resp.text
         # Wallet/network now loaded via meta.json, not embedded in HTML
         assert "0xDualWallet456" not in resp.text
-        # But the meta.json endpoint returns them (with valid Referer)
+        # But the meta.json endpoint returns them (with a valid token)
         meta = await client.get(
-            "/services/dual-proto-api/meta.json",
-            headers={"Referer": "https://satring.com/services/dual-proto-api"},
+            f"/services/dual-proto-api/meta.json?t={_meta_token('dual-proto-api')}"
         )
         data = meta.json()
         assert data["x402_pay_to"] == "0xDualWallet456"

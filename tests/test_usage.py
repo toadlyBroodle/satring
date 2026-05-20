@@ -78,7 +78,7 @@ async def clear_buffer():
     _detail_ip_sets.clear()
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_record_hit_and_flush(usage_db, monkeypatch):
     """record_hit accumulates counts, flush writes them to the DB."""
     from app import usage as usage_mod
@@ -108,7 +108,7 @@ async def test_record_hit_and_flush(usage_db, monkeypatch):
         assert web_row.unique_ips == 1
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_exclude_static():
     """Static and excluded paths should not be recorded (except .well-known, which is now tracked)."""
     record_hit("/static/css/theme.css", "web", "1.1.1.1")
@@ -123,7 +123,7 @@ async def test_exclude_static():
     assert len(_buffer) == 1
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_aggregation(usage_db, monkeypatch):
     """Multiple flushes for the same hour bucket merge correctly."""
     from app import usage as usage_mod
@@ -150,7 +150,7 @@ async def test_aggregation(usage_db, monkeypatch):
         assert rows[0].unique_ips == 2
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_unique_ips_dedup(usage_db, monkeypatch):
     """Same IP hitting the same endpoint multiple times counts as 1 unique."""
     from app import usage as usage_mod
@@ -173,7 +173,7 @@ async def test_unique_ips_dedup(usage_db, monkeypatch):
         assert row.unique_ips == 2
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_analytics_includes_usage(usage_client: AsyncClient):
     """The analytics response should include the usage field with unique IP stats."""
     resp = await usage_client.get("/api/v1/analytics")
@@ -192,7 +192,7 @@ async def test_analytics_includes_usage(usage_client: AsyncClient):
         assert "daily_30d" in data["usage"][src]
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_path_normalization():
     """Dynamic path segments should be replaced with placeholders."""
     # API routes
@@ -216,7 +216,7 @@ async def test_path_normalization():
     assert _normalize_path("/submit") == "/submit"
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_normalized_hits_aggregate():
     """Hits to different slugs should aggregate under the same normalized key."""
     record_hit("/services/alpha", "web", "1.1.1.1")
@@ -233,7 +233,7 @@ async def test_normalized_hits_aggregate():
     assert len(ip_set) == 2
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_buffer_cap():
     """Buffer should not grow beyond MAX_BUFFER_KEYS."""
     from app import usage as usage_mod
@@ -247,21 +247,21 @@ async def test_buffer_cap():
         usage_mod.MAX_BUFFER_KEYS = original_max
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_404_not_tracked(usage_client: AsyncClient):
     """Requests returning 404 should not be recorded."""
     await usage_client.get("/services/nonexistent-slug-xyz")
     assert len(_buffer) == 0
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_successful_request_tracked(usage_client: AsyncClient):
     """Successful requests should be recorded."""
     await usage_client.get("/")
     assert len(_buffer) > 0
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_record_details_search_query():
     """Search queries are captured in the detail buffer."""
     record_details("/search", {"q": "Lightning API"}, "1.1.1.1")
@@ -274,7 +274,7 @@ async def test_record_details_search_query():
     assert len(_detail_ip_sets[query_keys[0]]) == 2
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_record_details_category():
     """Category filters are captured in the detail buffer."""
     record_details("/", {"category": "tools"}, "1.1.1.1")
@@ -286,7 +286,7 @@ async def test_record_details_category():
     assert _detail_buffer[cat_keys[0]] == 2
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_record_details_slug():
     """Service slug views are captured in the detail buffer."""
     record_details("/services/satsapi", {}, "1.1.1.1")
@@ -299,7 +299,7 @@ async def test_record_details_slug():
     assert _detail_buffer[satsapi_key] == 2
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_record_details_skips_bulk():
     """The /services/bulk path should not record 'bulk' as a slug."""
     record_details("/api/v1/services/bulk", {}, "1.1.1.1")
@@ -307,14 +307,14 @@ async def test_record_details_skips_bulk():
     assert len(slug_keys) == 0
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_record_details_empty_params():
     """No details recorded when query params are absent."""
     record_details("/", {}, "1.1.1.1")
     assert len(_detail_buffer) == 0
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_detail_flush(usage_db, monkeypatch):
     """Detail buffer flushes to UsageDetail table."""
     from app import usage as usage_mod

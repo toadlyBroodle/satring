@@ -55,7 +55,7 @@ async def db():
     await _teardown_db(engine, session)
 
 
-@pytest_asyncio.fixture(scope="class")
+@pytest_asyncio.fixture(scope="class", loop_scope="class")
 async def class_db():
     """Class-scoped DB: all tests in a class share one database."""
     engine, session = await _make_db()
@@ -76,7 +76,7 @@ async def client(db: AsyncSession):
     app.dependency_overrides.clear()
 
 
-@pytest_asyncio.fixture(scope="class")
+@pytest_asyncio.fixture(scope="class", loop_scope="class")
 async def class_client(class_db: AsyncSession):
     """Class-scoped client sharing the class_db session."""
     async def override_get_db():

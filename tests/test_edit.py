@@ -290,7 +290,7 @@ class TestDeleteLifecycle:
 
     # -- setup: create services via web + API, add ratings ----------------
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="class")
     async def test_1_web_submit_creates_service(self, class_client: AsyncClient, class_db: AsyncSession):
         resp = await class_client.post("/submit", content="name=Web+Created&url=https%3A%2F%2Fweb-created.example.com&description=From+web+form&categories=9", headers={"Content-Type": "application/x-www-form-urlencoded"}, follow_redirects=False)
         assert resp.status_code == 200
@@ -305,7 +305,7 @@ class TestDeleteLifecycle:
         assert svc is not None
         TestDeleteLifecycle.web_slug = svc.slug
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="class")
     async def test_2_api_create_service(self, class_client: AsyncClient, class_db: AsyncSession):
         resp = await class_client.post("/api/v1/services", json={
             "name": "API Created",
@@ -318,7 +318,7 @@ class TestDeleteLifecycle:
         TestDeleteLifecycle.api_token = data["edit_token"]
         TestDeleteLifecycle.api_service_id = data["id"]
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="class")
     async def test_3_add_ratings_to_api_service(self, class_client: AsyncClient, class_db: AsyncSession):
         slug = TestDeleteLifecycle.api_slug
         for score in (5, 4, 3):
@@ -334,7 +334,7 @@ class TestDeleteLifecycle:
 
     # -- auth checks (services survive) -----------------------------------
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="class")
     async def test_4_web_delete_invalid_token_returns_403(self, class_client: AsyncClient, class_db: AsyncSession):
         resp = await class_client.post(f"/services/{TestDeleteLifecycle.web_slug}/delete", data={
             "edit_token": "wrong-token",
@@ -346,7 +346,7 @@ class TestDeleteLifecycle:
         )).scalars().first()
         assert svc is not None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="class")
     async def test_5_api_delete_invalid_token_returns_403(self, class_client: AsyncClient, class_db: AsyncSession):
         resp = await class_client.delete(
             f"/api/v1/services/{TestDeleteLifecycle.api_slug}",
@@ -361,7 +361,7 @@ class TestDeleteLifecycle:
 
     # -- actual deletes (services + cascaded ratings removed) -------------
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="class")
     async def test_6_web_delete_removes_service(self, class_client: AsyncClient, class_db: AsyncSession):
         resp = await class_client.post(f"/services/{TestDeleteLifecycle.web_slug}/delete", data={
             "edit_token": TestDeleteLifecycle.web_token,
@@ -374,7 +374,7 @@ class TestDeleteLifecycle:
         )).scalars().first()
         assert svc is None
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="class")
     async def test_7_api_delete_cascades_ratings(self, class_client: AsyncClient, class_db: AsyncSession):
         slug = TestDeleteLifecycle.api_slug
         service_id = TestDeleteLifecycle.api_service_id
@@ -396,7 +396,7 @@ class TestDeleteLifecycle:
         )).scalars().all()
         assert ratings == []
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="class")
     async def test_8_no_test_services_remain(self, class_client: AsyncClient, class_db: AsyncSession):
         """After deletes, zero services should be left in the DB."""
         count = (await class_db.execute(select(func.count(Service.id)))).scalar()

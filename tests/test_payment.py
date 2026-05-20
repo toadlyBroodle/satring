@@ -52,7 +52,7 @@ def _make_l402_token(preimage_bytes: bytes) -> tuple[str, str]:
 class TestPaymentRouting:
     """Test that require_payment routes to correct protocol based on headers."""
 
-    @pytest.mark.anyio
+    @pytest.mark.asyncio
     async def test_test_mode_bypass(self, payment_client):
         """In test mode, all payment gates are bypassed."""
         assert settings.AUTH_ROOT_KEY == "test-mode"
@@ -60,14 +60,14 @@ class TestPaymentRouting:
         resp = await payment_client.get("/api/v1/analytics")
         assert resp.status_code == 200
 
-    @pytest.mark.anyio
+    @pytest.mark.asyncio
     async def test_bulk_export_no_auth_test_mode(self, payment_client):
         """Bulk export works in test mode without auth."""
         resp = await payment_client.get("/api/v1/services/bulk")
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
-    @pytest.mark.anyio
+    @pytest.mark.asyncio
     async def test_reputation_test_mode(self, payment_client):
         """Reputation endpoint works in test mode (creates service first)."""
         from sqlalchemy import select
@@ -83,7 +83,7 @@ class TestPaymentRouting:
         resp = await payment_client.get(f"/api/v1/services/{slug}/reputation")
         assert resp.status_code == 200
 
-    @pytest.mark.anyio
+    @pytest.mark.asyncio
     async def test_create_rating_test_mode(self, payment_client):
         """Rating creation works in test mode."""
         # Create service first
@@ -109,14 +109,18 @@ class TestPaymentRouting:
 class TestL402ReplayProtection:
     """Reusing the same L402 token for multiple paid actions must be blocked."""
 
-    @pytest.mark.anyio
+    @pytest.mark.asyncio
     async def test_submit_replay_blocked(self, payment_client):
         """Second service submission with the same L402 token gets 402."""
         with patch.object(settings, "AUTH_ROOT_KEY", "replay-test-key"), \
              patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv, \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv:
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv, \
+             patch("app.l402.check_payment_status", new_callable=AsyncMock) as mock_status:
             mock_inv.return_value = MOCK_INVOICE
             mock_l402_inv.return_value = MOCK_INVOICE
+            # Legit payment: invoice settled for at least the endpoint price.
+            # Lets these tests isolate replay logic from the amount check.
+            mock_status.return_value = (True, 1_000_000)
 
             auth_header, _ = _make_l402_token(b"submit-replay-preimage")
 
@@ -135,7 +139,7 @@ class TestL402ReplayProtection:
             assert resp2.status_code == 402
             assert "already consumed" in resp2.json()["detail"]
 
-    @pytest.mark.anyio
+    @pytest.mark.asyncio
     async def test_rating_replay_blocked(self, payment_client):
         """Second rating with the same L402 token gets 402."""
         # Create service in test mode
@@ -149,9 +153,13 @@ class TestL402ReplayProtection:
 
         with patch.object(settings, "AUTH_ROOT_KEY", "replay-test-key"), \
              patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv, \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv:
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv, \
+             patch("app.l402.check_payment_status", new_callable=AsyncMock) as mock_status:
             mock_inv.return_value = MOCK_INVOICE
             mock_l402_inv.return_value = MOCK_INVOICE
+            # Legit payment: invoice settled for at least the endpoint price.
+            # Lets these tests isolate replay logic from the amount check.
+            mock_status.return_value = (True, 1_000_000)
 
             auth_header, _ = _make_l402_token(b"rating-replay-preimage")
 
@@ -165,14 +173,18 @@ class TestL402ReplayProtection:
             }, headers={"Authorization": auth_header})
             assert resp2.status_code == 402
 
-    @pytest.mark.anyio
+    @pytest.mark.asyncio
     async def test_different_tokens_both_accepted(self, payment_client):
         """Two different L402 tokens (separate payments) should both work."""
         with patch.object(settings, "AUTH_ROOT_KEY", "replay-test-key"), \
              patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv, \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv:
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv, \
+             patch("app.l402.check_payment_status", new_callable=AsyncMock) as mock_status:
             mock_inv.return_value = MOCK_INVOICE
             mock_l402_inv.return_value = MOCK_INVOICE
+            # Legit payment: invoice settled for at least the endpoint price.
+            # Lets these tests isolate replay logic from the amount check.
+            mock_status.return_value = (True, 1_000_000)
 
             auth1, _ = _make_l402_token(b"first-payment-preimage")
             auth2, _ = _make_l402_token(b"second-payment-preimage")
@@ -191,14 +203,18 @@ class TestL402ReplayProtection:
             }, headers={"Authorization": auth2})
             assert resp2.status_code == 201
 
-    @pytest.mark.anyio
+    @pytest.mark.asyncio
     async def test_replay_returns_fresh_challenge(self, payment_client):
         """Blocked replay should include a fresh WWW-Authenticate header."""
         with patch.object(settings, "AUTH_ROOT_KEY", "replay-test-key"), \
              patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv, \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv:
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv, \
+             patch("app.l402.check_payment_status", new_callable=AsyncMock) as mock_status:
             mock_inv.return_value = MOCK_INVOICE
             mock_l402_inv.return_value = MOCK_INVOICE
+            # Legit payment: invoice settled for at least the endpoint price.
+            # Lets these tests isolate replay logic from the amount check.
+            mock_status.return_value = (True, 1_000_000)
 
             auth_header, _ = _make_l402_token(b"challenge-replay-preimage")
 
@@ -221,7 +237,7 @@ class TestL402ReplayProtection:
             assert "macaroon=" in www_auth
             assert "invoice=" in www_auth
 
-    @pytest.mark.anyio
+    @pytest.mark.asyncio
     async def test_cross_endpoint_replay_blocked(self, payment_client):
         """Token used for submission cannot be reused for a rating."""
         # Create service in test mode
@@ -235,9 +251,13 @@ class TestL402ReplayProtection:
 
         with patch.object(settings, "AUTH_ROOT_KEY", "replay-test-key"), \
              patch("app.payment.create_invoice", new_callable=AsyncMock) as mock_inv, \
-             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv:
+             patch("app.l402.create_invoice", new_callable=AsyncMock) as mock_l402_inv, \
+             patch("app.l402.check_payment_status", new_callable=AsyncMock) as mock_status:
             mock_inv.return_value = MOCK_INVOICE
             mock_l402_inv.return_value = MOCK_INVOICE
+            # Legit payment: invoice settled for at least the endpoint price.
+            # Lets these tests isolate replay logic from the amount check.
+            mock_status.return_value = (True, 1_000_000)
 
             auth_header, _ = _make_l402_token(b"cross-endpoint-preimage")
 
